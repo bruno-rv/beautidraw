@@ -1,5 +1,5 @@
 // Probe 7 — per-family lineHeight, the height derivation, and the degenerate
-// bound-text cases (PLAN.md §11's "multi-line bound-text case with a blank line").
+// bound-text cases (docs/PLAN.md §11's "multi-line bound-text case with a blank line").
 //
 // Two results here are load-bearing: lineHeight is derived from fontFamily
 // rather than chosen, and an empty label produces NO text element at all —

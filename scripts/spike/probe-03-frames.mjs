@@ -1,4 +1,4 @@
-// Probe 3 — the two-frame fixture (PLAN.md §11).
+// Probe 3 — the two-frame fixture (docs/PLAN.md §11).
 //
 // Research 02 left four things empirically open: whether exportingFrame really
 // selects only that frame's members, whether it clips, whether membership is

@@ -14,7 +14,7 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -71,7 +71,7 @@ function depProblem() {
     // pinned versions, so a range here is a setup error, not something to
     // shrug past — an unverifiable pin would make this gate fail-open.
     if (!pin) return `package.json does not declare ${dep}`;
-    if (!/^\d+\.\d+\.\d+/.test(pin)) return `${dep} is pinned as "${pin}"; an exact version is required`;
+    if (!/^\d+\.\d+\.\d+$/.test(pin)) return `${dep} is pinned as "${pin}"; an exact version is required`;
     const installed = installedVersion(dep);
     if (!installed) return `${dep} is not installed`;
     if (installed !== pin) return `${dep}@${installed} is installed, package.json pins ${pin}`;
@@ -189,24 +189,40 @@ function vendorProblem() {
   const fonts = manifest.fonts;
   if (!fonts || typeof fonts !== "object") return "manifest records no fonts";
 
-  // The inventory itself must be exact. "any non-empty map" let a manifest
-  // listing Cascadia alone validate, which is precisely the case that matters:
-  // every Nunito subset would be unverified while the gate reported ready.
-  for (const [family, expected] of Object.entries(EXPECTED_FONT_SUBSETS)) {
-    const found = Object.keys(fonts).filter((k) => k.startsWith(`${family}/`)).length;
-    if (found !== expected) {
-      return `manifest records ${found} ${family} subsets, expected ${expected}`;
+  // The expected set comes from the PINNED PACKAGE, not from the manifest.
+  // build-bundle.mjs generates the manifest by listing whatever is on disk, so
+  // a manifest can only ever attest to itself — family prefixes and counts let
+  // five renamed files pass, each one dutifully matching the hash the manifest
+  // recorded for it. Naming the source of truth outside the artifact is the
+  // only version of this check that means anything.
+  const SRC_FONTS = resolve(ROOT, "node_modules/@excalidraw/excalidraw/dist/prod/fonts");
+  const expected = new Map();
+  for (const family of Object.keys(EXPECTED_FONT_SUBSETS)) {
+    const dir = resolve(SRC_FONTS, family);
+    if (!existsSync(dir)) return `the pinned package has no ${family} font directory`;
+    const names = readdirSync(dir).filter((f) => f.endsWith(".woff2")).sort();
+    if (names.length !== EXPECTED_FONT_SUBSETS[family]) {
+      return `the pinned package ships ${names.length} ${family} subsets, expected ${EXPECTED_FONT_SUBSETS[family]}`;
     }
+    for (const name of names) expected.set(`${family}/${name}`, resolve(dir, name));
   }
-  const extra = Object.keys(fonts).filter(
-    (k) => !Object.keys(EXPECTED_FONT_SUBSETS).some((f) => k.startsWith(`${f}/`)),
-  );
-  if (extra.length) return `manifest records unexpected fonts: ${extra.join(", ")}`;
 
-  for (const [rel, digest] of Object.entries(fonts)) {
+  const recorded = new Set(Object.keys(fonts));
+  for (const rel of expected.keys()) {
+    if (!recorded.has(rel)) return `manifest does not record ${rel}`;
+  }
+  for (const rel of recorded) {
+    if (!expected.has(rel)) return `manifest records unexpected font ${rel}`;
+  }
+
+  // Vendor copy must match the package byte for byte, and the manifest must
+  // have recorded that same digest.
+  for (const [rel, src] of expected) {
     const file = resolve(VENDOR, "fonts", rel);
     if (!existsSync(file)) return `font ${rel} is missing`;
-    if (sha256(readFileSync(file)) !== digest) return `font ${rel} does not match its hash`;
+    const digest = sha256(readFileSync(file));
+    if (digest !== sha256(readFileSync(src))) return `font ${rel} differs from the pinned package`;
+    if (digest !== fonts[rel]) return `font ${rel} does not match its recorded hash`;
   }
 
   return null;
@@ -217,6 +233,17 @@ if (problem) {
   console.log(`[setup] rebuilding the vendored Excalidraw bundle — ${problem}`);
   run("node", [resolve(ROOT, "scripts/build-bundle.mjs")]);
   didWork = true;
+
+  // Same reasoning as the dependency re-check: a build that ran is not a build
+  // that worked. build-bundle.mjs copies from node_modules, so a damaged source
+  // tree yields a self-consistent manifest describing a broken vendor dir —
+  // which this run would then report as ready.
+  const stillBroken = vendorProblem();
+  if (stillBroken) {
+    console.error(`[setup] the rebuilt bundle is still invalid: ${stillBroken}`);
+    console.error("[setup] remove node_modules and scripts/vendor, then re-run.");
+    process.exit(1);
+  }
 }
 
 console.log(didWork ? "[setup] ready" : "[setup] already provisioned, nothing to do");

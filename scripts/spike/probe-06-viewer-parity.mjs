@@ -1,6 +1,6 @@
-// Probe 6 — viewer parity against the real excalidraw.com (PLAN.md §11).
+// Probe 6 — viewer parity against the real excalidraw.com (docs/PLAN.md §11).
 //
-// Everything so far proves the pipeline agrees with itself. PLAN.md §2 is
+// Everything so far proves the pipeline agrees with itself. docs/PLAN.md §2 is
 // explicit that this is not enough: "if layout and rendering both run against an
 // injected provider on the same Playwright page, they agree with each other and
 // disagree with excalidraw.com". This measures the same strings in the real
@@ -293,7 +293,7 @@ const ASSERTED_FIELDS = [
   "type", "x", "y", "width", "height", "angle",
   "frameId", "containerId",
   // The complete text metric tuple, not a subset — these are exactly the fields
-  // PLAN.md §2 pins, so parity has to cover all of them.
+  // docs/PLAN.md §2 pins, so parity has to cover all of them.
   "fontSize", "fontFamily", "lineHeight", "textAlign", "verticalAlign", "autoResize",
   "text", "originalText",
 ];
@@ -459,7 +459,7 @@ console.log(JSON.stringify({ ...report, rawViewerScenes: "<written to file>" }, 
 
 // ---------- fail closed ----------
 //
-// This probe is the ONLY mechanism that detects live viewer drift (PLAN.md §2
+// This probe is the ONLY mechanism that detects live viewer drift (docs/PLAN.md §2
 // risk list), so recording a mismatch without failing would make that mitigation
 // decorative. Every condition below blocks re-signing the oracle.
 

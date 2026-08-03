@@ -1,4 +1,4 @@
-// Probe 8 — prove the font gate must be glyph-driven (PLAN.md §2).
+// Probe 8 — prove the font gate must be glyph-driven (docs/PLAN.md §2).
 //
 // Found by a post-spike consistency sweep, which argued from the Excalidraw
 // sources that `document.fonts.check(font)` WITHOUT a text argument probes the

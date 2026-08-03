@@ -2,7 +2,7 @@
 //
 // Probe 1 showed document.fonts.ready resolving while every scene face still
 // reported check() === false: Excalidraw registers unicode-range subsets that
-// the browser loads lazily. PLAN.md §11 requires measurement to be gated on
+// the browser loads lazily. docs/PLAN.md §11 requires measurement to be gated on
 // real faces. This probe proves the gate is load-bearing by measuring the same
 // strings before and after an explicit load, and it establishes the loader the
 // oracle will use.
@@ -79,7 +79,7 @@ const result = await withHarness(async ({ page }) => {
     return {
       loadReport,
       delta,
-      // A font fingerprint the oracle record can pin (PLAN.md §8).
+      // A font fingerprint the oracle record can pin (docs/PLAN.md §8).
       fingerprint: Object.fromEntries(
         FAMILIES.flatMap((f) =>
           SIZES.map((s) => [`${f}@${s}`, +measure(f, s, SAMPLE).toFixed(4)]),

@@ -3,7 +3,7 @@
 // Probe 3 inferred it from a whole-scene height subtraction, which conflates the
 // label with stroke width, rounding and the frame box itself. This varies exactly
 // one thing — whether the frame carries a `name` — and diffs the reported bounds.
-// The result decides whether FRAME_LABEL_BAND survives in PLAN.md §4 and at what
+// The result decides whether FRAME_LABEL_BAND survives in docs/PLAN.md §4 and at what
 // value.
 
 import { withHarness } from "../harness-runner.mjs";
