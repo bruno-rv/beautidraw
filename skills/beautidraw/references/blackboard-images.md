@@ -4,17 +4,16 @@ Use this reference whenever a deck needs the colored-blackboard illustrations us
 `hr-ai` presentation. The goal is a reproducible visual system, not a loose request for
 "something hand-drawn".
 
-> **Status: style contract only — embedding is not implemented.**
-> `deck-spec.json` has no image field, and `generate.mjs` writes `files: null`; there is no
-> image element path in the layout engine. Steps 5–6 below describe hand-editing the emitted
-> `.excalidraw`, which works exactly once: the next `generate.mjs` run rewrites the file and the
-> images are gone. That also contradicts the pipeline's rule that a deck is regenerated from its
-> spec, never edited in place.
+> **Status: style and placement contract.** `deck-spec.json` still has no image field and
+> `generate.mjs` still writes `files: null`, so a subsequent regeneration can remove embedded
+> images. For a finished presentation handoff, post-process the generated `.excalidraw` with
+> the accepted PNGs, preserve the manifest, and render the final file before delivery. The
+> placement rules below are part of the visual contract: an image is not finished while it is
+> still a loose thumbnail on the canvas.
 >
-> Until the spec gains an image field, **treat illustrations as a separate deliverable**:
-> generate them, accept them against the checks below, write the manifest, and hand the PNGs
-> over beside `deck.excalidraw`. Say plainly that they are not embedded. Steps 5–6 are kept as
-> the design for the unbuilt feature, not as instructions to follow today.
+> The PNGs remain useful as a separate deliverable, but when the user asks for an embedded
+> handoff, include them in the final `.excalidraw` and say that regeneration must preserve or
+> reapply the embedding step.
 
 ## Canonical visual contract
 
@@ -61,27 +60,46 @@ Subject prompts should describe the visual metaphor, not ask the model to render
 | `blackboard-05-source-grounded-evidence.png` | scanned source → structured table → verified evidence | 9 |
 | `blackboard-06-human-in-the-loop-guardrails.png` | AI assistance → review → human-only decision gate | 10 |
 
+## Frame-native placement contract
+
+- Never place a dark image as a free-floating thumbnail on the white canvas. The image must
+  either fill a deliberate side zone or be a true background for its entire parent frame.
+- The 16:9 size above is the standalone-card default. When the image fills a frame or side zone,
+  regenerate the composition for that target aspect ratio and normalize the PNG to the target
+  pixel dimensions. Do not letterbox a 16:9 card inside a wider or taller frame.
+- **Side mode:** use the full height of the left or right body column, flush to the frame's
+  content bounds. Generate a vertical or square composition when the column requires it; do not
+  add an inset panel, white padding, or a second dark border.
+- **Background mode:** make the image exactly the parent frame's width and height, place it
+  behind every other child with the same `frameId`, and reduce opacity enough for the deck's
+  typography and cards to remain primary. It must bleed to the frame edges so it reads as a
+  frame surface, not an object placed on top of it.
+- A compact row/checklist band generally needs background mode; a two-column workflow band
+  generally needs side mode. Choose based on the actual frame geometry, not on an arbitrary
+  thumbnail size.
+- If neither mode has a clean slot, reflow the deck or regenerate the asset. Never use an
+  arbitrary leftover gap merely to make an image fit.
+
 ## Production and acceptance protocol
 
 1. Generate each asset with the canonical prefix and one motif-specific subject prompt.
 2. View every candidate before wiring it into the deck. Reject it if the background is not a
    chalkboard, the linework becomes polished vector art, the colors drift, the subject is
    clipped, or readable text appears.
-3. Normalize accepted copies to 1536 × 864. Keep the PNGs **beside the deck-spec**, in an
-   `assets/` directory next to it — never in the deck's `out/`, which is derived, rewritten on
-   every run, and gitignored.
+3. Normalize standalone copies to 1536 × 864; normalize frame-native copies to the exact target
+   frame or side-zone dimensions. Keep the PNGs beside the handoff deck in the requested output
+   folder (or in the deck's `assets/` directory when the generator owns the output folder).
+   Record the final pixel dimensions and placement mode in the manifest.
 4. Record `file`, raw-byte `sha1`, `suggestedBand`, and a one-sentence `use` in
    `blackboard-asset-manifest.json`, beside the assets.
-
-Steps 5 and 6 are the **design for the unbuilt embedding feature** (see the status note above).
-Do not perform them against a generated deck today.
 
 5. Use the raw-byte SHA-1 as the Excalidraw `fileId` and `files` key. The file entry must
    contain the matching `id`, `mimeType: "image/png"`, and a `dataURL`.
 6. Put the image element inside the intended frame with a unique id, `status: "saved"`,
    `scale: [1, 1]`, `crop: null`, `boundElements: []`, and the full standard Excalidraw base
-   properties. Place it in an unused region of the frame; never cover a heading, label, arrow,
-   or note merely to make room for an image.
+   properties. In side mode, use the image itself as the flush visual zone. In background mode,
+   place it before the frame's other children, set its opacity deliberately, and do not add a
+   decorative panel rectangle around it.
 
 A prompt-only handoff is not enough: the assets, the manifest and the rendered deck must agree,
 and every image must have been viewed before it ships.

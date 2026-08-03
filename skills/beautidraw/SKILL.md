@@ -40,8 +40,9 @@ You own stage A. Stages B and C are one command.
    `references/deck-spec.md`. Choosing a pattern: `references/patterns.md`. Accents and type:
    `references/visual-system.md`.
    If the deck needs illustrations, read `references/blackboard-images.md` — it is the canonical
-   style contract. **Read its status note first: the generator cannot embed images**, so
-   illustrations are produced and delivered alongside the deck, not inside it.
+   style and placement contract. The generator still emits a spec-derived deck without images,
+   so embed accepted PNGs as a deliberate post-processing step, fit them to frame-native side or
+   background zones, and render the final `.excalidraw` before handoff.
 3. **Generate:**
    ```
    node "${CLAUDE_PLUGIN_ROOT}/scripts/generate.mjs" <spec.json> <outdir>
@@ -131,7 +132,7 @@ Do not edit `scripts/layout.mjs` to make a deck pass. The engine's constants are
 - `${CLAUDE_PLUGIN_ROOT}/scripts/LAYOUT-CONTRACT.md` — the engine's measured invariants
   (read only if changing it)
 
-Decks are type- and shape-led. Illustrations are a **separate deliverable**: the deck-spec has
-no image field and `generate.mjs` writes `files: null`, so a hand-embedded image is destroyed by
-the next regeneration. Produce the assets, view them, hand them over beside the deck, and say
-plainly that they are not embedded.
+Decks are type- and shape-led. Illustrations are generated alongside the deck and embedded only
+after the layout engine has produced the frame geometry. Preserve the asset manifest and the
+placement contract; a later regeneration must reapply the embedding step because `deck-spec.json`
+does not yet carry image fields.
