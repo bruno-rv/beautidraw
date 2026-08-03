@@ -5,7 +5,7 @@
 // rather than chosen, and an empty label produces NO text element at all —
 // silently, with the container returned alone.
 
-import { withHarness } from "./harness-runner.mjs";
+import { withHarness } from "../harness-runner.mjs";
 
 const result = await withHarness(async ({ page }) => {
   return page.evaluate(async () => {

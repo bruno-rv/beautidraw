@@ -8,7 +8,7 @@ import { dirname, extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 
-export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const MIME = {
   ".html": "text/html; charset=utf-8",

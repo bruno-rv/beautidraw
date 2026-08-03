@@ -8,9 +8,9 @@
 
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { ROOT, withHarness } from "./harness-runner.mjs";
+import { ROOT, withHarness } from "../harness-runner.mjs";
 
-const OUT = resolve(ROOT, ".scratch/beautidraw/spike-artifacts");
+const OUT = resolve(ROOT, ".scratch/spike-artifacts");
 await mkdir(OUT, { recursive: true });
 
 const result = await withHarness(async ({ page }) => {

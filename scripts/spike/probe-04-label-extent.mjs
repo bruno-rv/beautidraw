@@ -6,7 +6,7 @@
 // The result decides whether FRAME_LABEL_BAND survives in PLAN.md §4 and at what
 // value.
 
-import { withHarness } from "./harness-runner.mjs";
+import { withHarness } from "../harness-runner.mjs";
 
 const result = await withHarness(async ({ page }) => {
   return page.evaluate(async () => {

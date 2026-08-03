@@ -1,6 +1,6 @@
 // Node entry point: node scripts/generate.mjs <spec.json> <outdir>
 //
-// Boots the harness (scripts/spike/harness-runner.mjs), loads scripts/layout.mjs
+// Boots the harness (scripts/harness-runner.mjs), loads scripts/layout.mjs
 // inside the page, runs layoutDeck, validates the result against every check in
 // LAYOUT-CONTRACT.md's "Deliverables" §3, and — only if every check passes —
 // writes <outdir>/deck.excalidraw, band-NN.png per frame, scene.png and
@@ -12,7 +12,7 @@
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { withHarness } from "./spike/harness-runner.mjs";
+import { withHarness } from "./harness-runner.mjs";
 import {
   BAND_HEIGHT_CAP,
   FONT_NAME,

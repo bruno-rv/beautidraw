@@ -15,7 +15,7 @@
 // If bareCheckIsVacuous is ever false on a future runtime, the §2 rule can be
 // relaxed. Until then it is load-bearing.
 
-import { withHarness } from "./harness-runner.mjs";
+import { withHarness } from "../harness-runner.mjs";
 
 const CYRILLIC = "Быстрая коричневая лиса";
 const VIETNAMESE = "Tiếng Việt vượt qua";

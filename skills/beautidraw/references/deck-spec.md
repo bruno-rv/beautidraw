@@ -70,5 +70,5 @@ row is a question or a check rather than a stage.
 
 ## Worked example
 
-`decks/hr-ai/deck-spec.json` in this repo — 12 bands built from a planning conversation,
+`examples/hr-ai/deck-spec.json` in this repo — 12 bands built from a planning conversation,
 covering every pattern except `tree`. Its `out/` directory holds the rendered result.

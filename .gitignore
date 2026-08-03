@@ -5,8 +5,8 @@ node_modules/
 scripts/vendor/
 
 # Generated deck output. The spec is the source; everything under out/ is derived.
-decks/*/out/
 examples/*/out/
 
 .DS_Store
 .playwright-mcp/
+.scratch/

@@ -7,7 +7,7 @@
 // strings before and after an explicit load, and it establishes the loader the
 // oracle will use.
 
-import { withHarness } from "./harness-runner.mjs";
+import { withHarness } from "../harness-runner.mjs";
 
 const result = await withHarness(async ({ page }) => {
   return page.evaluate(async () => {

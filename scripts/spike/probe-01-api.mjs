@@ -5,7 +5,7 @@
 // convertToExcalidrawElements does not produce real wrapped geometry, route 1
 // has to vendor internals and the plan's largest risk is live.
 
-import { withHarness } from "./harness-runner.mjs";
+import { withHarness } from "../harness-runner.mjs";
 
 const result = await withHarness(async ({ page, consoleErrors }) => {
   return page.evaluate(async () => {

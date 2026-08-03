@@ -20,9 +20,9 @@ import {
   ROOT,
   VIEWPORT,
   withHarness,
-} from "./harness-runner.mjs";
+} from "../harness-runner.mjs";
 
-const OUT = resolve(ROOT, ".scratch/beautidraw/spike-artifacts");
+const OUT = resolve(ROOT, ".scratch/spike-artifacts");
 await mkdir(OUT, { recursive: true });
 
 // The viewer build parity was last verified against. A mismatch fails this probe

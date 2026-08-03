@@ -5,7 +5,7 @@
 // Also pins whether exportPadding has a floor, since probe 4 asked for 0 and got
 // what looked like 10.
 
-import { withHarness } from "./harness-runner.mjs";
+import { withHarness } from "../harness-runner.mjs";
 
 const result = await withHarness(async ({ page }) => {
   return page.evaluate(async () => {
