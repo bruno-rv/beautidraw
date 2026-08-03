@@ -6,7 +6,8 @@ argument-hint: <path-or-url> [--out-dir <dir>]
 Build an Excalidraw deck from: $ARGUMENTS
 
 Everything before `--out-dir` is the source. If `--out-dir` is absent, write to
-`decks/<slug>/` beside the source.
+`decks/<slug>/out/`, keeping the spec at `decks/<slug>/deck-spec.json` so it stays
+tracked (only `out/` is gitignored).
 
 Use the `beautidraw` skill. Steps:
 

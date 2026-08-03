@@ -14,11 +14,13 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const MANIFEST_SCHEMA = "beautidraw.bundle-manifest/2";
+const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
 
 function run(cmd, args) {
   // cwd is pinned to ROOT so this works when invoked from any directory —
@@ -29,7 +31,8 @@ function run(cmd, args) {
     if (e.code === "ENOENT") {
       console.error(`[setup] '${cmd}' is not on PATH. This repo pins its dependency tree with`);
       console.error("[setup] pnpm (pnpm-lock.yaml + pnpm-workspace.yaml); install it first:");
-      console.error("[setup]   npm install -g pnpm");
+      console.error("[setup]   corepack enable && corepack prepare pnpm@11.0.3 --activate");
+      console.error("[setup] or: npm install -g pnpm@11.0.3   (package.json pins this version)");
       process.exit(1);
     }
     throw e;
@@ -95,16 +98,27 @@ function vendorProblem() {
     return `manifest.json is unreadable (${e.message})`;
   }
 
-  // Stale bundle: built from versions other than the ones now installed.
+  if (manifest.schema !== MANIFEST_SCHEMA) {
+    return `manifest schema is ${manifest.schema ?? "absent"}, expected ${MANIFEST_SCHEMA}`;
+  }
+
+  // Stale bundle: built from versions other than the ones now installed. Every
+  // field is REQUIRED — an absent one used to skip its own check, which made
+  // the whole gate fail-open against exactly the manifest it was meant to
+  // police (a truncated or hand-edited manifest validated fine).
   for (const [key, pkg] of [
     ["excalidrawVersion", "@excalidraw/excalidraw"],
     ["react", "react"],
     ["reactDom", "react-dom"],
     ["esbuild", "esbuild"],
+    ["playwrightPinned", "playwright"],
   ]) {
+    const recorded = manifest[key];
+    if (!recorded) return `manifest is missing ${key}`;
     const installed = installedVersion(pkg);
-    if (installed && manifest[key] && manifest[key] !== installed) {
-      return `built against ${pkg}@${manifest[key]}, but ${installed} is installed`;
+    if (!installed) return `${pkg} is not installed`;
+    if (recorded !== installed) {
+      return `built against ${pkg}@${recorded}, but ${installed} is installed`;
     }
   }
 
@@ -112,21 +126,30 @@ function vendorProblem() {
   // sha256 catches a damaged one. Hashing 13 MB costs tens of milliseconds,
   // which is worth paying on a command that otherwise boots a whole browser.
   const bundle = readFileSync(resolve(VENDOR, "excalidraw.js"));
-  if (manifest.bundleBytes && bundle.length !== manifest.bundleBytes) {
+  if (!manifest.bundleBytes || !manifest.bundleSha256 || !manifest.cssSha256) {
+    return "manifest is missing a bundle or css digest";
+  }
+  if (bundle.length !== manifest.bundleBytes) {
     return `excalidraw.js is ${bundle.length} bytes, manifest says ${manifest.bundleBytes}`;
   }
-  if (manifest.bundleSha256) {
-    const actual = createHash("sha256").update(bundle).digest("hex");
-    if (actual !== manifest.bundleSha256) return "excalidraw.js does not match its recorded hash";
+  if (sha256(bundle) !== manifest.bundleSha256) {
+    return "excalidraw.js does not match its recorded hash";
+  }
+  if (sha256(readFileSync(resolve(VENDOR, "excalidraw.css"))) !== manifest.cssSha256) {
+    return "excalidraw.css does not match its recorded hash";
   }
 
-  // Excalidraw ships Nunito as five unicode-range subsets, and measuring against
-  // a missing subset silently changes wrap points (spike F2/F8) rather than
-  // failing — so a partial font copy must force a rebuild.
-  const nunito = resolve(VENDOR, "fonts/Nunito");
-  if (!existsSync(nunito)) return "fonts/Nunito is missing";
-  const subsets = readdirSync(nunito).filter((f) => f.endsWith(".woff2"));
-  if (subsets.length < 5) return `fonts/Nunito has ${subsets.length} subsets, expected 5`;
+  // Fonts by name AND hash, not by count. Counting let a missing subset be
+  // replaced by any arbitrary or empty .woff2 and still pass — and measuring
+  // against a subset that is present but wrong silently changes wrap points
+  // (spike F2/F8) rather than failing.
+  const fonts = manifest.fonts;
+  if (!fonts || Object.keys(fonts).length === 0) return "manifest records no fonts";
+  for (const [rel, digest] of Object.entries(fonts)) {
+    const file = resolve(VENDOR, "fonts", rel);
+    if (!existsSync(file)) return `font ${rel} is missing`;
+    if (sha256(readFileSync(file)) !== digest) return `font ${rel} does not match its hash`;
+  }
 
   return null;
 }

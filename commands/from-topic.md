@@ -5,7 +5,8 @@ argument-hint: <topic> [--out-dir <dir>]
 
 Build an Excalidraw deck about: $ARGUMENTS
 
-Everything before `--out-dir` is the topic. If `--out-dir` is absent, write to `decks/<slug>/`.
+Everything before `--out-dir` is the topic. If `--out-dir` is absent, write to `decks/<slug>/out/`, keeping the spec at
+`decks/<slug>/deck-spec.json` so it stays tracked (only `out/` is gitignored).
 
 Use the `beautidraw` skill. First run `node "${CLAUDE_PLUGIN_ROOT}/scripts/setup.mjs"` —
 idempotent, and a no-op once provisioned.

@@ -6,7 +6,7 @@
 
 import { build } from "esbuild";
 import { createHash } from "node:crypto";
-import { cp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
+import { cp, mkdir, readdir, readFile, writeFile, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -55,8 +55,25 @@ const css = await readFile(resolve(vendorDir, "excalidraw.css"));
 const pkg = JSON.parse(await readFile(resolve(excalidrawPkg, "package.json"), "utf8"));
 const own = JSON.parse(await readFile(resolve(root, "package.json"), "utf8"));
 
+// Record the font files the type ramp actually measures against, by name and
+// hash, so setup.mjs can verify the copy exactly rather than counting files.
+// Only Nunito (prose) and Cascadia (mono) are recorded: those are the faces
+// §2's metric tuple measures, and a missing or truncated subset silently shifts
+// wrap points instead of failing (spike F2/F8). The other families are
+// registered by Excalidraw but never measured here — Xiaolai alone is 209 CJK
+// subsets, and hashing them on every setup run would cost far more than it
+// protects.
+const METRIC_FONT_FAMILIES = ["Nunito", "Cascadia"];
+const fonts = {};
+for (const family of METRIC_FONT_FAMILIES) {
+  const dir = resolve(vendorDir, "fonts", family);
+  for (const name of (await readdir(dir)).filter((f) => f.endsWith(".woff2")).sort()) {
+    fonts[`${family}/${name}`] = sha256(await readFile(resolve(dir, name)));
+  }
+}
+
 const manifest = {
-  schema: "beautidraw.bundle-manifest/1",
+  schema: "beautidraw.bundle-manifest/2",
   excalidrawVersion: pkg.version,
   react: require("react/package.json").version,
   reactDom: require("react-dom/package.json").version,
@@ -65,6 +82,7 @@ const manifest = {
   bundleSha256: sha256(bundle),
   cssSha256: sha256(css),
   bundleBytes: bundle.length,
+  fonts,
 };
 
 await writeFile(
