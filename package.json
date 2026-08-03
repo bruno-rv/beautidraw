@@ -4,6 +4,7 @@
   "private": true,
   "description": "Layout engine and generator behind the beautidraw Claude Code plugin",
   "type": "module",
+  "packageManager": "pnpm@11.0.3",
   "scripts": {
     "setup": "node scripts/setup.mjs",
     "spike": "node scripts/spike/run-all.mjs",

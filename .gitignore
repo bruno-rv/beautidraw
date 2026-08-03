@@ -10,4 +10,4 @@ examples/*/out/
 .DS_Store
 .playwright-mcp/
 .scratch/
-decks/
+decks/*/out/

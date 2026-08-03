@@ -340,6 +340,8 @@ Every iteration writes per-band PNGs, the whole-scene PNG, the verdict documents
 
 A JSON Schema validated before layout. Bounded failure for every degenerate case: label longer than the pattern's wrap budget (wrap, then fail), more nodes than the pattern supports (reject, naming the limit), duplicate or non-monotonic timeline years (reject), cycles in a `flow` (reject), tree depth beyond the limit (reject), unknown pattern (reject). No silent truncation.
 
+*(**As built, 2026-08-03: there is no JSON Schema file.** `generate.mjs` and `layout.mjs` validate the spec in hand-written code — unknown pattern, empty/whitespace label, node shape per pattern, and the column-candidate search that rejects content a pattern cannot fit. The behaviour above holds; only the mechanism differs. Recorded rather than quietly dropped: a schema is still the better home for it, because hand-written checks are the kind that drift out of step with the pattern vocabulary. The shipped vocabulary is the one in §1 — `checklist`, not `annotated-figure`.)*
+
 **Empty and whitespace-only labels are rejected at the schema**, and they fail in two different ways *(spike F7)*: an **empty string** makes `convertToExcalidrawElements` return the container **alone** — no text element, no error — while a **whitespace-only** string does produce a text element, just an invisible one. The first is the worse bug: a role the §2 table declares must carry bound text silently carries none, the container renders as an empty box, and no structural assertion fires because nothing is malformed. Tier 1 therefore also asserts that **every role declared bound in the role table actually resolved to a text element**, so the defect cannot arrive by another path.
 
 ### 10. Determinism

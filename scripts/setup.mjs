@@ -13,7 +13,8 @@
 // provisioned tree exits 0 having run no installs.
 
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -37,14 +38,25 @@ function run(cmd, args) {
 
 let didWork = false;
 
-// Check every dependency the pipeline actually loads, not just one. A single
-// marker directory can survive an interrupted install, and the repair would
-// then be skipped forever.
-const REQUIRED_DEPS = ["playwright", "@excalidraw/excalidraw", "esbuild"];
+// Every direct dependency, not a single marker: react and react-dom are loaded
+// by vendor-entry.js and recorded by build-bundle.mjs, so a partial install that
+// happens to contain playwright would otherwise report ready and fail later
+// during bundling. A marker directory can also survive an interrupted install,
+// which is why the repair has to be re-checkable rather than one-shot.
+const REQUIRED_DEPS = ["playwright", "@excalidraw/excalidraw", "esbuild", "react", "react-dom"];
 if (REQUIRED_DEPS.some((d) => !existsSync(resolve(ROOT, "node_modules", d)))) {
   console.log("[setup] installing dependencies");
   run("pnpm", ["install", "--frozen-lockfile"]);
   didWork = true;
+}
+
+function installedVersion(pkg) {
+  try {
+    return JSON.parse(readFileSync(resolve(ROOT, "node_modules", pkg, "package.json"), "utf8"))
+      .version;
+  } catch {
+    return null;
+  }
 }
 
 // `chromium.executablePath()` reports where the binary WOULD live; it does not
@@ -63,14 +75,65 @@ if (!existsSync(chromiumPath)) {
   didWork = true;
 }
 
-// build-bundle.mjs writes manifest.json LAST, so its presence means the copy of
-// the js, the css and the font tree all completed. Verify the pieces too — an
-// interrupted build can leave a stale manifest from an earlier successful run
-// beside a half-copied vendor tree.
+// Presence is not readiness. build-bundle.mjs writes manifest.json last, but a
+// manifest from an earlier successful build can sit beside a half-copied tree,
+// and a bundle built against an older @excalidraw/excalidraw is worse than a
+// missing one — it produces plausible geometry from the wrong measurements.
+// So: parse the manifest, check it describes the versions currently installed,
+// and verify the bundle's bytes and hash against what the manifest recorded.
 const VENDOR = resolve(ROOT, "scripts/vendor");
-const VENDOR_PARTS = ["manifest.json", "excalidraw.js", "excalidraw.css", "fonts/Nunito"];
-if (VENDOR_PARTS.some((p) => !existsSync(resolve(VENDOR, p)))) {
-  console.log("[setup] building the vendored Excalidraw bundle");
+
+function vendorProblem() {
+  for (const p of ["manifest.json", "excalidraw.js", "excalidraw.css"]) {
+    if (!existsSync(resolve(VENDOR, p))) return `${p} is missing`;
+  }
+
+  let manifest;
+  try {
+    manifest = JSON.parse(readFileSync(resolve(VENDOR, "manifest.json"), "utf8"));
+  } catch (e) {
+    return `manifest.json is unreadable (${e.message})`;
+  }
+
+  // Stale bundle: built from versions other than the ones now installed.
+  for (const [key, pkg] of [
+    ["excalidrawVersion", "@excalidraw/excalidraw"],
+    ["react", "react"],
+    ["reactDom", "react-dom"],
+    ["esbuild", "esbuild"],
+  ]) {
+    const installed = installedVersion(pkg);
+    if (installed && manifest[key] && manifest[key] !== installed) {
+      return `built against ${pkg}@${manifest[key]}, but ${installed} is installed`;
+    }
+  }
+
+  // Truncated or corrupted bundle. bundleBytes catches a short write; the
+  // sha256 catches a damaged one. Hashing 13 MB costs tens of milliseconds,
+  // which is worth paying on a command that otherwise boots a whole browser.
+  const bundle = readFileSync(resolve(VENDOR, "excalidraw.js"));
+  if (manifest.bundleBytes && bundle.length !== manifest.bundleBytes) {
+    return `excalidraw.js is ${bundle.length} bytes, manifest says ${manifest.bundleBytes}`;
+  }
+  if (manifest.bundleSha256) {
+    const actual = createHash("sha256").update(bundle).digest("hex");
+    if (actual !== manifest.bundleSha256) return "excalidraw.js does not match its recorded hash";
+  }
+
+  // Excalidraw ships Nunito as five unicode-range subsets, and measuring against
+  // a missing subset silently changes wrap points (spike F2/F8) rather than
+  // failing — so a partial font copy must force a rebuild.
+  const nunito = resolve(VENDOR, "fonts/Nunito");
+  if (!existsSync(nunito)) return "fonts/Nunito is missing";
+  const subsets = readdirSync(nunito).filter((f) => f.endsWith(".woff2"));
+  if (subsets.length < 5) return `fonts/Nunito has ${subsets.length} subsets, expected 5`;
+
+  return null;
+}
+
+const problem = vendorProblem();
+if (problem) {
+  console.log(`[setup] rebuilding the vendored Excalidraw bundle — ${problem}`);
   run("node", [resolve(ROOT, "scripts/build-bundle.mjs")]);
   didWork = true;
 }
