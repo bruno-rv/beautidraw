@@ -27,8 +27,19 @@ From anywhere else — including a plugin install — give the full path:
 
 Re-running it on a provisioned tree prints `already provisioned` and does nothing. It is safe
 to call on every invocation, which is what the commands do. It re-checks rather than trusting a
-marker: dependency versions against the pins, `pnpm-lock.yaml` against the last completed
-install, and the vendored bundle and fonts against the pinned package's own bytes.
+marker:
+
+- dependency versions against the exact pins in `package.json`
+- `pnpm-lock.yaml` against the lockfile the last completed install reified
+- the vendored **fonts** against the pinned package's own bytes, by exact filename
+- the vendored **JS and CSS** against the digests recorded when they were built, plus the
+  hashes of `vendor-entry.js` and `build-bundle.mjs`, so an edited bundle source forces a
+  rebuild rather than silently reusing stale code
+
+The JS/CSS check is a build-integrity check, not a comparison against the package: the bundle is
+esbuild output, so there is nothing in `node_modules` to compare it to byte for byte. What binds
+it to the pinned versions is the recorded input hashes plus the version fields, all re-verified
+on every run.
 
 ## Use
 

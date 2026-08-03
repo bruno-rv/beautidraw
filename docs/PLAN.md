@@ -393,7 +393,9 @@ places, both recorded rather than retro-fitted.
   image field and `generate.mjs` writes `files: null`, so illustrations ship beside the deck,
   not inside it). **No `assets.md`** — tickets 07/08 are unresolved and there is no icon set.
 - `scripts/` — `layout.mjs` (in-page), `generate.mjs`, `harness-runner.mjs`, `harness.html`,
-  `setup.mjs`, `build-bundle.mjs`, `vendor/` (generated), `LAYOUT-CONTRACT.md`.
+  `setup.mjs`, `build-bundle.mjs`, `metric-fonts.mjs` (the Nunito/Cascadia inventory, shared by
+  setup and the bundler so the two cannot drift), `vendor-entry.js`, `vendor/` (generated),
+  `spike/` (probes; `probe-06` is the viewer-drift gate), `LAYOUT-CONTRACT.md`.
   **`lint.js` and `render.js` were not built as separate files**: validation and rendering both
   live in `generate.mjs`, because both need the same booted Playwright page and splitting them
   would mean booting Chromium twice or passing the page across module boundaries for no gain.

@@ -21,7 +21,7 @@ import { fileURLToPath } from "node:url";
 import { EXPECTED_FONT_SUBSETS } from "./metric-fonts.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const MANIFEST_SCHEMA = "beautidraw.bundle-manifest/2";
+const MANIFEST_SCHEMA = "beautidraw.bundle-manifest/3";
 const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
 
 const LOCK = resolve(ROOT, "pnpm-lock.yaml");
@@ -187,6 +187,18 @@ function vendorProblem() {
     if (!installed) return `${pkg} is not installed`;
     if (recorded !== installed) {
       return `built against ${pkg}@${recorded}, but ${installed} is installed`;
+    }
+  }
+
+  // The bundle must match the source that built it, not merely its own recorded
+  // hash. A self-consistent bundle built from a since-edited vendor-entry.js is
+  // exactly the silent-stale-code case, and nothing else here would notice it.
+  const inputs = manifest.inputs;
+  if (!inputs || typeof inputs !== "object") return "manifest records no build inputs";
+  for (const rel of ["scripts/vendor-entry.js", "scripts/build-bundle.mjs"]) {
+    if (!inputs[rel]) return `manifest does not record ${rel}`;
+    if (sha256(readFileSync(resolve(ROOT, rel))) !== inputs[rel]) {
+      return `${rel} changed since the bundle was built`;
     }
   }
 

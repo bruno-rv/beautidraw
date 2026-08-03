@@ -79,8 +79,17 @@ for (const [family, expected] of Object.entries(EXPECTED_FONT_SUBSETS)) {
   }
 }
 
+// Bind the artifact to the source that produced it. The version fields below
+// pin WHAT went in; these pin HOW. Without them a plugin update that edits
+// vendor-entry.js or this script leaves a stale bundle that still validates
+// against its own recorded hash, and the old code is used silently.
+const inputs = {};
+for (const rel of ["scripts/vendor-entry.js", "scripts/build-bundle.mjs"]) {
+  inputs[rel] = sha256(await readFile(resolve(root, rel)));
+}
+
 const manifest = {
-  schema: "beautidraw.bundle-manifest/2",
+  schema: "beautidraw.bundle-manifest/3",
   excalidrawVersion: pkg.version,
   react: require("react/package.json").version,
   reactDom: require("react-dom/package.json").version,
@@ -90,6 +99,7 @@ const manifest = {
   cssSha256: sha256(css),
   bundleBytes: bundle.length,
   fonts,
+  inputs,
 };
 
 await writeFile(
