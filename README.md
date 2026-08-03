@@ -18,11 +18,17 @@ Three further things are required and none are committed: dependencies, a Chromi
 the 27 MB vendored Excalidraw bundle. One idempotent command provides all three:
 
 ```
-node scripts/setup.mjs        # or: pnpm setup
+node scripts/setup.mjs        # from a clone of this repo; or: pnpm setup
 ```
 
+From anywhere else — including a plugin install — give the full path:
+`node /path/to/beautidraw/scripts/setup.mjs`. The skill uses
+`"${CLAUDE_PLUGIN_ROOT}/scripts/setup.mjs"`.
+
 Re-running it on a provisioned tree prints `already provisioned` and does nothing. It is safe
-to call from a skill on every invocation, which is what the commands do.
+to call on every invocation, which is what the commands do. It re-checks rather than trusting a
+marker: dependency versions against the pins, `pnpm-lock.yaml` against the last completed
+install, and the vendored bundle and fonts against the pinned package's own bytes.
 
 ## Use
 

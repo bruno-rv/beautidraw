@@ -39,9 +39,11 @@ like noise.
 The floor is set by the fit-zoom gate: a band viewed fit-to-window renders at ~0.70×, so 18pt
 lands at ~12.6 css px. Nothing smaller is allowed, which is why the ramp starts high.
 
-`prose` (Nunito) is the default. `mono` (Cascadia) is a role — code, formulas, CLI, file paths,
-literal identifiers — not a house style. Note text is currently prose-only; write formulas as
-prose ("voluntary leavers over average headcount", not `leavers / headcount`).
+`prose` (Nunito) is the default. `mono` (Cascadia) is a **declared but unwired** role — code,
+formulas, CLI, file paths, literal identifiers. `layout.mjs` defines it in `FONT` and routes no
+text through it yet, so in practice every element in a generated deck is Nunito. Write formulas
+as prose ("voluntary leavers over average headcount", not `leavers / headcount`) until the role
+is wired.
 
 ## Contrast
 

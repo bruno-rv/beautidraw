@@ -14,18 +14,20 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { EXPECTED_FONT_SUBSETS } from "./metric-fonts.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const MANIFEST_SCHEMA = "beautidraw.bundle-manifest/2";
 const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
 
-// Excalidraw ships Nunito as five unicode-range subsets and Cascadia as one.
-// These are the faces the type ramp measures (docs/PLAN.md §2); the counts are
-// asserted so a partial manifest cannot pass as a complete one.
-const EXPECTED_FONT_SUBSETS = { Nunito: 5, Cascadia: 1 };
+const LOCK = resolve(ROOT, "pnpm-lock.yaml");
+// Written after a successful install, inside node_modules so it is removed with
+// the tree it describes.
+const STAMP = resolve(ROOT, "node_modules/.beautidraw-setup.json");
 
 function run(cmd, args) {
   // cwd is pinned to ROOT so this works when invoked from any directory —
@@ -76,13 +78,31 @@ function depProblem() {
     if (!installed) return `${dep} is not installed`;
     if (installed !== pin) return `${dep}@${installed} is installed, package.json pins ${pin}`;
   }
+  // Direct pins say nothing about the transitive tree. pnpm-lock.yaml does, so
+  // compare it against the lockfile the last successful install actually
+  // reified — otherwise a pulled commit that only moves transitive versions
+  // leaves a stale node_modules reporting ready.
+  if (!existsSync(LOCK)) return "pnpm-lock.yaml is missing";
+  const lockHash = sha256(readFileSync(LOCK));
+  let stamp;
+  try {
+    stamp = JSON.parse(readFileSync(STAMP, "utf8"));
+  } catch {
+    return "no record of a completed install for this lockfile";
+  }
+  if (stamp?.lockfileSha256 !== lockHash) return "pnpm-lock.yaml changed since the last install";
   return null;
+}
+
+function writeStamp() {
+  writeFileSync(STAMP, JSON.stringify({ lockfileSha256: sha256(readFileSync(LOCK)) }) + "\n");
 }
 
 const depIssue = depProblem();
 if (depIssue) {
   console.log(`[setup] installing dependencies — ${depIssue}`);
   run("pnpm", ["install", "--frozen-lockfile"]);
+  writeStamp();
   didWork = true;
 
   // Re-check, and stop if the install did not resolve it. `--frozen-lockfile`
@@ -114,6 +134,11 @@ if (!existsSync(chromiumPath)) {
   console.log("[setup] installing Chromium");
   run("pnpm", ["exec", "playwright", "install", "chromium"]);
   didWork = true;
+  // An install that exits 0 is not a browser that exists.
+  if (!existsSync(chromiumPath)) {
+    console.error(`[setup] Chromium is still absent after install: ${chromiumPath}`);
+    process.exit(1);
+  }
 }
 
 // Presence is not readiness. build-bundle.mjs writes manifest.json last, but a

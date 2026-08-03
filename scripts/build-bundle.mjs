@@ -11,6 +11,8 @@ import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { EXPECTED_FONT_SUBSETS } from "./metric-fonts.mjs";
+
 const require = createRequire(import.meta.url);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const vendorDir = resolve(root, "scripts/vendor");
@@ -55,19 +57,24 @@ const css = await readFile(resolve(vendorDir, "excalidraw.css"));
 const pkg = JSON.parse(await readFile(resolve(excalidrawPkg, "package.json"), "utf8"));
 const own = JSON.parse(await readFile(resolve(root, "package.json"), "utf8"));
 
-// Record the font files the type ramp actually measures against, by name and
-// hash, so setup.mjs can verify the copy exactly rather than counting files.
-// Only Nunito (prose) and Cascadia (mono) are recorded: those are the faces
-// §2's metric tuple measures, and a missing or truncated subset silently shifts
-// wrap points instead of failing (spike F2/F8). The other families are
-// registered by Excalidraw but never measured here — Xiaolai alone is 209 CJK
-// subsets, and hashing them on every setup run would cost far more than it
-// protects.
-const METRIC_FONT_FAMILIES = ["Nunito", "Cascadia"];
+// Record the font files the type ramp measures against, by name and hash, so
+// setup.mjs can verify the copy exactly rather than counting files. The family
+// list and the reasoning behind it live in metric-fonts.mjs, shared with setup.
 const fonts = {};
-for (const family of METRIC_FONT_FAMILIES) {
+for (const [family, expected] of Object.entries(EXPECTED_FONT_SUBSETS)) {
   const dir = resolve(vendorDir, "fonts", family);
-  for (const name of (await readdir(dir)).filter((f) => f.endsWith(".woff2")).sort()) {
+  const names = (await readdir(dir)).filter((f) => f.endsWith(".woff2")).sort();
+  // Assert here too, not only in setup.mjs. A direct `pnpm bundle` bypasses
+  // setup entirely, and without this it would happily write a self-consistent
+  // manifest describing a partial font copy — which setup would then accept as
+  // matching, because the manifest and the tree agree with each other.
+  if (names.length !== expected) {
+    throw new Error(
+      `fonts/${family}: found ${names.length} subsets, expected ${expected}. ` +
+        `Refusing to write a manifest for an incomplete font copy.`,
+    );
+  }
+  for (const name of names) {
     fonts[`${family}/${name}`] = sha256(await readFile(resolve(dir, name)));
   }
 }
