@@ -22,7 +22,17 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 function run(cmd, args) {
   // cwd is pinned to ROOT so this works when invoked from any directory —
   // pnpm and playwright both resolve config relative to cwd, not to argv[1].
-  execFileSync(cmd, args, { cwd: ROOT, stdio: "inherit" });
+  try {
+    execFileSync(cmd, args, { cwd: ROOT, stdio: "inherit" });
+  } catch (e) {
+    if (e.code === "ENOENT") {
+      console.error(`[setup] '${cmd}' is not on PATH. This repo pins its dependency tree with`);
+      console.error("[setup] pnpm (pnpm-lock.yaml + pnpm-workspace.yaml); install it first:");
+      console.error("[setup]   npm install -g pnpm");
+      process.exit(1);
+    }
+    throw e;
+  }
 }
 
 let didWork = false;
@@ -33,13 +43,17 @@ if (!existsSync(resolve(ROOT, "node_modules/playwright"))) {
   didWork = true;
 }
 
-// Playwright exits non-zero when the browser is missing, which is the check.
-try {
-  execFileSync("node", ["-e", "require('playwright').chromium.executablePath()"], {
-    cwd: ROOT,
-    stdio: "pipe",
-  });
-} catch {
+// `chromium.executablePath()` reports where the binary WOULD live; it does not
+// throw when the browser was never downloaded. Verified against this Playwright
+// build: firefox and webkit both return a path with existsSync === false. So the
+// check has to stat the path — catching a throw here would silently skip the
+// download and fail later at browser launch instead.
+const chromiumPath = execFileSync(
+  "node",
+  ["-e", "process.stdout.write(require('playwright').chromium.executablePath())"],
+  { cwd: ROOT, encoding: "utf8" },
+);
+if (!existsSync(chromiumPath)) {
   console.log("[setup] installing Chromium");
   run("pnpm", ["exec", "playwright", "install", "chromium"]);
   didWork = true;
