@@ -26,7 +26,7 @@ export const RAMP = { title: 48, heading: 38, hero: 30, label: 23, note: 18 };
 export const FONT = { prose: 6, mono: 3 }; // Nunito, Cascadia — spike F3
 export const FONT_NAME = { prose: "Nunito", mono: "Cascadia" };
 
-// z_actual / z_scene machinery (PLAN.md §4), used for the legibility gate and
+// z_actual / z_scene machinery (docs/PLAN.md §4), used for the legibility gate and
 // recorded in diagnostics.
 export const USABLE_W = 1600;
 export const USABLE_H = 850;
@@ -129,7 +129,7 @@ const PATTERNS = new Set([
 // planDeck — the single source of truth for role→text→size assignment and
 // spec validation. Pure. Used by both collectFontRequirements (Node, before
 // the harness boots) and layoutDeck (in-page). Throws named, located errors —
-// never silently drops or truncates (LAYOUT-CONTRACT.md, PLAN.md §9).
+// never silently drops or truncates (LAYOUT-CONTRACT.md, docs/PLAN.md §9).
 // ---------------------------------------------------------------------------
 
 function reqText(value, where) {
@@ -325,7 +325,7 @@ function measureNatural(api, id, text, fontSize) {
 }
 
 // Natural (unbound) text, stepping down the ramp once on overflow, per
-// PLAN.md §2's fixed-role overflow contract. Throws, naming the role, the
+// docs/PLAN.md §2's fixed-role overflow contract. Throws, naming the role, the
 // measured width and the budget, if it still doesn't fit.
 function fitChromeText(api, id, text, primarySize, fallbackSize, maxWidth, roleName) {
   let el = measureNatural(api, id, text, primarySize);
@@ -393,7 +393,7 @@ function placeCards(cards, x, yTop, width, gap, heights) {
 }
 
 // ---------------------------------------------------------------------------
-// Column-candidate search (LAYOUT-CONTRACT.md / PLAN.md §2): try each
+// Column-candidate search (LAYOUT-CONTRACT.md / docs/PLAN.md §2): try each
 // candidate k in declared order, accept the first whose BODY height clears
 // the band's remaining budget (BAND_HEIGHT_CAP minus the heading/deck-line/
 // padding overhead already spent — that overhead is fixed before any pattern

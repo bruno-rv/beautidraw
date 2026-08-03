@@ -49,7 +49,7 @@ export async function serve(dir = ROOT) {
   };
 }
 
-// Launch flags are part of oracle_hash (PLAN.md §8) — keep them here, in one
+// Launch flags are part of oracle_hash (docs/PLAN.md §8) — keep them here, in one
 // place, so the manifest can record exactly what was used.
 export const LAUNCH_ARGS = ["--font-render-hinting=none", "--disable-lcd-text"];
 export const DEVICE_SCALE_FACTOR = 1;

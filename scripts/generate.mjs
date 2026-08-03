@@ -8,7 +8,7 @@
 //
 // A failed run still writes diagnostics.json (with the failure reasons) but
 // never writes deck.excalidraw — a blocked run that explains nothing is
-// useless (PLAN.md §8), but a blocked run that ships a file anyway is worse.
+// useless (docs/PLAN.md §8), but a blocked run that ships a file anyway is worse.
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -102,7 +102,7 @@ function checkFrameHeightCap(elements) {
 }
 
 // Patterns exempted from the edge-coverage check below, with the reason each
-// one is exempt — PLAN.md's rule exists so a band cannot quietly abandon the
+// one is exempt — docs/PLAN.md's rule exists so a band cannot quietly abandon the
 // page, and every pattern except the ones named here still has to clear it.
 const EDGE_COVERAGE_EXEMPT_PATTERNS = new Set([
   // `flow` cards are deliberately narrow and centred on the page axis
@@ -130,7 +130,7 @@ function checkEdgeCoverage(elements, diagnostics) {
 
     // Probe set: this band's framed body elements plus its heading and deck
     // line — i.e. everything with frameId === frame.id except the frame
-    // itself, EXCLUDING decorative `line` elements (PLAN.md §3: "so a full-
+    // itself, EXCLUDING decorative `line` elements (docs/PLAN.md §3: "so a full-
     // width divider cannot mask an under-filled band" — the timeline axis is
     // exactly that shape, and it always spans edge-to-edge regardless of
     // whether the actual content cards do).

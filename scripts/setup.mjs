@@ -22,6 +22,11 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const MANIFEST_SCHEMA = "beautidraw.bundle-manifest/2";
 const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
 
+// Excalidraw ships Nunito as five unicode-range subsets and Cascadia as one.
+// These are the faces the type ramp measures (docs/PLAN.md §2); the counts are
+// asserted so a partial manifest cannot pass as a complete one.
+const EXPECTED_FONT_SUBSETS = { Nunito: 5, Cascadia: 1 };
+
 function run(cmd, args) {
   // cwd is pinned to ROOT so this works when invoked from any directory —
   // pnpm and playwright both resolve config relative to cwd, not to argv[1].
@@ -41,24 +46,57 @@ function run(cmd, args) {
 
 let didWork = false;
 
-// Every direct dependency, not a single marker: react and react-dom are loaded
-// by vendor-entry.js and recorded by build-bundle.mjs, so a partial install that
-// happens to contain playwright would otherwise report ready and fail later
-// during bundling. A marker directory can also survive an interrupted install,
-// which is why the repair has to be re-checkable rather than one-shot.
-const REQUIRED_DEPS = ["playwright", "@excalidraw/excalidraw", "esbuild", "react", "react-dom"];
-if (REQUIRED_DEPS.some((d) => !existsSync(resolve(ROOT, "node_modules", d)))) {
-  console.log("[setup] installing dependencies");
-  run("pnpm", ["install", "--frozen-lockfile"]);
-  didWork = true;
-}
-
 function installedVersion(pkg) {
   try {
     return JSON.parse(readFileSync(resolve(ROOT, "node_modules", pkg, "package.json"), "utf8"))
       .version;
   } catch {
     return null;
+  }
+}
+
+// Every direct dependency, at the pinned version — not just a directory that
+// exists. react and react-dom are loaded by vendor-entry.js and recorded by
+// build-bundle.mjs, so a partial install containing only playwright would
+// otherwise report ready and fail later during bundling; and a tree left behind
+// by an older pin would be bundled as if current, which is the same
+// wrong-measurements failure the vendor gate below exists to prevent.
+const PINS = JSON.parse(readFileSync(resolve(ROOT, "package.json"), "utf8")).devDependencies;
+const REQUIRED_DEPS = ["playwright", "@excalidraw/excalidraw", "esbuild", "react", "react-dom"];
+
+function depProblem() {
+  for (const dep of REQUIRED_DEPS) {
+    const pin = PINS?.[dep];
+    // This repo's whole thesis is that geometry is only reproducible against
+    // pinned versions, so a range here is a setup error, not something to
+    // shrug past — an unverifiable pin would make this gate fail-open.
+    if (!pin) return `package.json does not declare ${dep}`;
+    if (!/^\d+\.\d+\.\d+/.test(pin)) return `${dep} is pinned as "${pin}"; an exact version is required`;
+    const installed = installedVersion(dep);
+    if (!installed) return `${dep} is not installed`;
+    if (installed !== pin) return `${dep}@${installed} is installed, package.json pins ${pin}`;
+  }
+  return null;
+}
+
+const depIssue = depProblem();
+if (depIssue) {
+  console.log(`[setup] installing dependencies — ${depIssue}`);
+  run("pnpm", ["install", "--frozen-lockfile"]);
+  didWork = true;
+
+  // Re-check, and stop if the install did not resolve it. `--frozen-lockfile`
+  // is a no-op when the lockfile is already satisfied, so it cannot repair a
+  // node_modules tree that disagrees with the pins for some other reason. Left
+  // unchecked, setup would go on to build the vendor bundle against versions
+  // that do not match package.json — a bundle that measures wrongly but reports
+  // ready, which is the exact failure this whole gate exists to prevent.
+  const stillBroken = depProblem();
+  if (stillBroken) {
+    console.error(`[setup] dependencies are still wrong after install: ${stillBroken}`);
+    console.error("[setup] refusing to build the bundle against an unpinned tree.");
+    console.error("[setup] remove node_modules and re-run, or reconcile pnpm-lock.yaml.");
+    process.exit(1);
   }
 }
 
@@ -96,6 +134,11 @@ function vendorProblem() {
     manifest = JSON.parse(readFileSync(resolve(VENDOR, "manifest.json"), "utf8"));
   } catch (e) {
     return `manifest.json is unreadable (${e.message})`;
+  }
+  // `null` and `[1,2]` are both valid JSON, and reading .schema off null throws
+  // a TypeError that escapes this function instead of triggering a rebuild.
+  if (manifest === null || typeof manifest !== "object" || Array.isArray(manifest)) {
+    return "manifest.json is not an object";
   }
 
   if (manifest.schema !== MANIFEST_SCHEMA) {
@@ -144,7 +187,22 @@ function vendorProblem() {
   // against a subset that is present but wrong silently changes wrap points
   // (spike F2/F8) rather than failing.
   const fonts = manifest.fonts;
-  if (!fonts || Object.keys(fonts).length === 0) return "manifest records no fonts";
+  if (!fonts || typeof fonts !== "object") return "manifest records no fonts";
+
+  // The inventory itself must be exact. "any non-empty map" let a manifest
+  // listing Cascadia alone validate, which is precisely the case that matters:
+  // every Nunito subset would be unverified while the gate reported ready.
+  for (const [family, expected] of Object.entries(EXPECTED_FONT_SUBSETS)) {
+    const found = Object.keys(fonts).filter((k) => k.startsWith(`${family}/`)).length;
+    if (found !== expected) {
+      return `manifest records ${found} ${family} subsets, expected ${expected}`;
+    }
+  }
+  const extra = Object.keys(fonts).filter(
+    (k) => !Object.keys(EXPECTED_FONT_SUBSETS).some((f) => k.startsWith(`${f}/`)),
+  );
+  if (extra.length) return `manifest records unexpected fonts: ${extra.join(", ")}`;
+
   for (const [rel, digest] of Object.entries(fonts)) {
     const file = resolve(VENDOR, "fonts", rel);
     if (!existsSync(file)) return `font ${rel} is missing`;
