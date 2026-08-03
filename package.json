@@ -1,0 +1,22 @@
+{
+  "name": "beautidraw",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Generator for sectioned Excalidraw lesson canvases",
+  "type": "module",
+  "scripts": {
+    "spike": "node scripts/spike/run-all.mjs",
+    "spike:network": "node scripts/spike/run-all.mjs --network",
+    "bundle": "node scripts/build-bundle.mjs"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  },
+  "devDependencies": {
+    "@excalidraw/excalidraw": "0.18.1",
+    "esbuild": "0.25.10",
+    "playwright": "1.56.1",
+    "react": "19.2.0",
+    "react-dom": "19.2.0"
+  }
+}

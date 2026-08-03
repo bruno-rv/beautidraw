@@ -1,0 +1,845 @@
+{
+  "viewerVersion": {
+    "version": "2026-07-28T16:12:33Z-1acf66e",
+    "buildId": "1acf66edabc2ac5bbd4aed0714aed7dca7cc2aab",
+    "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.7390.37 Safari/537.36"
+  },
+  "pinnedViewerBuild": "2026-07-28T16:12:33Z-1acf66e",
+  "viewerBuildMatchesPinned": true,
+  "fontChecks": {
+    "ours": {
+      "Excalifont/latin": true,
+      "Excalifont/latinExt": true,
+      "Excalifont/cyrillic": true,
+      "Excalifont/vietnamese": true,
+      "Nunito/latin": true,
+      "Nunito/latinExt": true,
+      "Nunito/cyrillic": true,
+      "Nunito/vietnamese": true,
+      "Cascadia/latin": true,
+      "Cascadia/latinExt": true,
+      "Cascadia/cyrillic": true,
+      "Cascadia/vietnamese": true,
+      "Comic Shanns/latin": true,
+      "Comic Shanns/latinExt": true,
+      "Comic Shanns/cyrillic": true,
+      "Comic Shanns/vietnamese": true,
+      "Lilita One/latin": true,
+      "Lilita One/latinExt": true,
+      "Lilita One/cyrillic": true,
+      "Lilita One/vietnamese": true
+    },
+    "viewer": {
+      "Excalifont/latin": true,
+      "Excalifont/latinExt": true,
+      "Excalifont/cyrillic": true,
+      "Excalifont/vietnamese": true,
+      "Nunito/latin": true,
+      "Nunito/latinExt": true,
+      "Nunito/cyrillic": true,
+      "Nunito/vietnamese": true,
+      "Cascadia/latin": true,
+      "Cascadia/latinExt": true,
+      "Cascadia/cyrillic": true,
+      "Cascadia/vietnamese": true,
+      "Comic Shanns/latin": true,
+      "Comic Shanns/latinExt": true,
+      "Comic Shanns/cyrillic": true,
+      "Comic Shanns/vietnamese": true,
+      "Lilita One/latin": true,
+      "Lilita One/latinExt": true,
+      "Lilita One/cyrillic": true,
+      "Lilita One/vietnamese": true
+    }
+  },
+  "failedChecks": [],
+  "fpKeyFailures": [],
+  "fontFingerprintDiff": {
+    "Excalifont@18/latin": {
+      "ours": 569.5556640625,
+      "viewer": 569.5556640625,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Excalifont@18/latinExt": {
+      "ours": 311.68475341796875,
+      "viewer": 311.68475341796875,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Excalifont@18/cyrillic": {
+      "ours": 338.831787109375,
+      "viewer": 338.831787109375,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Excalifont@18/vietnamese": {
+      "ours": 287.0261535644531,
+      "viewer": 287.0261535644531,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Excalifont@23/latin": {
+      "ours": 727.765625,
+      "viewer": 727.765625,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Excalifont@23/latinExt": {
+      "ours": 398.263916015625,
+      "viewer": 398.263916015625,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Excalifont@23/cyrillic": {
+      "ours": 432.95172119140625,
+      "viewer": 432.95172119140625,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Excalifont@23/vietnamese": {
+      "ours": 366.7557373046875,
+      "viewer": 366.7557373046875,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Excalifont@30/latin": {
+      "ours": 949.259765625,
+      "viewer": 949.259765625,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Excalifont@30/latinExt": {
+      "ours": 519.474609375,
+      "viewer": 519.474609375,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Excalifont@30/cyrillic": {
+      "ours": 564.7198486328125,
+      "viewer": 564.7198486328125,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Excalifont@30/vietnamese": {
+      "ours": 478.3770751953125,
+      "viewer": 478.3770751953125,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Excalifont@38/latin": {
+      "ours": 1202.3956298828125,
+      "viewer": 1202.3956298828125,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Excalifont@38/latinExt": {
+      "ours": 658.0013427734375,
+      "viewer": 658.0013427734375,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Excalifont@38/cyrillic": {
+      "ours": 715.311767578125,
+      "viewer": 715.311767578125,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Excalifont@38/vietnamese": {
+      "ours": 605.9442749023438,
+      "viewer": 605.9442749023438,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Excalifont@48/latin": {
+      "ours": 1518.8153076171875,
+      "viewer": 1518.8153076171875,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Excalifont@48/latinExt": {
+      "ours": 831.1595458984375,
+      "viewer": 831.1595458984375,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Excalifont@48/cyrillic": {
+      "ours": 903.5517578125,
+      "viewer": 903.5517578125,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Excalifont@48/vietnamese": {
+      "ours": 765.4033813476562,
+      "viewer": 765.4033813476562,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Nunito@18/latin": {
+      "ours": 526.517578125,
+      "viewer": 526.517578125,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Nunito@18/latinExt": {
+      "ours": 263.8616943359375,
+      "viewer": 263.8616943359375,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Nunito@18/cyrillic": {
+      "ours": 334.979736328125,
+      "viewer": 334.979736328125,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Nunito@18/vietnamese": {
+      "ours": 269.92779541015625,
+      "viewer": 269.92779541015625,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Nunito@23/latin": {
+      "ours": 672.7724609375,
+      "viewer": 672.7724609375,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Nunito@23/latinExt": {
+      "ours": 337.156494140625,
+      "viewer": 337.156494140625,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Nunito@23/cyrillic": {
+      "ours": 428.02972412109375,
+      "viewer": 428.02972412109375,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Nunito@23/vietnamese": {
+      "ours": 344.9077453613281,
+      "viewer": 344.9077453613281,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Nunito@30/latin": {
+      "ours": 877.529541015625,
+      "viewer": 877.529541015625,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Nunito@30/latinExt": {
+      "ours": 439.76947021484375,
+      "viewer": 439.76947021484375,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Nunito@30/cyrillic": {
+      "ours": 558.2998046875,
+      "viewer": 558.2998046875,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Nunito@30/vietnamese": {
+      "ours": 449.87969970703125,
+      "viewer": 449.87969970703125,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Nunito@38/latin": {
+      "ours": 1111.5377197265625,
+      "viewer": 1111.5377197265625,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Nunito@38/latinExt": {
+      "ours": 557.0416259765625,
+      "viewer": 557.0416259765625,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Nunito@38/cyrillic": {
+      "ours": 707.1798095703125,
+      "viewer": 707.1798095703125,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Nunito@38/vietnamese": {
+      "ours": 569.8478393554688,
+      "viewer": 569.8478393554688,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Nunito@48/latin": {
+      "ours": 1404.0477294921875,
+      "viewer": 1404.0477294921875,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Nunito@48/latinExt": {
+      "ours": 703.631591796875,
+      "viewer": 703.631591796875,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Nunito@48/cyrillic": {
+      "ours": 893.2797241210938,
+      "viewer": 893.2797241210938,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Nunito@48/vietnamese": {
+      "ours": 719.807861328125,
+      "viewer": 719.807861328125,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Cascadia@18/latin": {
+      "ours": 632.8125,
+      "viewer": 632.8125,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Cascadia@18/latinExt": {
+      "ours": 381.146484375,
+      "viewer": 381.146484375,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Cascadia@18/cyrillic": {
+      "ours": 358.59375,
+      "viewer": 358.59375,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Cascadia@18/vietnamese": {
+      "ours": 326.953125,
+      "viewer": 326.953125,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Cascadia@23/latin": {
+      "ours": 808.59375,
+      "viewer": 808.59375,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Cascadia@23/latinExt": {
+      "ours": 487.0205078125,
+      "viewer": 487.0205078125,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Cascadia@23/cyrillic": {
+      "ours": 458.203125,
+      "viewer": 458.203125,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Cascadia@23/vietnamese": {
+      "ours": 417.7734375,
+      "viewer": 417.7734375,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Cascadia@30/latin": {
+      "ours": 1054.6875,
+      "viewer": 1054.6875,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Cascadia@30/latinExt": {
+      "ours": 635.244140625,
+      "viewer": 635.244140625,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Cascadia@30/cyrillic": {
+      "ours": 597.65625,
+      "viewer": 597.65625,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Cascadia@30/vietnamese": {
+      "ours": 544.921875,
+      "viewer": 544.921875,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Cascadia@38/latin": {
+      "ours": 1335.9375,
+      "viewer": 1335.9375,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Cascadia@38/latinExt": {
+      "ours": 804.642578125,
+      "viewer": 804.642578125,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Cascadia@38/cyrillic": {
+      "ours": 757.03125,
+      "viewer": 757.03125,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Cascadia@38/vietnamese": {
+      "ours": 690.234375,
+      "viewer": 690.234375,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Cascadia@48/latin": {
+      "ours": 1687.5,
+      "viewer": 1687.5,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Cascadia@48/latinExt": {
+      "ours": 1016.390625,
+      "viewer": 1016.390625,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Cascadia@48/cyrillic": {
+      "ours": 956.25,
+      "viewer": 956.25,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Cascadia@48/vietnamese": {
+      "ours": 871.875,
+      "viewer": 871.875,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Comic Shanns@18/latin": {
+      "ours": 593.9996337890625,
+      "viewer": 593.9996337890625,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Comic Shanns@18/latinExt": {
+      "ours": 365.99066162109375,
+      "viewer": 365.99066162109375,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Comic Shanns@18/cyrillic": {
+      "ours": 315.4235534667969,
+      "viewer": 315.4235534667969,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Comic Shanns@18/vietnamese": {
+      "ours": 305.6201477050781,
+      "viewer": 305.6201477050781,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Comic Shanns@23/latin": {
+      "ours": 758.9996337890625,
+      "viewer": 758.9996337890625,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Comic Shanns@23/latinExt": {
+      "ours": 467.65478515625,
+      "viewer": 467.65478515625,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Comic Shanns@23/cyrillic": {
+      "ours": 403.0412292480469,
+      "viewer": 403.0412292480469,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Comic Shanns@23/vietnamese": {
+      "ours": 390.5146789550781,
+      "viewer": 390.5146789550781,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Comic Shanns@30/latin": {
+      "ours": 990,
+      "viewer": 990,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Comic Shanns@30/latinExt": {
+      "ours": 609.9847412109375,
+      "viewer": 609.9847412109375,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Comic Shanns@30/cyrillic": {
+      "ours": 525.7060546875,
+      "viewer": 525.7060546875,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Comic Shanns@30/vietnamese": {
+      "ours": 509.3671875,
+      "viewer": 509.3671875,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Comic Shanns@38/latin": {
+      "ours": 1253.9998779296875,
+      "viewer": 1253.9998779296875,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Comic Shanns@38/latinExt": {
+      "ours": 772.6473388671875,
+      "viewer": 772.6473388671875,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Comic Shanns@38/cyrillic": {
+      "ours": 665.894287109375,
+      "viewer": 665.894287109375,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Comic Shanns@38/vietnamese": {
+      "ours": 645.1982421875,
+      "viewer": 645.1982421875,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Comic Shanns@48/latin": {
+      "ours": 1583.9998779296875,
+      "viewer": 1583.9998779296875,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Comic Shanns@48/latinExt": {
+      "ours": 975.9757080078125,
+      "viewer": 975.9757080078125,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Comic Shanns@48/cyrillic": {
+      "ours": 841.1295776367188,
+      "viewer": 841.1295776367188,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Comic Shanns@48/vietnamese": {
+      "ours": 814.9873046875,
+      "viewer": 814.9873046875,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Lilita One@18/latin": {
+      "ours": 488.7535400390625,
+      "viewer": 488.7535400390625,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Lilita One@18/latinExt": {
+      "ours": 238.52120971679688,
+      "viewer": 238.52120971679688,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Lilita One@18/cyrillic": {
+      "ours": 294.61553955078125,
+      "viewer": 294.61553955078125,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Lilita One@18/vietnamese": {
+      "ours": 248.3981170654297,
+      "viewer": 248.3981170654297,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Lilita One@23/latin": {
+      "ours": 624.5185546875,
+      "viewer": 624.5185546875,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Lilita One@23/latinExt": {
+      "ours": 304.77716064453125,
+      "viewer": 304.77716064453125,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Lilita One@23/cyrillic": {
+      "ours": 376.4532165527344,
+      "viewer": 376.4532165527344,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Lilita One@23/vietnamese": {
+      "ours": 317.3976135253906,
+      "viewer": 317.3976135253906,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Lilita One@30/latin": {
+      "ours": 814.58984375,
+      "viewer": 814.58984375,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Lilita One@30/latinExt": {
+      "ours": 397.53582763671875,
+      "viewer": 397.53582763671875,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Lilita One@30/cyrillic": {
+      "ours": 491.02606201171875,
+      "viewer": 491.02606201171875,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Lilita One@30/vietnamese": {
+      "ours": 413.9970703125,
+      "viewer": 413.9970703125,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Lilita One@38/latin": {
+      "ours": 1031.8134765625,
+      "viewer": 1031.8134765625,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Lilita One@38/latinExt": {
+      "ours": 503.5450439453125,
+      "viewer": 503.5450439453125,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Lilita One@38/cyrillic": {
+      "ours": 621.9661865234375,
+      "viewer": 621.9661865234375,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Lilita One@38/vietnamese": {
+      "ours": 524.396240234375,
+      "viewer": 524.396240234375,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Lilita One@48/latin": {
+      "ours": 1303.343505859375,
+      "viewer": 1303.343505859375,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Lilita One@48/latinExt": {
+      "ours": 636.0569458007812,
+      "viewer": 636.0569458007812,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Lilita One@48/cyrillic": {
+      "ours": 785.6416015625,
+      "viewer": 785.6416015625,
+      "deltaPx": 0,
+      "deltaPct": 0
+    },
+    "Lilita One@48/vietnamese": {
+      "ours": 662.395263671875,
+      "viewer": 662.395263671875,
+      "deltaPx": 0,
+      "deltaPct": 0
+    }
+  },
+  "maxFingerprintDeltaPct": 0,
+  "maxFingerprintDeltaPx": 0,
+  "tolerancePx": 0,
+  "fingerprintIdentical": true,
+  "boundTextParity": {
+    "written": {
+      "width": 288.5396728515625,
+      "height": 81,
+      "text": "The quick brown fox jumps over\nthe lazy dog and keeps running\nwell past the edge"
+    },
+    "readBack": {
+      "id": "txt1",
+      "type": "text",
+      "x": 105.73016357421875,
+      "y": 109.5,
+      "width": 288.5396728515625,
+      "height": 81,
+      "angle": 0,
+      "frameId": "frm1",
+      "containerId": "cont1",
+      "boundElements": [],
+      "fontSize": 20,
+      "fontFamily": 6,
+      "lineHeight": 1.35,
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "autoResize": true,
+      "text": "The quick brown fox jumps over\nthe lazy dog and keeps running\nwell past the edge",
+      "originalText": "The quick brown fox jumps over the lazy dog and keeps running well past the edge",
+      "isDeleted": false
+    },
+    "textUnchanged": true,
+    "widthDelta": 0,
+    "heightDelta": 0
+  },
+  "orderingParity": {
+    "childBeforeFrameKeptFrameId": "frm1",
+    "frameFirstKeptFrameId": "frm1",
+    "identicalGeometry": true,
+    "mismatches": []
+  },
+  "writtenSceneParity": [],
+  "rawViewerScenes": {
+    "childBeforeFrame": [
+      {
+        "id": "cont1",
+        "type": "rectangle",
+        "x": 100,
+        "y": 100,
+        "width": 300,
+        "height": 100,
+        "angle": 0,
+        "frameId": "frm1",
+        "containerId": null,
+        "boundElements": [
+          {
+            "type": "text",
+            "id": "txt1"
+          }
+        ],
+        "fontSize": null,
+        "fontFamily": null,
+        "lineHeight": null,
+        "textAlign": null,
+        "verticalAlign": null,
+        "autoResize": null,
+        "text": null,
+        "originalText": null,
+        "isDeleted": false
+      },
+      {
+        "id": "txt1",
+        "type": "text",
+        "x": 105.73016357421875,
+        "y": 109.5,
+        "width": 288.5396728515625,
+        "height": 81,
+        "angle": 0,
+        "frameId": "frm1",
+        "containerId": "cont1",
+        "boundElements": [],
+        "fontSize": 20,
+        "fontFamily": 6,
+        "lineHeight": 1.35,
+        "textAlign": "center",
+        "verticalAlign": "middle",
+        "autoResize": true,
+        "text": "The quick brown fox jumps over\nthe lazy dog and keeps running\nwell past the edge",
+        "originalText": "The quick brown fox jumps over the lazy dog and keeps running well past the edge",
+        "isDeleted": false
+      },
+      {
+        "id": "frm1",
+        "type": "frame",
+        "x": 60,
+        "y": 60,
+        "width": 400,
+        "height": 200,
+        "angle": 0,
+        "frameId": null,
+        "containerId": null,
+        "boundElements": [],
+        "fontSize": null,
+        "fontFamily": null,
+        "lineHeight": null,
+        "textAlign": null,
+        "verticalAlign": null,
+        "autoResize": null,
+        "text": null,
+        "originalText": null,
+        "isDeleted": false
+      }
+    ],
+    "frameFirst": [
+      {
+        "id": "frm1",
+        "type": "frame",
+        "x": 60,
+        "y": 60,
+        "width": 400,
+        "height": 200,
+        "angle": 0,
+        "frameId": null,
+        "containerId": null,
+        "boundElements": [],
+        "fontSize": null,
+        "fontFamily": null,
+        "lineHeight": null,
+        "textAlign": null,
+        "verticalAlign": null,
+        "autoResize": null,
+        "text": null,
+        "originalText": null,
+        "isDeleted": false
+      },
+      {
+        "id": "cont1",
+        "type": "rectangle",
+        "x": 100,
+        "y": 100,
+        "width": 300,
+        "height": 100,
+        "angle": 0,
+        "frameId": "frm1",
+        "containerId": null,
+        "boundElements": [
+          {
+            "type": "text",
+            "id": "txt1"
+          }
+        ],
+        "fontSize": null,
+        "fontFamily": null,
+        "lineHeight": null,
+        "textAlign": null,
+        "verticalAlign": null,
+        "autoResize": null,
+        "text": null,
+        "originalText": null,
+        "isDeleted": false
+      },
+      {
+        "id": "txt1",
+        "type": "text",
+        "x": 105.73016357421875,
+        "y": 109.5,
+        "width": 288.5396728515625,
+        "height": 81,
+        "angle": 0,
+        "frameId": "frm1",
+        "containerId": "cont1",
+        "boundElements": [],
+        "fontSize": 20,
+        "fontFamily": 6,
+        "lineHeight": 1.35,
+        "textAlign": "center",
+        "verticalAlign": "middle",
+        "autoResize": true,
+        "text": "The quick brown fox jumps over\nthe lazy dog and keeps running\nwell past the edge",
+        "originalText": "The quick brown fox jumps over the lazy dog and keeps running well past the edge",
+        "isDeleted": false
+      }
+    ]
+  },
+  "passed": true,
+  "failures": []
+}

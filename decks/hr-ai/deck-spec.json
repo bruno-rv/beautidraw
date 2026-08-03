@@ -1,0 +1,221 @@
+{
+  "title": "Less Admin, More Human",
+  "subtitle": "Practical AI workflows for HR with Joyia and MediaHub",
+  "footer": "Less blank-page work, repetitive transformation and manual synthesis — more time on people, judgment and decisions",
+  "bands": [
+    {
+      "heading": "What would you stop rebuilding from scratch?",
+      "deck": "AI removes blank-page work and manual synthesis, not your judgment",
+      "pattern": "row-of-stages",
+      "accent": "blue",
+      "nodes": [
+        { "label": "Reports and Excel analyses" },
+        { "label": "Communications" },
+        { "label": "Training materials" },
+        { "label": "Research and comparison tables" },
+        { "label": "Policies and recurring questions" }
+      ]
+    },
+    {
+      "heading": "The same source, finished work",
+      "deck": "Four transformations you already do by hand every month",
+      "pattern": "row-of-stages",
+      "accent": "green",
+      "nodes": [
+        {
+          "label": "One message becomes several",
+          "note": "One approved source, then controlled channel variants: Teams, email, LinkedIn, external"
+        },
+        {
+          "label": "One spreadsheet becomes insight",
+          "note": "Validate, calculate, visualise, summarise — decision-ready, not just formatted"
+        },
+        {
+          "label": "One rough idea becomes a package",
+          "note": "Bullets to a facilitator guide, handout, diagram and reusable template"
+        },
+        {
+          "label": "One document becomes evidence",
+          "note": "Extract and structure, with every figure traced back to its source"
+        }
+      ]
+    },
+    {
+      "heading": "From an HR need to a reusable playbook",
+      "deck": "Chat is the thinking room; MediaHub is the production workspace",
+      "pattern": "flow",
+      "accent": "violet",
+      "nodes": [
+        { "label": "HR need", "note": "A real recurring process, not an AI experiment" },
+        { "label": "Joyia Chat", "note": "Ask, search, plan, summarise, schedule" },
+        { "label": "MediaHub", "note": "Create, analyse, edit, visualise, collaborate" },
+        { "label": "Quality gate", "note": "Persona review, diff cards, approvals, source checks" },
+        { "label": "Human owner", "note": "Validate, decide, publish — accountability stays here" },
+        { "label": "Collection", "note": "Reuse, share, repeat, improve — the team playbook" }
+      ]
+    },
+    {
+      "heading": "Four things to remember",
+      "deck": "AI generates, works from what you give it, and still needs you",
+      "pattern": "row-of-stages",
+      "accent": "amber",
+      "nodes": [
+        {
+          "label": "Generates, not guarantees",
+          "note": "A fluent answer is not a verified answer. Ask it to separate fact from interpretation."
+        },
+        {
+          "label": "Context is its working desk",
+          "note": "If it is not on the desk it may not be used. Give the smallest complete context."
+        },
+        {
+          "label": "Grounding uses approved sources",
+          "note": "Name exactly which sources it may use, and forbid inventing what is missing."
+        },
+        {
+          "label": "Review scales with consequence",
+          "note": "The more an output can affect a person, the less autonomy the AI should have."
+        }
+      ]
+    },
+    {
+      "heading": "A good HR prompt sets boundaries and accountability",
+      "deck": "The same five parts every time — not ten frameworks",
+      "pattern": "row-of-stages",
+      "accent": "green",
+      "nodes": [
+        { "label": "Situation", "note": "What is happening, and for whom" },
+        { "label": "Task", "note": "What Joyia should actually do" },
+        { "label": "Source", "note": "Which information it may use — and only that" },
+        { "label": "Constraints", "note": "What to preserve, avoid, and never invent" },
+        { "label": "Output and checks", "note": "Format, plus what must be flagged for confirmation" }
+      ]
+    },
+    {
+      "heading": "One message becomes several communications",
+      "deck": "One factual source, controlled channel variants",
+      "pattern": "flow",
+      "accent": "blue",
+      "nodes": [
+        { "label": "One approved source", "note": "Facts, names, dates and eligibility rules — agreed once" },
+        { "label": "Channel variants", "note": "Teams post, internal email, LinkedIn, external announcement" },
+        { "label": "Persona review on save", "note": "Editor and Proofreader check tone and clarity" },
+        { "label": "Diff card, not auto-accept", "note": "You see the proposed change before it lands" },
+        { "label": "Reusable template", "note": "The approved format goes into a shared Collection" }
+      ]
+    },
+    {
+      "heading": "One spreadsheet becomes decision-ready insight",
+      "deck": "Joyia finds patterns and asks questions. You decide what they mean",
+      "pattern": "flow",
+      "accent": "amber",
+      "nodes": [
+        { "label": "Validate first", "note": "Flag inconsistent periods, missing data and small samples" },
+        { "label": "Define the metric", "note": "Voluntary leavers over average headcount — stated, not guessed" },
+        { "label": "Calculation table", "note": "With the logic shown, not only the result" },
+        { "label": "Observations and questions", "note": "Three based on evidence, two worth investigating" },
+        { "label": "Dashboard", "note": "Trends, response coverage, and a visible caveats section" },
+        { "label": "Executive summary", "note": "Five sentences, with assumptions and limitations" },
+        { "label": "Reviewer challenges it", "note": "Unsupported conclusions get flagged before you send" }
+      ]
+    },
+    {
+      "heading": "One rough idea becomes a workshop package",
+      "deck": "Asking AI to critique the workshop matters as much as creating it",
+      "pattern": "flow",
+      "accent": "violet",
+      "nodes": [
+        { "label": "What is missing?", "note": "Ask before generating — the brief is always incomplete" },
+        { "label": "Objectives and agenda", "note": "Three learning objectives and a timed run of the session" },
+        { "label": "Facilitator notes", "note": "One agenda section expanded into what you actually say" },
+        { "label": "Workshop flow diagram", "note": "Drawn on the canvas, not built by hand" },
+        { "label": "Accessibility review", "note": "A persona flags sensitivity and participation issues" },
+        { "label": "Shared Collection", "note": "Guide, handout and diagram, read-only for other facilitators" }
+      ]
+    },
+    {
+      "heading": "AI can organise the evidence. The evidence still comes from the source.",
+      "deck": "Salary benchmarking, benefits and awards: compare, never invent",
+      "pattern": "row-of-stages",
+      "accent": "red",
+      "nodes": [
+        { "label": "Extract", "note": "OCR pulls the table out of a scanned vendor PDF" },
+        { "label": "Structure", "note": "Roles, levels and sources in one comparison table" },
+        { "label": "Attribute", "note": "Source title, page, date, geography and population per figure" },
+        { "label": "Verify", "note": "Compare one extracted figure against the original PDF" },
+        { "label": "Separate", "note": "Extracted facts kept apart from AI interpretation" }
+      ]
+    },
+    {
+      "heading": "The more an output can affect a person, the less autonomy the AI gets",
+      "deck": "Where it may generate freely, assist, or stay out of the decision",
+      "pattern": "comparison",
+      "accent": "slate",
+      "nodes": [
+        {
+          "label": "Green — generate freely",
+          "tone": "green",
+          "items": [
+            "Drafting and formatting",
+            "Summarising approved content",
+            "Building reusable templates",
+            "AI role: generate and transform, then normal review"
+          ]
+        },
+        {
+          "label": "Yellow — assist with checks",
+          "tone": "amber",
+          "items": [
+            "Turnover and survey analysis",
+            "Compensation research",
+            "Sensitive communications",
+            "AI role: approved data and sources, explicit human review"
+          ]
+        },
+        {
+          "label": "Red — human decides",
+          "tone": "red",
+          "items": [
+            "Hiring and promotion",
+            "Pay and discipline",
+            "Medical and accommodation",
+            "AI role: none in the decision. Human-led throughout."
+          ]
+        }
+      ]
+    },
+    {
+      "heading": "Start with one process, not several experiments",
+      "deck": "Pick one recurring process and answer these",
+      "pattern": "checklist",
+      "accent": "blue",
+      "nodes": [
+        { "label": "What triggers it?", "note": "End of month" },
+        { "label": "What inputs are needed?", "note": "Approved headcount file" },
+        { "label": "Which steps repeat?", "note": "Formulas, charts, summary" },
+        { "label": "What judgment stays human?", "note": "Interpretation and management action" },
+        { "label": "What should Joyia do?", "note": "Validate, calculate, summarise" },
+        { "label": "What should MediaHub create?", "note": "A reviewed reporting package" },
+        { "label": "Who approves it?", "note": "The HR analytics owner" },
+        { "label": "Can it become a template?", "note": "If it repeats, yes" },
+        { "label": "How is improvement measured?", "note": "Time, corrections, review rounds" }
+      ]
+    },
+    {
+      "heading": "The next step is deliberately small",
+      "deck": "One process, one source, one review gate, one owner, one outcome",
+      "pattern": "flow",
+      "accent": "red",
+      "nodes": [
+        {
+          "label": "Which single HR process should we improve first?",
+          "note": "One recurring process, one approved source, one reusable template"
+        },
+        {
+          "label": "And what part of it should Joyia never be allowed to decide?",
+          "note": "One review gate, one measurable outcome, and a named human owner"
+        }
+      ]
+    }
+  ]
+}

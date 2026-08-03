@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>beautidraw harness</title>
+    <link rel="stylesheet" href="./vendor/excalidraw.css" />
+    <style>
+      html,
+      body,
+      #root {
+        margin: 0;
+        padding: 0;
+        width: 100vw;
+        height: 100vh;
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      // Fonts are fetched relative to this path. Everything is local — no CDN
+      // at render time (PLAN.md §11).
+      window.EXCALIDRAW_ASSET_PATH = new URL("./vendor/", location.href).href;
+
+      window.__bdReady = (async () => {
+        const api = await import("./vendor/excalidraw.js");
+        window.__bdApi = api;
+        window.__bdEditor = await api.mountEditor(
+          document.getElementById("root"),
+        );
+        await document.fonts.ready;
+        return true;
+      })().then(
+        () => ({ ok: true }),
+        (err) => ({ ok: false, error: String(err && err.stack) || String(err) }),
+      );
+    </script>
+  </body>
+</html>
