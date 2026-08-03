@@ -7,7 +7,7 @@ Build an Excalidraw deck about: $ARGUMENTS
 
 Everything before `--out-dir` is the topic. If `--out-dir` is absent, write to `decks/<slug>/`.
 
-Use the `beautidraw` skill. First run `node ${CLAUDE_PLUGIN_ROOT}/scripts/setup.mjs` —
+Use the `beautidraw` skill. First run `node "${CLAUDE_PLUGIN_ROOT}/scripts/setup.mjs"` —
 idempotent, and a no-op once provisioned.
 
 There is no source document here, so the content is yours to establish. Before writing

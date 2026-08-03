@@ -5,11 +5,13 @@ _Round 15 — **APPROVED by Codex.** First approved at round 8, reopened when th
 
 Build a Claude Code plugin at `~/Dev/beautidraw` whose skills turn a markdown document or a topic string into a single `.excalidraw` file: one continuous canvas, stacked labelled section bands running top to bottom, each band wrapped in a numbered `frame`, opened and panned by hand in excalidraw.com. No slideshow, no export, no presenter mode.
 
-The reference artifact is `examples/al-1.excalidraw` — a real lesson poster the author hand-built (scene bbox 2705 × 1695; the 2725 × 1715 figure quoted elsewhere is the padded SVG export size). Its author's verdict: *representative of the format, but it needs improving.* A five-lens adversarially-verified critique produced **35 confirmed defects**, and this plan exists to make each one structurally impossible rather than merely discouraged.
+The reference artifact is `examples/reference/al-1.excalidraw` — a real lesson poster the author hand-built (scene bbox 2705 × 1695; the 2725 × 1715 figure quoted elsewhere is the padded SVG export size). Its author's verdict: *representative of the format, but it needs improving.* A five-lens adversarially-verified critique produced **35 confirmed defects**, and this plan exists to make each one structurally impossible rather than merely discouraged.
 
 ## Context that constrains the design
 
 Settled (wayfinder map, `docs/design-notes/map.md`): standalone self-contained plugin repo; clean-room visual system; two entry points; mandatory self-validation; progressive disclosure; imagery from both vector primitives and a shipped asset catalogue.
+
+*(Amended at packaging, 2026-08-03: **the shipped asset catalogue was not built.** Tickets 07/08 never resolved, there is no `assets/` tree, and the layout engine has no image element path — `generate.mjs` writes `files: null`. Imagery is vector primitives only. `skills/beautidraw/references/blackboard-images.md` defines an illustration **style** contract whose assets ship beside the deck rather than inside it; its embedding steps are marked as design for an unbuilt feature. "Self-contained" also narrowed: the 27 MB vendor bundle and Chromium are provisioned by `scripts/setup.mjs`, not committed. See §12.)*
 
 Verified format facts (research 02/03/04, amended by the §11 spike): a `frame` adds only `name`; membership is an explicit `frameId`, never geometry; frames do not nest; `exportToSvg`/`exportToCanvas`/`exportToBlob` accept `exportingFrame`; those functions need a DOM; `image` keys into `files` by SHA-1 of raw bytes; ceilings are 4 MiB per file for collab sync and a silent ~5–10 MB localStorage quota. The existing skill's renderer is currently broken — its `esm.sh` import 404s on a transitive dependency. *(Research 02's claim that children must appear immediately before their frame or clipping breaks was **falsified** by spike F6.4 — see §7.)*
 

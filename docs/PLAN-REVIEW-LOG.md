@@ -4,7 +4,7 @@ Started 2026-08-02 ~10:20 WEST. MAX_ROUNDS=5. PLAN_FILE=PLAN.md.
 
 Reviewer: Codex CLI 0.144.0, read-only every round.
 Basis: `PLAN.md` round 0, derived from a five-lens adversarially-verified critique of
-`examples/al-1.excalidraw` (38 findings raised, 35 confirmed, 3 refuted).
+`examples/reference/al-1.excalidraw` (38 findings raised, 35 confirmed, 3 refuted).
 
 ---
 
@@ -328,7 +328,7 @@ fail-closed integrity, implementability — each finding then handed to a verifi
    a schedule, and the constant asserted equal to the probe's recorded viewer build.
 
 3. **[minor] Contrast defect misattributed.** §8 cited "white-on-`#3b82f6` at 2.54:1".
-   Recomputed independently from `examples/al-1.excalidraw`: `#3b82f6` measures **3.68:1**, and
+   Recomputed independently from `examples/reference/al-1.excalidraw`: `#3b82f6` measures **3.68:1**, and
    the 2.54:1 pair is white on **`#60a5fa`** (`tf_posenc_t`). Corrected — and `#3b82f6` still
    fails, because at 14 units its effective size is ≈9.8 px, under the 24 px threshold where
    ≥4.5:1 applies. The verifier additionally re-derived and confirmed every *other*

@@ -30,7 +30,7 @@ You own stage A. Stages B and C are one command.
 0. **Set up.** Three things are needed and none ship with the plugin — dependencies, a Chromium
    binary, and the 27 MB vendored Excalidraw bundle:
    ```
-   node ${CLAUDE_PLUGIN_ROOT}/scripts/setup.mjs
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/setup.mjs"
    ```
    Idempotent. On a provisioned tree it prints `already provisioned` and exits. On a fresh
    install it takes a few minutes. Run it first every time rather than guessing.
@@ -44,7 +44,7 @@ You own stage A. Stages B and C are one command.
    illustrations are produced and delivered alongside the deck, not inside it.
 3. **Generate:**
    ```
-   node ${CLAUDE_PLUGIN_ROOT}/scripts/generate.mjs <spec.json> <outdir>
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/generate.mjs" <spec.json> <outdir>
    ```
    Both paths are yours; relative ones resolve against your current directory. The script
    resolves its own root, so it runs from anywhere. Writes `deck.excalidraw`, `band-NN.png` per

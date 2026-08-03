@@ -10,7 +10,7 @@ Parent: ../map.md
 The map was charted on the assumption that a presentation is a multi-frame Excalidraw file, one frame per slide. Two findings put that in doubt:
 
 1. Ticket 09 — no presenter mode is needed. The file is opened and panned by hand.
-2. The first example, `examples/al-1.excalidraw`, contains **zero frame elements**. It is one continuous 2705 × 1695 canvas with three stacked, labelled section bands (`SEÇÃO 1/2/3`), a title, and a footer.
+2. The first example, `examples/reference/al-1.excalidraw`, contains **zero frame elements**. It is one continuous 2705 × 1695 canvas with three stacked, labelled section bands (`SEÇÃO 1/2/3`), a title, and a footer.
 
 So the generator's output shape is an open decision, not a settled premise:
 

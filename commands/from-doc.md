@@ -10,7 +10,7 @@ Everything before `--out-dir` is the source. If `--out-dir` is absent, write to
 
 Use the `beautidraw` skill. Steps:
 
-1. Run `node ${CLAUDE_PLUGIN_ROOT}/scripts/setup.mjs` — idempotent, and a no-op once
+1. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/setup.mjs"` — idempotent, and a no-op once
    provisioned.
 2. Read the source. If it is a URL that renders client-side (a chat share link, a docs site),
    fetch it with a real browser rather than a plain HTTP get — a title-only result means the

@@ -10,8 +10,12 @@ browser computes every coordinate from Excalidraw's own text measurement.
 
 ## Setup
 
-Three things are required and none are committed — dependencies, a Chromium binary, and the
-27 MB vendored Excalidraw bundle. One idempotent command provides all three:
+**Prerequisites: Node 20+ and [pnpm](https://pnpm.io/installation).** The dependency tree is
+pinned with `pnpm-lock.yaml`, so pnpm is required and setup will not bootstrap it for you —
+installing global tooling behind your back is worse than failing with a message.
+
+Three further things are required and none are committed: dependencies, a Chromium binary, and
+the 27 MB vendored Excalidraw bundle. One idempotent command provides all three:
 
 ```
 node scripts/setup.mjs        # or: pnpm setup
@@ -25,17 +29,17 @@ to call from a skill on every invocation, which is what the commands do.
 As a plugin: invoke the `beautidraw` skill, or `/beautidraw:from-doc` and
 `/beautidraw:from-topic`. Installed plugins namespace their commands, hence the prefix.
 
-Directly:
+Directly — the script path must be reachable from wherever you are, so give it in full:
 
 ```
-node scripts/generate.mjs <spec.json> <outdir>
+node /path/to/beautidraw/scripts/generate.mjs <spec.json> <outdir>
 ```
 
 Writes `deck.excalidraw`, one `band-NN.png` per band, `scene.png`, and `diagnostics.json`. The
-script resolves its own root from `import.meta.url`, so it runs from any working directory —
-the two arguments are yours and resolve against *your* cwd.
+script resolves its *own* root from `import.meta.url`, so it finds the bundle and harness no
+matter where it is invoked from; the two arguments are yours and resolve against your cwd.
 
-Try it against the worked example (paths here are relative to this repo):
+Try it against the worked example, from a clone of this repo:
 
 ```
 node scripts/generate.mjs examples/hr-ai/deck-spec.json examples/hr-ai/out

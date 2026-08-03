@@ -37,7 +37,11 @@ function run(cmd, args) {
 
 let didWork = false;
 
-if (!existsSync(resolve(ROOT, "node_modules/playwright"))) {
+// Check every dependency the pipeline actually loads, not just one. A single
+// marker directory can survive an interrupted install, and the repair would
+// then be skipped forever.
+const REQUIRED_DEPS = ["playwright", "@excalidraw/excalidraw", "esbuild"];
+if (REQUIRED_DEPS.some((d) => !existsSync(resolve(ROOT, "node_modules", d)))) {
   console.log("[setup] installing dependencies");
   run("pnpm", ["install", "--frozen-lockfile"]);
   didWork = true;
@@ -59,7 +63,13 @@ if (!existsSync(chromiumPath)) {
   didWork = true;
 }
 
-if (!existsSync(resolve(ROOT, "scripts/vendor/excalidraw.js"))) {
+// build-bundle.mjs writes manifest.json LAST, so its presence means the copy of
+// the js, the css and the font tree all completed. Verify the pieces too — an
+// interrupted build can leave a stale manifest from an earlier successful run
+// beside a half-copied vendor tree.
+const VENDOR = resolve(ROOT, "scripts/vendor");
+const VENDOR_PARTS = ["manifest.json", "excalidraw.js", "excalidraw.css", "fonts/Nunito"];
+if (VENDOR_PARTS.some((p) => !existsSync(resolve(VENDOR, p)))) {
   console.log("[setup] building the vendored Excalidraw bundle");
   run("node", [resolve(ROOT, "scripts/build-bundle.mjs")]);
   didWork = true;

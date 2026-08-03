@@ -6,7 +6,7 @@ Label: `wayfinder:map`
 
 An installed, working Claude Code plugin at `~/Dev/beautidraw` whose skills turn either a markdown document or a topic string into a **sectioned Excalidraw canvas** — one file per topic, stacked section bands running top to bottom, each band wrapped in a numbered `frame`, opened and panned by hand. Done when the skills exist, are installed, and have produced a real canvas that survives inspection.
 
-The layout unit is the **section band**, not the slide. `examples/al-1.excalidraw` is the reference artifact.
+The layout unit is the **section band**, not the slide. `examples/reference/al-1.excalidraw` is the reference artifact.
 
 ## Notes
 
@@ -25,6 +25,10 @@ Skills every session should consult: `/grilling`, `/domain-modeling`, `mattpococ
 - **Self-validation is mandatory**: the skills render what they drew, look at the image, and fix defects in a loop before handing over. The renderer is an internal validation tool, not an output format.
 - **Progressive disclosure in every skill**: thin `SKILL.md`, detail in `references/` loaded only when needed.
 - **Imagery is both**: vector illustrations composed from Excalidraw primitives, *and* embedded assets chosen from a shipped asset folder with a description manifest the agent searches.
+  **Not delivered (2026-08-03).** Only the vector half shipped. Tickets 07/08 never resolved, no
+  `assets/` folder exists, and the layout engine has no image element path — `generate.mjs`
+  writes `files: null`. Illustration assets are produced per deck and handed over beside it; see
+  `skills/beautidraw/references/blackboard-images.md`.
 - **Structural inspiration**: `~/Dev/frm-ai-data-engineer/.claude/agents/domain/excalidraw-specialist.md` — its capability blocks, execution template, quality checklist and anti-pattern table are the shape to borrow.
 
 ### Frontier order override

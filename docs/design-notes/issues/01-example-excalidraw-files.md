@@ -19,7 +19,7 @@ HITL. The checklist for Bruno:
 
 ## Progress
 
-**Received (1 of ?)**: `examples/al-1.excalidraw`, copied from `~/Downloads/al-1.excalidraw`. 48 KB, 94 elements, no `files` map (zero embedded images).
+**Received (1 of ?)**: `examples/reference/al-1.excalidraw`, copied from `~/Downloads/al-1.excalidraw`. 48 KB, 94 elements, no `files` map (zero embedded images).
 
 Measured facts, straight from the JSON:
 
