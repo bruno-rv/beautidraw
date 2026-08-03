@@ -191,7 +191,7 @@ above. The pairs above are chosen to clear it; assert rather than assume.
    `layoutDeck(spec, api)` where `api` is the Excalidraw module. Returns
    `{ elements, diagnostics }`.
 2. `scripts/generate.mjs` — Node entry. Boots the existing harness
-   (`scripts/spike/harness-runner.mjs` exports `withHarness`), injects `layout.mjs`, runs it,
+   (`scripts/harness-runner.mjs` exports `withHarness`), injects `layout.mjs`, runs it,
    writes `<out>.excalidraw`, and writes per-band + whole-scene PNGs beside it.
 3. Validation inside `generate.mjs`, all fail-closed with a named cause:
    - every band's frame height ≤ `BAND_HEIGHT_CAP`

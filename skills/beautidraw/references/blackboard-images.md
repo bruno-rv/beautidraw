@@ -4,6 +4,18 @@ Use this reference whenever a deck needs the colored-blackboard illustrations us
 `hr-ai` presentation. The goal is a reproducible visual system, not a loose request for
 "something hand-drawn".
 
+> **Status: style contract only — embedding is not implemented.**
+> `deck-spec.json` has no image field, and `generate.mjs` writes `files: null`; there is no
+> image element path in the layout engine. Steps 5–6 below describe hand-editing the emitted
+> `.excalidraw`, which works exactly once: the next `generate.mjs` run rewrites the file and the
+> images are gone. That also contradicts the pipeline's rule that a deck is regenerated from its
+> spec, never edited in place.
+>
+> Until the spec gains an image field, **treat illustrations as a separate deliverable**:
+> generate them, accept them against the checks below, write the manifest, and hand the PNGs
+> over beside `deck.excalidraw`. Say plainly that they are not embedded. Steps 5–6 are kept as
+> the design for the unbuilt feature, not as instructions to follow today.
+
 ## Canonical visual contract
 
 - Output one self-contained **16:9** image at **1536 × 864**.
@@ -55,16 +67,21 @@ Subject prompts should describe the visual metaphor, not ask the model to render
 2. View every candidate before wiring it into the deck. Reject it if the background is not a
    chalkboard, the linework becomes polished vector art, the colors drift, the subject is
    clipped, or readable text appears.
-3. Normalize accepted copies to 1536 × 864. Keep the image as a standalone PNG in the deck's
-   `out/` directory.
+3. Normalize accepted copies to 1536 × 864. Keep the PNGs **beside the deck-spec**, in an
+   `assets/` directory next to it — never in the deck's `out/`, which is derived, rewritten on
+   every run, and gitignored.
 4. Record `file`, raw-byte `sha1`, `suggestedBand`, and a one-sentence `use` in
-   `blackboard-asset-manifest.json`.
-5. When embedding, use the raw-byte SHA-1 as the Excalidraw `fileId` and `files` key. The file
-   entry must contain the matching `id`, `mimeType: "image/png"`, and a `dataURL`.
+   `blackboard-asset-manifest.json`, beside the assets.
+
+Steps 5 and 6 are the **design for the unbuilt embedding feature** (see the status note above).
+Do not perform them against a generated deck today.
+
+5. Use the raw-byte SHA-1 as the Excalidraw `fileId` and `files` key. The file entry must
+   contain the matching `id`, `mimeType: "image/png"`, and a `dataURL`.
 6. Put the image element inside the intended frame with a unique id, `status: "saved"`,
    `scale: [1, 1]`, `crop: null`, `boundElements: []`, and the full standard Excalidraw base
    properties. Place it in an unused region of the frame; never cover a heading, label, arrow,
    or note merely to make room for an image.
 
-The reference is successful only when the generated files, manifest, embedded file map, and
-rendered deck all agree. A prompt-only handoff is not enough.
+A prompt-only handoff is not enough: the assets, the manifest and the rendered deck must agree,
+and every image must have been viewed before it ships.

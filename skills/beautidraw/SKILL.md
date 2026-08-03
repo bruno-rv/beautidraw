@@ -27,26 +27,34 @@ You own stage A. Stages B and C are one command.
 
 ## Build a deck
 
+0. **Set up.** Three things are needed and none ship with the plugin — dependencies, a Chromium
+   binary, and the 27 MB vendored Excalidraw bundle:
+   ```
+   node ${CLAUDE_PLUGIN_ROOT}/scripts/setup.mjs
+   ```
+   Idempotent. On a provisioned tree it prints `already provisioned` and exits. On a fresh
+   install it takes a few minutes. Run it first every time rather than guessing.
 1. **Read the source.** A document, a transcript, a link, or just a topic. Extract the
    substance; ignore the packaging.
 2. **Write `deck-spec.json`.** Schema and per-pattern node shapes:
    `references/deck-spec.md`. Choosing a pattern: `references/patterns.md`. Accents and type:
    `references/visual-system.md`.
-   If the deck needs illustrations, read `references/blackboard-images.md` before generating
-   them; it is the canonical colored-blackboard style and embedding contract.
+   If the deck needs illustrations, read `references/blackboard-images.md` — it is the canonical
+   style contract. **Read its status note first: the generator cannot embed images**, so
+   illustrations are produced and delivered alongside the deck, not inside it.
 3. **Generate:**
    ```
-   node <plugin>/scripts/generate.mjs <spec.json> <outdir>
+   node ${CLAUDE_PLUGIN_ROOT}/scripts/generate.mjs <spec.json> <outdir>
    ```
-   Absolute paths are fine and the command runs from any working directory. Writes
-   `deck.excalidraw`, `band-NN.png` per band, `scene.png`, and `diagnostics.json`.
+   Both paths are yours; relative ones resolve against your current directory. The script
+   resolves its own root, so it runs from anywhere. Writes `deck.excalidraw`, `band-NN.png` per
+   band, `scene.png`, and `diagnostics.json`.
 4. **Look at the PNGs.** Read `scene.png` for the whole canvas and any band that seems risky.
    This step is not optional — see "What the validators do not catch".
 5. Hand over `deck.excalidraw`.
 
-First run in a fresh checkout needs `pnpm install` and `pnpm bundle` (builds the vendored
-Excalidraw bundle into `scripts/vendor/`). Check whether `scripts/vendor/excalidraw.js` exists
-before assuming it does.
+`${CLAUDE_PLUGIN_ROOT}` is substituted by Claude Code. Outside a plugin install, use the path to
+your checkout.
 
 ## Write the presentation, not a script for it
 
@@ -119,8 +127,11 @@ Do not edit `scripts/layout.mjs` to make a deck pass. The engine's constants are
 - `references/deck-spec.md` — the schema and every pattern's node shape
 - `references/patterns.md` — which of the six patterns fits what, and node counts that work
 - `references/visual-system.md` — palette, accent rotation, type ramp, contrast
-- `../../scripts/LAYOUT-CONTRACT.md` — the engine's measured invariants (read only if changing it)
+- `references/blackboard-images.md` — the illustration style contract, and what it cannot yet do
+- `${CLAUDE_PLUGIN_ROOT}/scripts/LAYOUT-CONTRACT.md` — the engine's measured invariants
+  (read only if changing it)
 
-Generic decks remain type- and shape-led. When a presentation needs illustration assets, use the
-canonical colored-blackboard reference in `references/blackboard-images.md`, keep the asset map
-explicit, and embed images only after viewing the rendered result.
+Decks are type- and shape-led. Illustrations are a **separate deliverable**: the deck-spec has
+no image field and `generate.mjs` writes `files: null`, so a hand-embedded image is destroyed by
+the next regeneration. Produce the assets, view them, hand them over beside the deck, and say
+plainly that they are not embedded.

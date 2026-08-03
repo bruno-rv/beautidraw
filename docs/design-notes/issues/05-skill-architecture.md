@@ -22,6 +22,6 @@ Resolving this unblocks the content pipeline (06) and makes the build-out specif
 
 ## Answer
 
-Answered by `../../../PLAN.md` §12 (skill layout), §1 (three-stage pipeline) and §11 (spike), after eight rounds of adversarial review by Codex — transcript in `../../../PLAN-REVIEW-LOG.md`.
+Answered by `../../PLAN.md` §12 (skill layout), §1 (three-stage pipeline) and §11 (spike), after eight rounds of adversarial review by Codex — transcript in `../../PLAN-REVIEW-LOG.md`.
 
 One fat methodology skill (`skills/beautidraw/`) with thin `references/` loaded on demand, two thin commands (`beautidraw-from-doc`, `beautidraw-from-topic`), and `scripts/` holding the in-browser layout engine, linter, renderer and harness. The decisive architectural call: **the LLM never types a coordinate** — it emits a semantic `deck-spec.json` and a deterministic layout engine, running inside the same Playwright page as the renderer, computes all geometry. This overrides the existing `excalidraw-diagram` skill's explicit "don't write a generator script" guidance, on the evidence that 35 of 35 confirmed defects in the reference are arithmetic failures rather than taste failures.

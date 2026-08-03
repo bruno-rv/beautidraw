@@ -7,7 +7,7 @@ Parent: ../map.md
 
 ## Question
 
-Prove the geometry foundation before any of it is allowed to gate. Identified as the single largest risk in `../../../PLAN.md` §11, and the prerequisite for every geometric assertion in §8.
+Prove the geometry foundation before any of it is allowed to gate. Identified as the single largest risk in `../../PLAN.md` §11, and the prerequisite for every geometric assertion in §8.
 
 Deliverables:
 

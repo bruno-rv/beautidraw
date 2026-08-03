@@ -9,7 +9,7 @@ The reference artifact is `examples/al-1.excalidraw` — a real lesson poster th
 
 ## Context that constrains the design
 
-Settled (wayfinder map, `.scratch/beautidraw/map.md`): standalone self-contained plugin repo; clean-room visual system; two entry points; mandatory self-validation; progressive disclosure; imagery from both vector primitives and a shipped asset catalogue.
+Settled (wayfinder map, `docs/design-notes/map.md`): standalone self-contained plugin repo; clean-room visual system; two entry points; mandatory self-validation; progressive disclosure; imagery from both vector primitives and a shipped asset catalogue.
 
 Verified format facts (research 02/03/04, amended by the §11 spike): a `frame` adds only `name`; membership is an explicit `frameId`, never geometry; frames do not nest; `exportToSvg`/`exportToCanvas`/`exportToBlob` accept `exportingFrame`; those functions need a DOM; `image` keys into `files` by SHA-1 of raw bytes; ceilings are 4 MiB per file for collab sync and a silent ~5–10 MB localStorage quota. The existing skill's renderer is currently broken — its `esm.sh` import 404s on a transitive dependency. *(Research 02's claim that children must appear immediately before their frame or clipping breaks was **falsified** by spike F6.4 — see §7.)*
 
@@ -36,7 +36,7 @@ source (markdown | topic)
 
 **The metric oracle.** *(Codex round 2: the public entry point exposes export helpers and `setCustomTextMetricsProvider`, not `measureText`/`wrapText`. Round 3 then checked each candidate route in the sources and found they are not interchangeable fallbacks — so they are now ranked by role, not by preference.)*
 
-**Resolved empirically — the spike passed.** Findings in `.scratch/beautidraw/research/11-spike-findings.md`; the three-route ranking below is superseded by measurement.
+**Resolved empirically — the spike passed.** Findings in `docs/design-notes/research/11-spike-findings.md`; the three-route ranking below is superseded by measurement.
 
 | Route | Status after the spike | Why |
 |---|---|---|
@@ -357,7 +357,7 @@ Each term has a canonical form *(Codex round 6: an unserialised "history" is not
 ### 11. The spike — **PASSED** (2026-08-02)
 
 Prerequisite for everything geometric, and now discharged. Full findings:
-`.scratch/beautidraw/research/11-spike-findings.md`. Probes: `scripts/spike/probe-0{1..8}-*.mjs`,
+`docs/design-notes/research/11-spike-findings.md`. Probes: `scripts/spike/probe-0{1..8}-*.mjs`,
 reproducible end to end with `pnpm spike:network`.
 Headline results: route 1 needs no vendored internals (F1); the font gate is a
 correctness gate, not polish (F2); `lineHeight` is derived, not declared (F4);
@@ -368,8 +368,8 @@ applies neither padding nor a label band, which moved `BAND_HEIGHT_CAP` from 117
 
 Delivered:
 
-- **Pinned versions, named and locked**: `@excalidraw/excalidraw@0.18.1` (latest confirmed, 2026-04-20), a pinned Playwright release and its bundled Chromium revision, and the font set shipped with the package. Lockfile and bundle manifest committed.
-- **A local, offline bundle.** No CDN import at render time — the existing skill is broken today for exactly that reason. The build artifact is vendored and its hash recorded.
+- **Pinned versions, named and locked**: `@excalidraw/excalidraw@0.18.1` (latest confirmed, 2026-04-20), a pinned Playwright release and its bundled Chromium revision, and the font set shipped with the package. **The lockfile is committed; the bundle and its manifest are not.** *(Amended at packaging: `scripts/vendor/` is a 27 MB build artifact and Chromium is ~150 MB, so both are generated locally by `scripts/setup.mjs` rather than committed. Determinism comes from the lockfile plus the pinned versions above — the artifact is reproducible from them, and `build-bundle.mjs` still records its hash for the oracle.)*
+- **A local, offline bundle.** No CDN import at render time — the existing skill is broken today for exactly that reason. The build artifact is vendored **into the working tree at setup time** and its hash recorded.
 - **Font readiness before any measurement**, per the character-driven procedure in §2: `document.fonts.load(font, chars)` where `chars` is the union of characters the deck will actually lay out at that `(family, size)`, *then* `await document.fonts.ready`, *then* `document.fonts.check(font, chars)` **with the text argument**, aborting on failure, *then* record the fingerprint and the repertoire. **`ready` + `check` alone is not enough**, and neither is a fixed sample string — both leave lazily-loaded subsets unfetched while reporting success. *(Codex round 9 major: the delivered procedure listed only `ready` + `check`. The consistency sweep then caught that the obvious fix was still glyph-blind — see §2.)*
 - **A decisive two-frame fixture** proving frame selection, clipping and `frameId` association under `exportingFrame`. It also settled child-before-frame ordering, which the research had left empirically open: ordering is **not** load-bearing (F6.4).
 - **The metric oracle**, built as route 1 — `convertToExcalidrawElements` over the library's **native** Canvas metrics, with no injected provider — verified against fixtures whose ground truth is Excalidraw's own rendering, including multi-line bound-text cases with blank lines. *(Codex round 9 major: this deliverable still required route 2 as a width backend, contradicting §2 where route 2 is unused.)* The spike records the oracle state (`passed` / `failed`) that §8 keys on.
@@ -384,13 +384,19 @@ places, both recorded rather than retro-fitted.
 
 - `.claude-plugin/plugin.json` — plugin manifest.
 - `skills/beautidraw/SKILL.md` — thin: pipeline, the audience-facing rule, failure table, pointers.
-- `skills/beautidraw/references/` — `deck-spec.md`, `patterns.md`, `visual-system.md`.
-  **No `assets.md`** — tickets 07/08 are unresolved and there is no icon set to document.
-- `scripts/` — `layout.mjs` (in-page), `generate.mjs`, `harness.html`, `vendor/`, `LAYOUT-CONTRACT.md`.
+- `skills/beautidraw/references/` — `deck-spec.md`, `patterns.md`, `visual-system.md`, and
+  `blackboard-images.md` (**style contract only — image embedding is unbuilt**: the spec has no
+  image field and `generate.mjs` writes `files: null`, so illustrations ship beside the deck,
+  not inside it). **No `assets.md`** — tickets 07/08 are unresolved and there is no icon set.
+- `scripts/` — `layout.mjs` (in-page), `generate.mjs`, `harness-runner.mjs`, `harness.html`,
+  `setup.mjs`, `build-bundle.mjs`, `vendor/` (generated), `LAYOUT-CONTRACT.md`.
   **`lint.js` and `render.js` were not built as separate files**: validation and rendering both
   live in `generate.mjs`, because both need the same booted Playwright page and splitting them
   would mean booting Chromium twice or passing the page across module boundaries for no gain.
-- `commands/` — `beautidraw-from-doc.md`, `beautidraw-from-topic.md`.
+- `commands/` — `from-doc.md`, `from-topic.md`, invoked as `/beautidraw:from-doc` and
+  `/beautidraw:from-topic`. *(Named without the redundant `beautidraw-` prefix: an installed
+  plugin already namespaces its commands, so the planned names would read
+  `/beautidraw:beautidraw-from-doc`.)*
 
 `scripts/` resolves its own root from `import.meta.url`, so `node <plugin>/scripts/generate.mjs`
 works from any working directory — verified by running it from outside the repo.

@@ -8,20 +8,22 @@ The design decision the whole thing rests on: **the model never types a coordina
 semantic content into a `deck-spec.json`; a deterministic layout engine running inside a real
 browser computes every coordinate from Excalidraw's own text measurement.
 
-## Install
+## Setup
+
+Three things are required and none are committed — dependencies, a Chromium binary, and the
+27 MB vendored Excalidraw bundle. One idempotent command provides all three:
 
 ```
-pnpm install
-pnpm bundle       # builds scripts/vendor/ from the pinned @excalidraw/excalidraw
+node scripts/setup.mjs        # or: pnpm setup
 ```
 
-`scripts/vendor/` is a 27 MB build artifact and is not committed. Nothing runs until
-`pnpm bundle` has produced it.
+Re-running it on a provisioned tree prints `already provisioned` and does nothing. It is safe
+to call from a skill on every invocation, which is what the commands do.
 
 ## Use
 
-As a plugin, invoke the `beautidraw` skill, or the `/beautidraw-from-doc` and
-`/beautidraw-from-topic` commands.
+As a plugin: invoke the `beautidraw` skill, or `/beautidraw:from-doc` and
+`/beautidraw:from-topic`. Installed plugins namespace their commands, hence the prefix.
 
 Directly:
 
@@ -29,10 +31,11 @@ Directly:
 node scripts/generate.mjs <spec.json> <outdir>
 ```
 
-Writes `deck.excalidraw`, one `band-NN.png` per band, `scene.png`, and `diagnostics.json`.
-Resolves its own root, so it runs from any working directory.
+Writes `deck.excalidraw`, one `band-NN.png` per band, `scene.png`, and `diagnostics.json`. The
+script resolves its own root from `import.meta.url`, so it runs from any working directory —
+the two arguments are yours and resolve against *your* cwd.
 
-Try it against the worked example:
+Try it against the worked example (paths here are relative to this repo):
 
 ```
 node scripts/generate.mjs examples/hr-ai/deck-spec.json examples/hr-ai/out
@@ -44,7 +47,7 @@ node scripts/generate.mjs examples/hr-ai/deck-spec.json examples/hr-ai/out
 .claude-plugin/plugin.json     plugin manifest
 skills/beautidraw/             SKILL.md + references/ — how to write a deck-spec
 commands/                      two thin entry points
-scripts/                       layout engine, generator, harness, bundler
+scripts/                       layout engine, generator, harness, setup, bundler
 scripts/spike/                 measurement probes; probe-06 is the viewer-drift gate
 examples/                      a worked deck-spec, and the reference artifact
 docs/                          PLAN.md, its 15-round review transcript, design notes

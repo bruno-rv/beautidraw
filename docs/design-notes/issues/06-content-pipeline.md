@@ -20,6 +20,6 @@ To decide:
 
 ## Answer
 
-Answered by `../../../PLAN.md` §1, §9 and §8.
+Answered by `../../PLAN.md` §1, §9 and §8.
 
 There **is** an intermediate artifact: `deck-spec.json`, semantic and geometry-free, validated against a JSON Schema before layout runs and written to disk beside the output. Slide decomposition is governed by a closed pattern vocabulary (`timeline`, `flow`, `row-of-stages`, `comparison`, `tree`, `annotated-figure`), each with declared node limits and bounded failure behaviour — no silent truncation. The two entry points differ only in that the topic path runs a research stage before emitting the spec. Revision is **regeneration from the spec**, never in-place patching; reproducibility is claimed from the triple `(deck_spec_hash, layout_params_hash, repair_history)` plus the pinned runtime, which is the honest claim once a visual judgement gate exists.
