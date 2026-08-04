@@ -1,7 +1,7 @@
 // Probe 1 — does the harness boot, do the scene fonts actually load, what are
 // the real FONT_FAMILY ids, and does the public API perform bound-text layout?
 //
-// Everything in docs/PLAN.md §11 that is cheap to answer, answered first. If
+// Everything in the spike that is cheap to answer, answered first. If
 // convertToExcalidrawElements does not produce real wrapped geometry, route 1
 // has to vendor internals and the plan's largest risk is live.
 

@@ -6,8 +6,8 @@
 // could otherwise write a self-consistent but partial manifest that setup then
 // accepted.
 //
-// Only these two families are validated. They are the faces docs/PLAN.md §2's
-// metric tuple names, and a missing or altered subset silently shifts wrap
+// Only these two families are validated. They are the faces the type ramp in
+// layout.mjs names, and a missing or altered subset silently shifts wrap
 // points rather than failing (spike F2/F8). Excalidraw registers six more
 // families that this engine never measures — Xiaolai alone is 209 CJK subsets,
 // so hashing all 234 vendored files on every setup run would cost far more than

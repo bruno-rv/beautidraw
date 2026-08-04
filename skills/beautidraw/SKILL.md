@@ -9,50 +9,41 @@ Produce one `.excalidraw` file: a single continuous canvas, sections stacked top
 each wrapped in a numbered `frame`. Opened and panned by hand on excalidraw.com. No slideshow,
 no export, no presenter mode.
 
-## The one thing that makes this work
-
 **You never type a coordinate.** You write semantic content into `deck-spec.json`; a layout
 engine running inside a real browser computes every `x`, `y`, `width` and `height` from
 Excalidraw's own text measurement. Guessing at geometry is the failure mode this exists to
-remove — 35 of 35 confirmed defects in the reference artifact were arithmetic, not taste.
-
-```
-source (document | topic)
-  └─> [A] you        → deck-spec.json        semantic, zero geometry
-       └─> [B] engine → deck.excalidraw      all geometry, zero judgement
-            └─> [C] engine → validators + PNGs
-```
-
-You own stage A. Stages B and C are one command.
+remove — 35 of 35 confirmed defects in the reference artifact were arithmetic, not taste. You
+own the spec; generation is one command.
 
 ## Build a deck
 
-0. **Set up.** Three things are needed and none ship with the plugin — dependencies, a Chromium
-   binary, and the 27 MB vendored Excalidraw bundle:
+1. **Set up.** Dependencies, a Chromium binary and the 27 MB vendored Excalidraw bundle — none
+   ship with the plugin:
    ```
    node "${CLAUDE_PLUGIN_ROOT}/scripts/setup.mjs"
    ```
-   Idempotent. On a provisioned tree it prints `already provisioned` and exits. On a fresh
-   install it takes a few minutes. Run it first every time rather than guessing.
-1. **Read the source.** A document, a transcript, a link, or just a topic. Extract the
-   substance; ignore the packaging.
-2. **Write `deck-spec.json`.** Schema and per-pattern node shapes:
-   `references/deck-spec.md`. Choosing a pattern: `references/patterns.md`. Accents and type:
-   `references/visual-system.md`.
-   If the deck needs illustrations, read `references/blackboard-images.md` — it is the canonical
-   style and placement contract. The generator still emits a spec-derived deck without images,
-   so embed accepted PNGs as a deliberate post-processing step, fit them to frame-native side or
-   background zones, and render the final `.excalidraw` before handoff.
-3. **Generate:**
+   Idempotent. On a provisioned tree it prints `already provisioned` and exits. Run it first
+   every time rather than guessing.
+2. **Read the source.** A document, a transcript, a link, or just a topic. Extract the
+   substance; ignore the packaging. If the source is a URL that renders client-side (a chat
+   share link, a docs site), fetch it with a real browser — a title-only result means the page
+   was not rendered. If there is no source at all, settle who is in the room and what the deck
+   is *claiming* before writing anything, and say what you settled on.
+3. **Write `deck-spec.json`.** Schema and per-pattern node shapes: `references/deck-spec.md`.
+   Choosing a pattern: `references/patterns.md`. Accents and type: `references/visual-system.md`.
+   For illustrations read `references/blackboard-images.md` first — it is the canonical style and
+   placement contract.
+4. **Generate:**
    ```
    node "${CLAUDE_PLUGIN_ROOT}/scripts/generate.mjs" <spec.json> <outdir>
    ```
-   Both paths are yours; relative ones resolve against your current directory. The script
-   resolves its own root, so it runs from anywhere. Writes `deck.excalidraw`, `band-NN.png` per
-   band, `scene.png`, and `diagnostics.json`.
-4. **Look at the PNGs.** Read `scene.png` for the whole canvas and any band that seems risky.
-   This step is not optional — see "What the validators do not catch".
-5. Hand over `deck.excalidraw`.
+   Both paths are yours; relative ones resolve against your current directory. Unless the user
+   names an output directory, keep the spec at `decks/<slug>/deck-spec.json` and write to
+   `decks/<slug>/out/` — only `out/` is gitignored, so the spec stays tracked. Writes
+   `deck.excalidraw`, `band-NN.png` per band, `scene.png`, and `diagnostics.json`.
+5. **Look at the PNGs.** Read `scene.png` for the whole canvas and any band that seems risky.
+   Not optional — see "What the validators do not catch".
+6. Hand over `deck.excalidraw`.
 
 `${CLAUDE_PLUGIN_ROOT}` is substituted by Claude Code. Outside a plugin install, use the path to
 your checkout.
@@ -61,25 +52,14 @@ your checkout.
 
 The most likely way a deck goes wrong, and no validator catches it: you summarise **advice
 about how to present** instead of the presentation itself. It happens whenever the source is a
-planning conversation, a brief, or a coaching transcript.
+planning conversation, a brief, or a coaching transcript. The tell is in the headings — "The
+mental model **to teach**", "Run of show — 45 minutes". The audience sees meta-commentary about
+a session they are sitting in.
 
-The tell is in the headings. These address the presenter:
-
-- "Lead with the work, not the feature list"
-- "The mental model **to teach**"
-- "Only four concepts **are worth teaching**"
-- "Run of show — 45 minutes"
-- a footer reading "~15% concepts, ~70% workflows"
-
-The audience sees meta-commentary about a session they are sitting in. Rewrite so every
-heading, deck line and node speaks to the audience about the subject:
-
-- "From an HR need to a reusable playbook"
-- "Four things to remember"
-- "One spreadsheet becomes decision-ready insight"
-
-Timings, delivery order, presenter scripts and balance percentages are **not** deck content.
-If the source is mostly delivery advice, the deck is built from what that advice is *about*.
+Rewrite so every heading, deck line and node speaks to the audience about the subject: "From an
+HR need to a reusable playbook", "One spreadsheet becomes decision-ready insight". Timings,
+delivery order, presenter scripts and balance percentages are **not** deck content. If the
+source is mostly delivery advice, the deck is built from what that advice is *about*.
 
 ## Content rules
 
@@ -132,7 +112,8 @@ Do not edit `scripts/layout.mjs` to make a deck pass. The engine's constants are
 - `${CLAUDE_PLUGIN_ROOT}/scripts/LAYOUT-CONTRACT.md` — the engine's measured invariants
   (read only if changing it)
 
-Decks are type- and shape-led. Illustrations are generated alongside the deck and embedded only
-after the layout engine has produced the frame geometry. Preserve the asset manifest and the
-placement contract; a later regeneration must reapply the embedding step because `deck-spec.json`
-does not yet carry image fields.
+Decks are type- and shape-led. Illustrations are embedded only after the layout engine has
+produced the frame geometry: fit accepted PNGs to frame-native side or background zones, then
+re-render before handoff. Preserve the asset manifest and the placement contract — a later
+regeneration must reapply the embedding step, because `deck-spec.json` does not yet carry image
+fields.

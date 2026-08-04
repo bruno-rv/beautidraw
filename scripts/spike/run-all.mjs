@@ -1,5 +1,4 @@
-// Runs the whole spike end to end. Every claim in
-// docs/design-notes/research/11-spike-findings.md is reproducible from here.
+// Runs the whole spike end to end. Every spike finding is reproducible from here.
 //
 //   node scripts/spike/run-all.mjs           # local probes only
 //   node scripts/spike/run-all.mjs --network # adds the excalidraw.com parity probe

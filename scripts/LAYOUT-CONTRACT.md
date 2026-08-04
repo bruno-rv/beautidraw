@@ -1,24 +1,24 @@
 # Layout engine contract
 
-Implements the core path of `docs/PLAN.md`: `deck-spec.json` → deterministic layout → `.excalidraw`.
+The core path: `deck-spec.json` → deterministic layout → `.excalidraw`.
 
 **In scope:** measurement, geometry, frames, emission.
 **Out of scope for now:** oracle signing, `oracle_hash`, repair operators, the visual-verdict
-loop. Those are docs/PLAN.md §8/§10 machinery and are not needed to produce a deck. The geometric
-*rules* below still apply — they are what the spike proved.
+loop. None of that is needed to produce a deck. The geometric *rules* below still apply — they
+are what the spike proved.
 
 ## Non-negotiables (each one is a measured spike result)
 
 | Rule | Why |
 |---|---|
-| The LLM never types a coordinate. Every `x`/`y`/`width`/`height` is computed here. | docs/PLAN.md central decision |
+| The LLM never types a coordinate. Every `x`/`y`/`width`/`height` is computed here. | the central design decision |
 | Text geometry comes from `convertToExcalidrawElements`, never from a `chars × constant` model. | spike F1 |
 | Fonts: `document.fonts.load(font, chars)` for the deck's own characters, then `document.fonts.ready`, then `document.fonts.check(font, chars)` **with the text argument**. Abort on failure. | spike F2 / F8 — a bare `check` passes vacuously and Cyrillic then measures 13.34% narrow |
 | `lineHeight` is read from the library, never declared. | spike F4 |
 | `boundElements: []`, never `null`. | measured: the viewer canonicalises `null` → `[]` |
-| Bound text lives **only in rectangles**. Ellipses/diamonds carry unbound labels. | docs/PLAN.md §2 |
+| Bound text lives **only in rectangles**. Ellipses/diamonds carry unbound labels. | only rectangles accept a bound container |
 | Children emitted before their frame. | convention (contiguity is not correctness — spike F6.4) |
-| Frame `name` is navigation metadata, not typography. Zero-padded numeric prefix. | docs/PLAN.md §4 |
+| Frame `name` is navigation metadata, not typography. Zero-padded numeric prefix. | frame names drive viewer navigation order |
 | Frame bounds are re-pinned to `[PAGE_X, PAGE_X + PAGE_WIDTH]` **after** conversion. | `convertToExcalidrawElements` refits a frame to its children's bounding box and discards the skeleton's `x`/`width`. Left unpinned, frame origin becomes content-derived and the page edge jitters between bands as you pan. |
 
 ## Constants
@@ -36,7 +36,7 @@ export const RAMP = { title: 48, heading: 38, hero: 30, label: 23, note: 18 };
 export const FONT = { prose: 6, mono: 3 };   // Nunito, Cascadia — spike F3
 export const FONT_NAME = { prose: "Nunito", mono: "Cascadia" };
 
-// z_actual / z_scene machinery (docs/PLAN.md §4) — legibility gate + diagnostics
+// z_actual / z_scene machinery — legibility gate + diagnostics
 export const USABLE_W = 1600;
 export const USABLE_H = 850;
 export const EXPORT_PAD = 10;

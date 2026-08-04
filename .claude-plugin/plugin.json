@@ -10,6 +10,5 @@
   "repository": "https://github.com/bruno-rv/beautidraw",
   "license": "MIT",
   "keywords": ["excalidraw", "presentations", "diagrams", "layout", "canvas"],
-  "skills": ["./skills/beautidraw"],
-  "commands": ["./commands/"]
+  "skills": ["./skills/beautidraw"]
 }

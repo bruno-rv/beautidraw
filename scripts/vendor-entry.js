@@ -3,7 +3,7 @@
 // The plugin never imports Excalidraw from a CDN at render time — the previous
 // skill's renderer is broken today because its esm.sh import 404s on a
 // transitive dependency. Everything the harness needs is bundled from
-// node_modules and its hash recorded in the runtime manifest (docs/PLAN.md §8).
+// node_modules and its hash recorded in the runtime manifest.
 
 import { createElement } from "react";
 import { createRoot } from "react-dom/client";
@@ -13,7 +13,7 @@ export * from "@excalidraw/excalidraw";
 
 // Mounting the real editor is what registers the scene fonts with the
 // document and gives us an API handle whose scene Excalidraw itself maintains.
-// Measuring before this resolves yields fallback font metrics (docs/PLAN.md §11).
+// Measuring before this resolves yields fallback font metrics.
 export function mountEditor(container) {
   return new Promise((resolve) => {
     createRoot(container).render(

@@ -1,7 +1,7 @@
 // Builds the offline Excalidraw bundle the harness loads.
 //
 // Output goes to scripts/vendor/. Nothing here is fetched at render time.
-// The bundle hash is part of oracle_hash (docs/PLAN.md §8), so this script also
+// The bundle hash is part of oracle_hash, so this script also
 // writes a manifest recording exactly what went in.
 
 import { build } from "esbuild";
@@ -46,7 +46,7 @@ await build({
 });
 
 // Fonts and stylesheet ship alongside — measurement is only valid once the
-// real faces are loaded (docs/PLAN.md §11), so they must be served locally too.
+// real faces are loaded, so they must be served locally too.
 await cp(resolve(excalidrawPkg, "dist/prod/fonts"), resolve(vendorDir, "fonts"), {
   recursive: true,
 });

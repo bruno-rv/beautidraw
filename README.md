@@ -43,8 +43,7 @@ on every run.
 
 ## Use
 
-As a plugin: invoke the `beautidraw` skill, or `/beautidraw:from-doc` and
-`/beautidraw:from-topic`. Installed plugins namespace their commands, hence the prefix.
+As a plugin: invoke the `beautidraw` skill by name.
 
 Directly — the script path must be reachable from wherever you are, so give it in full:
 
@@ -67,11 +66,9 @@ node scripts/generate.mjs examples/hr-ai/deck-spec.json examples/hr-ai/out
 ```
 .claude-plugin/plugin.json     plugin manifest
 skills/beautidraw/             SKILL.md + references/ — how to write a deck-spec
-commands/                      two thin entry points
 scripts/                       layout engine, generator, harness, setup, bundler
 scripts/spike/                 measurement probes; probe-06 is the viewer-drift gate
-examples/                      a worked deck-spec, and the reference artifact
-docs/                          PLAN.md, its 15-round review transcript, design notes
+examples/                      a worked deck-spec
 ```
 
 ## Maintenance
@@ -85,8 +82,8 @@ pnpm spike:network   # adds probe-06, which measures against live excalidraw.com
 ```
 
 `pnpm spike:network` is the **only** thing that detects viewer drift — the build is hermetic, so
-a normal run cannot. Re-run it on a schedule. A failure blocks; see the remediation order in
-`docs/PLAN.md`.
+a normal run cannot. Re-run it on a schedule. A failure blocks: re-pin
+`@excalidraw/excalidraw`, `pnpm bundle`, re-run the spike, and only then generate again.
 
 `scripts/LAYOUT-CONTRACT.md` records every engine constant and the measurement behind it. Read
 it before changing any of them.
