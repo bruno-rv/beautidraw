@@ -1,9 +1,9 @@
-// Probe 6 — viewer parity against the real excalidraw.com (docs/PLAN.md §11).
+// Probe 6 — viewer parity against the real excalidraw.com.
 //
-// Everything so far proves the pipeline agrees with itself. docs/PLAN.md §2 is
-// explicit that this is not enough: "if layout and rendering both run against an
-// injected provider on the same Playwright page, they agree with each other and
-// disagree with excalidraw.com". This measures the same strings in the real
+// Everything so far proves the pipeline agrees with itself, which is not
+// enough: if layout and rendering both run against an injected provider on the
+// same Playwright page, they agree with each other and can still disagree with
+// excalidraw.com. This measures the same strings in the real
 // viewer and diffs them, then loads a generated scene there and reads the
 // geometry back.
 //
@@ -27,7 +27,14 @@ await mkdir(OUT, { recursive: true });
 
 // The viewer build parity was last verified against. A mismatch fails this probe
 // rather than being noted — see the fail-closed block at the bottom.
-const PINNED_VIEWER_BUILD = "2026-07-28T16:12:33Z-1acf66e";
+//
+// Re-pinned 2026-08-04 against a green behavioural run, NOT by bumping the string
+// to silence a failure: max font-metric delta 0px at 0px tolerance across 5
+// families x 5 sizes x 4 repertoires, bound text round-tripped unchanged (dw=dh=0),
+// writtenSceneParity and orderingParity both empty, and all four BD_NEG_* gates
+// re-confirmed biting against that same live build first. Repeat that order on the
+// next drift — prove the gate still bites, then move the constant.
+const PINNED_VIEWER_BUILD = "2026-08-04T14:31:37Z-ab0255f";
 
 const FAMILIES = ["Excalifont", "Nunito", "Cascadia", "Comic Shanns", "Lilita One"];
 const SIZES = [18, 23, 30, 38, 48];
@@ -293,7 +300,7 @@ const ASSERTED_FIELDS = [
   "type", "x", "y", "width", "height", "angle",
   "frameId", "containerId",
   // The complete text metric tuple, not a subset — these are exactly the fields
-  // docs/PLAN.md §2 pins, so parity has to cover all of them.
+  // the oracle pins, so parity has to cover all of them.
   "fontSize", "fontFamily", "lineHeight", "textAlign", "verticalAlign", "autoResize",
   "text", "originalText",
 ];
@@ -459,9 +466,9 @@ console.log(JSON.stringify({ ...report, rawViewerScenes: "<written to file>" }, 
 
 // ---------- fail closed ----------
 //
-// This probe is the ONLY mechanism that detects live viewer drift (docs/PLAN.md §2
-// risk list), so recording a mismatch without failing would make that mitigation
-// decorative. Every condition below blocks re-signing the oracle.
+// This probe is the ONLY mechanism that detects live viewer drift, so recording
+// a mismatch without failing would make that mitigation decorative. Every
+// condition below blocks re-signing the oracle.
 
 const failures = [];
 if (!viewerVersion?.version) failures.push("viewer build not identified");
