@@ -1,6 +1,6 @@
 ---
 name: beautidraw
-description: Build an Excalidraw presentation from a document or a topic — one continuous canvas of stacked, framed sections. Use when the user wants to present workflows, ideas or concepts visually without PowerPoint.
+description: Build an Excalidraw presentation from a document, transcript or topic — one continuous canvas of stacked, framed sections, every coordinate computed by a layout engine. Use when the user wants a deck, slides, or a visual walkthrough of a workflow or concept without PowerPoint.
 ---
 
 # beautidraw
@@ -12,8 +12,24 @@ no export, no presenter mode.
 **You never type a coordinate.** You write semantic content into `deck-spec.json`; a layout
 engine running inside a real browser computes every `x`, `y`, `width` and `height` from
 Excalidraw's own text measurement. Guessing at geometry is the failure mode this exists to
-remove — 35 of 35 confirmed defects in the reference artifact were arithmetic, not taste. You
-own the spec; generation is one command.
+remove — it produced every rendering defect in the deck this was built from. You own the spec;
+generation is one command.
+
+## Quick start
+
+```json
+{
+  "title": "Shipping the review pipeline", "subtitle": "What changed", "footer": "Questions by Friday",
+  "bands": [
+    { "heading": "Where the time goes", "deck": "Three stages, one of them automated",
+      "pattern": "row-of-stages", "accent": "blue",
+      "nodes": [{ "label": "Draft", "note": "Author writes, no gate" },
+                { "label": "Review", "note": "Two approvals, median 14h wait" }] }
+  ]
+}
+```
+
+Full schema, every pattern's node shape, and a complete two-band spec: `references/deck-spec.md`.
 
 ## Build a deck
 
@@ -25,10 +41,10 @@ own the spec; generation is one command.
    Idempotent. On a provisioned tree it prints `already provisioned` and exits. Run it first
    every time rather than guessing.
 2. **Read the source.** A document, a transcript, a link, or just a topic. Extract the
-   substance; ignore the packaging. If the source is a URL that renders client-side (a chat
-   share link, a docs site), fetch it with a real browser — a title-only result means the page
-   was not rendered. If there is no source at all, settle who is in the room and what the deck
-   is *claiming* before writing anything, and say what you settled on.
+   substance; ignore the packaging. A URL that renders client-side (a chat share link, a docs
+   site) needs a real browser — a title-only result means the page was not rendered. With no
+   source at all, settle who is in the room and what the deck is *claiming* first, and say what
+   you settled on.
 3. **Write `deck-spec.json`.** Schema and per-pattern node shapes: `references/deck-spec.md`.
    Choosing a pattern: `references/patterns.md`. Accents and type: `references/visual-system.md`.
    For illustrations read `references/blackboard-images.md` first — it is the canonical style and
@@ -38,15 +54,15 @@ own the spec; generation is one command.
    node "${CLAUDE_PLUGIN_ROOT}/scripts/generate.mjs" <spec.json> <outdir>
    ```
    Both paths are yours; relative ones resolve against your current directory. Unless the user
-   names an output directory, keep the spec at `decks/<slug>/deck-spec.json` and write to
-   `decks/<slug>/out/` — only `out/` is gitignored, so the spec stays tracked. Writes
-   `deck.excalidraw`, `band-NN.png` per band, `scene.png`, and `diagnostics.json`.
-5. **Look at the PNGs.** Read `scene.png` for the whole canvas and any band that seems risky.
-   Not optional — see "What the validators do not catch".
+   names an output directory, use `decks/<slug>/deck-spec.json` and `decks/<slug>/out/` — only
+   `out/` is gitignored, so the spec stays tracked. Writes `deck.excalidraw`, `band-NN.png` per
+   band, `scene.png`, and `diagnostics.json`.
+5. **Look at the PNGs.** Read `scene.png`, and any band that seems risky. Not optional — see
+   "What the validators do not catch".
 6. Hand over `deck.excalidraw`.
 
-`${CLAUDE_PLUGIN_ROOT}` is substituted by Claude Code. Outside a plugin install, use the path to
-your checkout.
+`${CLAUDE_PLUGIN_ROOT}` is substituted by Claude Code; outside a plugin install use your
+checkout path.
 
 ## Write the presentation, not a script for it
 
@@ -61,32 +77,20 @@ HR need to a reusable playbook", "One spreadsheet becomes decision-ready insight
 delivery order, presenter scripts and balance percentages are **not** deck content. If the
 source is mostly delivery advice, the deck is built from what that advice is *about*.
 
-## Content rules
-
-- **One idea per band.** A band is a section, not a slide, and not a dumping ground.
-- **The deck line is an argument, not a label.** ≤ 75 characters, and it should say something
-  the heading does not.
-- **Notes earn their place.** A node with a label and no note is fine. A note that restates the
-  label is noise.
-- **Prose is the default font.** `mono` is a role — code, formulas, CLI, file paths, literal
-  identifiers — not a house style. (Not yet wired for note text; write formulas as prose.)
-- **6–12 bands** reads as a session. Beyond that, split the deck.
-
 ## What the validators do not catch
 
 `generate.mjs` fails closed on arithmetic: band height cap, edge coverage, element overlap,
 fit-zoom legibility, unresolved bound text, `boundElements` shape, contrast floors. A clean run
-means the geometry is sound.
+means the geometry is sound. It says nothing about whether the deck is any good. Yours to judge:
 
-It says nothing about whether the deck is any good. Composition defects that pass every gate:
-
+- **One idea per band** — a band is a section, not a slide, and not a dumping ground.
+- **Notes earn their place** — a note that restates its label is noise; label-only is fine.
 - a pattern that fights its content (a 12-step sequence as `row-of-stages`)
-- bands that all look alike because the accent never rotates
-- a band with one node in it
+- bands that all look alike because the accent never rotates, or a band with one node in it
 - text that is technically legible and actually unreadable at pan distance
 
-So read `scene.png` and judge it. If a band looks wrong, the fix is almost always in the spec —
-a different pattern, fewer nodes, shorter notes — not in the layout engine.
+Read `scene.png` and judge it. If a band looks wrong the fix is almost always in the spec — a
+different pattern, fewer nodes, shorter notes — not in the layout engine.
 
 ## When generation fails
 
@@ -96,24 +100,25 @@ Failures are deliberate and named. Read the message; it tells you which band and
 |---|---|
 | `exceeds BAND_HEIGHT_CAP` | fewer nodes, shorter notes, or split the band |
 | `exhausted column candidates` | same — the pattern cannot fit this much content |
-| `label is empty or whitespace-only` | a label is blank; the converter emits no text for `""` |
+| `measures Npx, budget is Mpx` | a title, heading, deck line or footer is too long for its width budget — shorten it |
+| `label is empty or whitespace-only` | a label, heading or chrome string is blank; the converter emits no text for `""` |
+| `nodes must be a non-empty array` | every band needs at least one node |
+| `unknown pattern` / `unknown accent` | the message lists the accepted values |
 | `content spans [...]` (edge coverage) | the band abandons the page; usually too few nodes |
-| overlap / contrast / legibility | report it — these indicate an engine bug, not a spec bug |
+| overlap / contrast / `below the 12px gate` | report it — no spec can cause these; they indicate an engine bug |
 
 Do not edit `scripts/layout.mjs` to make a deck pass. The engine's constants are measured, and
 `scripts/LAYOUT-CONTRACT.md` records why each one holds.
 
 ## References
 
-- `references/deck-spec.md` — the schema and every pattern's node shape
+- `references/deck-spec.md` — the schema, every pattern's node shape, a complete example
 - `references/patterns.md` — which of the six patterns fits what, and node counts that work
-- `references/visual-system.md` — palette, accent rotation, type ramp, contrast
+- `references/visual-system.md` — palette, accent rotation, type ramp, contrast, `mono`
 - `references/blackboard-images.md` — the illustration style contract, and what it cannot yet do
 - `${CLAUDE_PLUGIN_ROOT}/scripts/LAYOUT-CONTRACT.md` — the engine's measured invariants
   (read only if changing it)
 
-Decks are type- and shape-led. Illustrations are embedded only after the layout engine has
-produced the frame geometry: fit accepted PNGs to frame-native side or background zones, then
-re-render before handoff. Preserve the asset manifest and the placement contract — a later
-regeneration must reapply the embedding step, because `deck-spec.json` does not yet carry image
-fields.
+Decks are type- and shape-led. Illustrations go in only after the engine has produced the frame
+geometry, and `deck-spec.json` carries no image fields — a regeneration drops them, so the
+embedding step must be reapplied.

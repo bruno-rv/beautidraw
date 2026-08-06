@@ -36,8 +36,15 @@ like noise.
 | node label, subtitle, deck line | 23 |
 | note, footer | 18 |
 
-The floor is set by the fit-zoom gate: a band viewed fit-to-window renders at ~0.70×, so 18pt
-lands at ~12.6 css px. Nothing smaller is allowed, which is why the ramp starts high.
+The floor is set by the fit-zoom gate, and the band height cap is what keeps you clear of it.
+A band viewed fit-to-window zooms to `min(1600 / 2280, 850 / frameHeight)`. The first term is
+0.70175 and fixed; the second only becomes the smaller one above a frame height of 1211.25 — and
+`BAND_HEIGHT_CAP` is 1211, which is `floor(850 × 2280 / 1600)`, not a free choice. So every legal
+band zooms at 0.70175, 18pt lands at 12.63 css px, and the 12px floor holds with 0.63px to spare.
+
+Two consequences. Content cannot push text below the floor — a band that would has already
+failed the height cap. And the ramp cannot be lowered: 17pt would land at 11.93px and fail
+everywhere at once.
 
 `prose` (Nunito) is the default. `mono` (Cascadia) is a **declared but unwired** role — code,
 formulas, CLI, file paths, literal identifiers. `layout.mjs` defines it in `FONT` and routes no
@@ -47,9 +54,11 @@ is wired.
 
 ## Contrast
 
-Text on a filled shape must clear **4.5:1** below 24 effective px and **3:1** at or above. The
-six pairs above are chosen to clear it and the generator asserts it per element rather than
-trusting the table — `amber` is the tightest at 4.51 with no headroom, so do not hand-edit fills.
+Text on a filled shape must clear **4.5:1** below 24 effective px and **3:1** at or above.
+"Effective" is size × the 0.70175 zoom above, so the 3:1 branch only engages at 35pt and up —
+every ramp step a node can use is judged against the strict 4.5:1. The six pairs above are chosen
+to clear it and the generator asserts it per element rather than trusting the table — `amber` is
+the tightest at 4.51 with no headroom, so do not hand-edit fills.
 
 ## Page geometry
 

@@ -1,8 +1,7 @@
 # Colored Blackboard Image Reference
 
-Use this reference whenever a deck needs the colored-blackboard illustrations used by the
-`hr-ai` presentation. The goal is a reproducible visual system, not a loose request for
-"something hand-drawn".
+Use this reference whenever a deck needs colored-blackboard illustrations. The goal is a
+reproducible visual system, not a loose request for "something hand-drawn".
 
 > **Status: style and placement contract.** `deck-spec.json` still has no image field and
 > `generate.mjs` still writes `files: null`, so a subsequent regeneration can remove embedded
@@ -39,8 +38,12 @@ Start every image prompt with this exact style direction, then append only the s
 > restrained chalk marks in powder blue, mint green, lavender violet, warm amber, coral red,
 > and off-white. Use simple clean hand-drawn line art, generous margins, no photorealism, no
 > logos, no interface screenshots, no readable words, no letters, no numbers. The illustration
-> should feel practical, intelligent, friendly, and human-centred for an HR AI workflow
-> presentation. Keep the drawing well inside the frame and make it legible as a 16:9 card.
+> should feel practical, intelligent, friendly, and human-centred. Keep the drawing well inside
+> the frame and make it legible as a 16:9 card.
+
+The prefix carries the style and nothing else — the deck's domain belongs in the subject line
+below it, never in the prefix. A prefix that names one deck's subject silently reframes every
+illustration in every other deck.
 
 Subject prompts should describe the visual metaphor, not ask the model to render text. For example:
 
@@ -49,16 +52,10 @@ Subject prompts should describe the visual metaphor, not ask the model to render
 > with arrows and small approval checkmarks; emphasize one source becoming several controlled
 > variants. Keep it as a single self-contained chalkboard panel.
 
-## Reference motifs for the HR workflow deck
-
-| Asset | Motif | Deck band |
-|---|---|---:|
-| `blackboard-01-blank-page-to-finished-work.png` | blank source → lightbulb → reusable work artifacts | 2 |
-| `blackboard-02-source-to-channel-variants.png` | one approved source → controlled communication channels | 6 |
-| `blackboard-03-spreadsheet-to-insight.png` | spreadsheet → validated analysis → decision insight | 7 |
-| `blackboard-04-idea-to-workshop-package.png` | rough idea → agenda, notes, handout, flow, collection | 8 |
-| `blackboard-05-source-grounded-evidence.png` | scanned source → structured table → verified evidence | 9 |
-| `blackboard-06-human-in-the-loop-guardrails.png` | AI assistance → review → human-only decision gate | 10 |
+Motifs that work, as shapes rather than subjects: a source becoming several controlled variants;
+a raw table becoming a decision; a rough idea becoming a packaged set of artifacts; assistance
+passing through review into a human-only gate. Each is a left-to-right transformation, which is
+what the composition rule above asks for.
 
 ## Frame-native placement contract
 

@@ -62,13 +62,62 @@ row is a question or a check rather than a stage.
 
 ## Hard rules
 
-- **Empty or whitespace-only labels are fatal.** Excalidraw emits no text element for `""`, so
-  the container would render blank and silently pass. The generator refuses to write the file.
-- **`deck` is capped at 75 characters** — beyond that it competes with the heading.
-- **`accent` is required on every band**; `tone` is optional and only `comparison` reads it.
-- Every band needs at least one node.
+Each of these is enforced — the generator throws rather than writing a file.
 
-## Worked example
+- **Empty or whitespace-only strings are fatal**, for labels, notes, headings and the three
+  chrome strings alike. Excalidraw emits no text element for `""`, so the container would render
+  blank and silently pass.
+- **`accent` is required on every band** and must name one of the six; `tone` is optional and
+  only `comparison` reads it. An unknown `pattern` or `accent` throws and lists what is accepted.
+- **Every band needs at least one node**, and `bands` itself must be non-empty.
 
-`examples/hr-ai/deck-spec.json` in this repo — 12 bands built from a planning conversation,
-covering every pattern except `tree`. Its `out/` directory holds the rendered result.
+## Soft rule: the deck line
+
+Keep `deck` to about **75 characters**. This is a guideline, not a gate: what the engine
+actually enforces is a pixel budget, so an over-long deck line fails as
+`band N deck line "…" measures Xpx, budget is 2120.0px`. 75 characters keeps you clear of it,
+and beyond that the deck line competes with the heading anyway. The same budget check applies to
+the title, subtitle, headings and footer, each against its own width.
+
+## A complete minimal spec
+
+Two bands, one of each of the most common shapes. Generates as-is.
+
+```json
+{
+  "title": "Shipping the review pipeline",
+  "subtitle": "What changed, and what it still costs us",
+  "footer": "Questions before Friday",
+  "bands": [
+    {
+      "heading": "Where the time goes",
+      "deck": "Three stages, and only one of them is automated",
+      "pattern": "row-of-stages",
+      "accent": "blue",
+      "nodes": [
+        { "label": "Draft", "note": "Author writes, no gate" },
+        { "label": "Review", "note": "Two approvals, median 14h wait" },
+        { "label": "Merge", "note": "Automated once the suite is green" }
+      ]
+    },
+    {
+      "heading": "What we automate, what stays human",
+      "deck": "Judgement calls do not get handed to a bot",
+      "pattern": "comparison",
+      "accent": "slate",
+      "nodes": [
+        {
+          "label": "Machine decides",
+          "tone": "green",
+          "items": ["Formatting", "Test runs", "Merge on green"]
+        },
+        {
+          "label": "Human decides",
+          "tone": "red",
+          "items": ["Design review", "Release sign-off"]
+        }
+      ]
+    }
+  ]
+}
+```
