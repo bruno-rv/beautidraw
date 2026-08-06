@@ -10,9 +10,13 @@ browser computes every coordinate from Excalidraw's own text measurement.
 
 ## Setup
 
-**Prerequisites: Node 20+ and [pnpm](https://pnpm.io/installation).** The dependency tree is
-pinned with `pnpm-lock.yaml`, so pnpm is required and setup will not bootstrap it for you —
-installing global tooling behind your back is worse than failing with a message.
+**Prerequisites: Node 20+ and [pnpm](https://pnpm.io/installation).** Setup will not bootstrap
+pnpm for you — installing global tooling behind your back is worse than failing with a message.
+
+No lockfile is committed. Every direct dependency is pinned to an exact version in
+`package.json` and setup verifies each one after installing; the transitive tree is whatever
+pnpm resolves at install time and is **not** pinned. The versions that decide geometry —
+`@excalidraw/excalidraw`, `react`, `react-dom`, `esbuild` — are all direct.
 
 Three further things are required and none are committed: dependencies, a Chromium binary, and
 the 27 MB vendored Excalidraw bundle. One idempotent command provides all three:
@@ -30,7 +34,6 @@ to call on every invocation, which is what the commands do. It re-checks rather 
 marker:
 
 - dependency versions against the exact pins in `package.json`
-- `pnpm-lock.yaml` against the lockfile the last completed install reified
 - the vendored **fonts** against the pinned package's own bytes, by exact filename
 - the vendored **JS and CSS** against the digests recorded when they were built, plus the
   hashes of `vendor-entry.js` and `build-bundle.mjs`, so an edited bundle source forces a
@@ -55,20 +58,17 @@ Writes `deck.excalidraw`, one `band-NN.png` per band, `scene.png`, and `diagnost
 script resolves its *own* root from `import.meta.url`, so it finds the bundle and harness no
 matter where it is invoked from; the two arguments are yours and resolve against your cwd.
 
-Try it against the worked example, from a clone of this repo:
-
-```
-node scripts/generate.mjs examples/hr-ai/deck-spec.json examples/hr-ai/out
-```
-
 ## Layout
 
+The repo root *is* the skill — `plugin.json` declares `"skills": ["."]`, so `SKILL.md` and
+`references/` sit at the top level and nothing is nested for the sake of it.
+
 ```
-.claude-plugin/plugin.json     plugin manifest
-skills/beautidraw/             SKILL.md + references/ — how to write a deck-spec
+SKILL.md                       what Claude reads; the build procedure
+references/                    deck-spec schema, patterns, visual system, images
 scripts/                       layout engine, generator, harness, setup, bundler
 scripts/spike/                 measurement probes; probe-06 is the viewer-drift gate
-examples/                      a worked deck-spec
+.claude-plugin/plugin.json     plugin manifest
 ```
 
 ## Maintenance

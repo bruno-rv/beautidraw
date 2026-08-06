@@ -1,13 +1,16 @@
 node_modules/
 
+# Resolved fresh on each install; only the exact pins in package.json are
+# authoritative, so a checked-in lockfile would be a second source of truth.
+pnpm-lock.yaml
+
 # Built by `pnpm bundle` from the pinned @excalidraw/excalidraw dependency.
 # 27 MB of vendored bundle + fonts — regenerate, don't commit.
 scripts/vendor/
 
-# Generated deck output. The spec is the source; everything under out/ is derived.
-examples/*/out/
-
 .DS_Store
 .playwright-mcp/
 .scratch/
+
+# Generated deck output. The spec is the source; everything under out/ is derived.
 decks/*/out/

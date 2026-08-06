@@ -3,12 +3,12 @@
   "description": "Turn a document or a topic into a single .excalidraw presentation — stacked labelled bands on one continuous canvas, all geometry computed by a deterministic layout engine.",
   "version": "0.1.0",
   "author": {
-    "name": "Bruno Rodrigues Veloso",
+    "name": "Bruno",
     "url": "https://github.com/bruno-rv"
   },
   "homepage": "https://github.com/bruno-rv/beautidraw",
   "repository": "https://github.com/bruno-rv/beautidraw",
   "license": "MIT",
   "keywords": ["excalidraw", "presentations", "diagrams", "layout", "canvas"],
-  "skills": ["./skills/beautidraw"]
+  "skills": ["."]
 }

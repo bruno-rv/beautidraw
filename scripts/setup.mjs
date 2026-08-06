@@ -14,7 +14,7 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -24,11 +24,6 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const MANIFEST_SCHEMA = "beautidraw.bundle-manifest/3";
 const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
 
-const LOCK = resolve(ROOT, "pnpm-lock.yaml");
-// Written after a successful install, inside node_modules so it is removed with
-// the tree it describes.
-const STAMP = resolve(ROOT, "node_modules/.beautidraw-setup.json");
-
 function run(cmd, args) {
   // cwd is pinned to ROOT so this works when invoked from any directory —
   // pnpm and playwright both resolve config relative to cwd, not to argv[1].
@@ -36,8 +31,8 @@ function run(cmd, args) {
     execFileSync(cmd, args, { cwd: ROOT, stdio: "inherit" });
   } catch (e) {
     if (e.code === "ENOENT") {
-      console.error(`[setup] '${cmd}' is not on PATH. This repo pins its dependency tree with`);
-      console.error("[setup] pnpm (pnpm-lock.yaml + pnpm-workspace.yaml); install it first:");
+      console.error(`[setup] '${cmd}' is not on PATH. This repo installs with pnpm`);
+      console.error("[setup] (see pnpm-workspace.yaml); install it first:");
       console.error("[setup]   corepack enable && corepack prepare pnpm@11.0.3 --activate");
       console.error("[setup] or: npm install -g pnpm@11.0.3   (package.json pins this version)");
       process.exit(1);
@@ -78,36 +73,23 @@ function depProblem() {
     if (!installed) return `${dep} is not installed`;
     if (installed !== pin) return `${dep}@${installed} is installed, package.json pins ${pin}`;
   }
-  // Direct pins say nothing about the transitive tree. pnpm-lock.yaml does, so
-  // compare it against the lockfile the last successful install actually
-  // reified — otherwise a pulled commit that only moves transitive versions
-  // leaves a stale node_modules reporting ready.
-  if (!existsSync(LOCK)) return "pnpm-lock.yaml is missing";
-  const lockHash = sha256(readFileSync(LOCK));
-  let stamp;
-  try {
-    stamp = JSON.parse(readFileSync(STAMP, "utf8"));
-  } catch {
-    return "no record of a completed install for this lockfile";
-  }
-  if (stamp?.lockfileSha256 !== lockHash) return "pnpm-lock.yaml changed since the last install";
+  // The direct pins are the whole guarantee: no lockfile is committed, so the
+  // transitive tree is whatever pnpm resolves at install time and drift below
+  // the direct deps is NOT detected here. The versions that decide geometry —
+  // excalidraw, react, esbuild — are all direct and exact; if a transitive bump
+  // ever moves a measurement, the fix is to commit a lockfile again and restore
+  // a hash gate against it.
   return null;
-}
-
-function writeStamp() {
-  writeFileSync(STAMP, JSON.stringify({ lockfileSha256: sha256(readFileSync(LOCK)) }) + "\n");
 }
 
 const depIssue = depProblem();
 if (depIssue) {
   console.log(`[setup] installing dependencies — ${depIssue}`);
-  run("pnpm", ["install", "--frozen-lockfile"]);
-  writeStamp();
+  run("pnpm", ["install"]);
   didWork = true;
 
-  // Re-check, and stop if the install did not resolve it. `--frozen-lockfile`
-  // is a no-op when the lockfile is already satisfied, so it cannot repair a
-  // node_modules tree that disagrees with the pins for some other reason. Left
+  // Re-check, and stop if the install did not resolve it. An install can exit 0
+  // having left a node_modules tree that still disagrees with the pins. Left
   // unchecked, setup would go on to build the vendor bundle against versions
   // that do not match package.json — a bundle that measures wrongly but reports
   // ready, which is the exact failure this whole gate exists to prevent.
@@ -115,7 +97,7 @@ if (depIssue) {
   if (stillBroken) {
     console.error(`[setup] dependencies are still wrong after install: ${stillBroken}`);
     console.error("[setup] refusing to build the bundle against an unpinned tree.");
-    console.error("[setup] remove node_modules and re-run, or reconcile pnpm-lock.yaml.");
+    console.error("[setup] remove node_modules and re-run, or reconcile the pins in package.json.");
     process.exit(1);
   }
 }
