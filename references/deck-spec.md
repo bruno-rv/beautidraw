@@ -11,9 +11,10 @@ The only file you write. Semantic content, no geometry.
     {
       "heading": "string",                 // the section title
       "deck": "string",                    // one line, <= 75 chars
-      "pattern": "flow" | "row-of-stages" | "comparison" | "timeline" | "tree" | "checklist",
+      "pattern": "flow" | "row-of-stages" | "comparison" | "timeline" | "tree" | "checklist" | "canvas",
       "accent": "blue" | "green" | "amber" | "red" | "violet" | "slate",
-      "nodes": [ /* shape depends on pattern */ ]
+      "nodes": [ /* required for structured patterns */ ],
+      "height": 620 // required only for canvas; body height in 240..1000
     }
   ]
 }
@@ -60,6 +61,13 @@ A root row, each root with its children stacked beneath and connected by short l
 Two columns of left-aligned rows, rendered `• label — note`. For dense enumerations where each
 row is a question or a check rather than a stage.
 
+### `canvas` — `{ height }`, no `nodes`
+
+Allocates an empty deterministic body for a composed or hybrid frame. `height` is the body height,
+from 240 to 1000. The heading and deck line remain normal frame chrome. After base generation,
+fill every canvas band through `scripts/compose.mjs` and a `composition-spec.json`; never deliver
+an empty canvas frame.
+
 ## Hard rules
 
 Each of these is enforced — the generator throws rather than writing a file.
@@ -69,7 +77,8 @@ Each of these is enforced — the generator throws rather than writing a file.
   blank and silently pass.
 - **`accent` is required on every band** and must name one of the six; `tone` is optional and
   only `comparison` reads it. An unknown `pattern` or `accent` throws and lists what is accepted.
-- **Every band needs at least one node**, and `bands` itself must be non-empty.
+- **Every structured band needs at least one node**. A `canvas` band instead requires `height` from
+  240 to 1000. `bands` itself must be non-empty.
 
 ## Soft rule: the deck line
 

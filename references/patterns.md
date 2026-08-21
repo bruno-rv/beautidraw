@@ -1,8 +1,8 @@
 # Choosing a pattern
 
-Six patterns. The vocabulary is closed — it trades reach for the guarantee that every band is
-laid out correctly. If nothing fits, the content is usually wrong for a band, not the other way
-round.
+Six structured patterns plus the `canvas` allocation pattern. The structured vocabulary trades
+reach for deterministic layout. Use `canvas` when the visual treatment map calls for a composed or
+hybrid frame rather than forcing the idea into a native pattern.
 
 Pick by **what the content is**, not by how it looks.
 
@@ -14,6 +14,14 @@ Pick by **what the content is**, not by how it looks.
 | `timeline` | events positioned along time | 4–8 |
 | `tree` | one thing decomposes into parts | 2–4 roots |
 | `checklist` | a list of questions or checks to work through | 6–10 |
+| `canvas` | a composed or hybrid frame assembled after base generation | body height 240–1000 |
+
+## `canvas`
+
+`canvas` is not a seventh visual template. It allocates frame geometry and preserves narrative
+order so `scripts/compose.mjs` can insert a bespoke composition. It has `height` instead of
+`nodes`. Read `composition-spec.md` before using it. Every canvas band must be filled before
+delivery.
 
 ## `flow`
 

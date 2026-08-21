@@ -93,7 +93,7 @@ formula itself. Chrome (heading, deck line) uses `MARGIN`, not `BODY_INSET`.
     {
       "heading": "string",
       "deck": "string",              // one line, <= 75 chars
-      "pattern": "flow" | "row-of-stages" | "comparison" | "timeline" | "tree" | "checklist",
+      "pattern": "flow" | "row-of-stages" | "comparison" | "timeline" | "tree" | "checklist" | "canvas",
       "accent": "blue"|"green"|"amber"|"red"|"violet"|"slate",
       "nodes": [ ... ]               // shape depends on pattern, see below
     }
@@ -118,6 +118,8 @@ formula itself. Chrome (heading, deck line) uses `MARGIN`, not `BODY_INSET`.
   with its children stacked beneath and connected by short lines.
 - **`checklist`** — `nodes: [{ label, note? }]`. Two columns of left-aligned note-sized rows,
   text `• label — note`; used for dense enumerations.
+- **`canvas`** — `height: number` from 240 to 1000, with no nodes. Allocates a blank body for
+  deterministic post-generation assembly by `scripts/compose.mjs`.
 
 Empty or whitespace-only labels are a **hard error** — the converter returns no text element
 for an empty string (spike F7), so a container would silently render blank.
@@ -205,12 +207,12 @@ above. The pairs above are chosen to clear it; assert rather than assume.
    - `boundElements` is an array on every element
    - every text/fill pair clears its contrast floor (4.5:1 below 24 effective px, 3:1 above)
 
-**Edge-coverage exemptions.** `EDGE_COVERAGE_EXEMPT_PATTERNS = { "flow" }`. A centred k=1
-column cannot clear `ε` by construction, and widening it back out to pass would reintroduce the
-composition defect the narrowing exists to remove. Every other pattern still has to clear it —
-the rule exists so a band cannot quietly abandon the page. Note the cost: `flow` now has no
-positional gate at all, which is why frame bounds are pinned explicitly rather than left to the
-converter.
+**Edge-coverage exemptions.** `EDGE_COVERAGE_EXEMPT_PATTERNS = { "flow", "canvas" }`. A centred
+`flow` column cannot clear `ε` by construction, and widening it back out would reintroduce the
+composition defect the narrowing exists to remove. A `canvas` is deliberately empty during base
+generation and receives its final positional checks in `scripts/compose.mjs`. Every structured
+pattern besides `flow` still clears the gate. Note the cost: `flow` has no positional gate at all,
+which is why frame bounds are pinned explicitly rather than left to the converter.
 
 The probe set for edge coverage excludes decorative `line` elements, so the timeline's
 edge-to-edge axis cannot mask an under-filled band.

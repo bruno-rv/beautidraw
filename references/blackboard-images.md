@@ -65,21 +65,29 @@ default.
 
 ## Frame-native placement contract
 
-- Never place a dark image as a free-floating thumbnail on the white canvas. The image must
-  either fill a deliberate side zone or be a true background for its entire parent frame.
+- Never place a dark image as an arbitrary thumbnail on the white canvas. Give it a deliberate
+  role: `scene`, `side`, `focal`, or `background`.
 - The 16:9 size above is the standalone-card default. When the image fills a frame or side zone,
   regenerate the composition for that target aspect ratio and normalize the PNG to the target
   pixel dimensions. Do not letterbox a 16:9 card inside a wider or taller frame.
 - **Side mode:** use the full height of the left or right body column, flush to the frame's
   content bounds. Generate a vertical or square composition when the column requires it; do not
   add an inset panel, white padding, or a second dark border.
+- **Scene mode:** the illustration is the primary explanatory surface for a composed frame. Make
+  it exactly the parent frame's dimensions and keep it at readable opacity. Prompt for intentional
+  negative space beside the focal objects, then place only a few Excalidraw callouts, arrows,
+  highlights, or source notes in those spaces. Direct text belongs on the rendered composition
+  surface; text that must overlap the image needs a filled callout so contrast is deterministic.
+  Do not overlay a standard card template on top of the scene.
+- **Focal mode:** use one dominant image zone or object inside a deliberately composed frame,
+  leaving the remaining space for a claim, evidence, or a compact structured element. Its position
+  and scale follow the visual treatment map; it is not fitted into an accidental leftover gap.
 - **Background mode:** make the image exactly the parent frame's width and height, place it
   behind every other child with the same `frameId`, and reduce opacity enough for the deck's
   typography and cards to remain primary. It must bleed to the frame edges so it reads as a
   frame surface, not an object placed on top of it.
-- A compact row/checklist band generally needs background mode; a two-column workflow band
-  generally needs side mode. Choose based on the actual frame geometry, not on an arbitrary
-  thumbnail size.
+- Background mode is not the default. Use it only when the native structure is already the clearest
+  explanation and the image adds context without becoming the main visual argument.
 - If neither mode has a clean slot, reflow the deck or regenerate the asset. Never use an
   arbitrary leftover gap merely to make an image fit.
 
@@ -100,9 +108,10 @@ default.
    contain the matching `id`, `mimeType: "image/png"`, and a `dataURL`.
 6. Put the image element inside the intended frame with a unique id, `status: "saved"`,
    `scale: [1, 1]`, `crop: null`, `boundElements: []`, and the full standard Excalidraw base
-   properties. In side mode, use the image itself as the flush visual zone. In background mode,
-   place it before the frame's other children, set its opacity deliberately, and do not add a
-   decorative panel rectangle around it.
+   properties. In scene mode, place the image before its direct annotations and keep the focal
+   objects unobstructed. In side or focal mode, use the image itself as the visual zone. In
+   background mode, place it before the frame's other children, set its opacity deliberately, and
+   do not add a decorative panel rectangle around it.
 
 A prompt-only handoff is not enough: the assets, the manifest and the rendered deck must agree,
 and every image must have been viewed before it ships.

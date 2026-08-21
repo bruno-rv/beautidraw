@@ -114,6 +114,8 @@ const EDGE_COVERAGE_EXEMPT_PATTERNS = new Set([
   // Widening the cards back out to pass this check would just reintroduce
   // the composition defect the narrowing exists to remove.
   "flow",
+  // `canvas` is intentionally blank until scripts/compose.mjs fills it.
+  "canvas",
 ]);
 
 function checkEdgeCoverage(elements, diagnostics) {

@@ -71,8 +71,8 @@ const FRAME_STROKE = "#94a3b8";
 // Interior band spacing — judgment calls, not pinned by the contract.
 const FRAME_PAD_TOP = G;
 const HEADING_DECK_GAP = 16;
-const DECK_BODY_GAP = G;
-const FRAME_PAD_BOTTOM = G;
+export const DECK_BODY_GAP = G;
+export const FRAME_PAD_BOTTOM = G;
 const ROW_GAP = G; // vertical gap between stacked rows/units
 const CARD_GAP = 12; // gap between stacked cards within one unit
 const ARROW_CLEARANCE = 6; // gap between an arrow tip and the shape it binds to
@@ -123,6 +123,7 @@ const PATTERNS = new Set([
   "timeline",
   "tree",
   "checklist",
+  "canvas",
 ]);
 
 // ---------------------------------------------------------------------------
@@ -140,6 +141,12 @@ function reqText(value, where) {
 }
 
 function planBandNodes(band, bandIndex) {
+  if (band.pattern === "canvas") {
+    if (!Number.isFinite(band.height) || band.height < 240 || band.height > 1000) {
+      throw new Error(`band ${bandIndex} (canvas): height must be a number from 240 to 1000`);
+    }
+    return [];
+  }
   const nodes = band.nodes;
   if (!Array.isArray(nodes) || nodes.length === 0) {
     throw new Error(`band ${bandIndex} (${band.pattern}): nodes must be a non-empty array`);
@@ -216,6 +223,7 @@ export function planDeck(spec) {
         deck: { text: reqText(band.deck, `band ${i} deck`), size: RAMP.label },
         pattern: band.pattern,
         accent: band.accent,
+        height: band.pattern === "canvas" ? band.height : null,
         nodes: planBandNodes(band, i),
       };
     }),
@@ -299,6 +307,8 @@ export function collectFontRequirements(spec) {
         for (const n of band.nodes) {
           add(formatChecklistRow(n.label, n.note), RAMP.note);
         }
+        break;
+      case "canvas":
         break;
     }
   }
@@ -825,6 +835,15 @@ function layoutChecklist(band, bandIndex, api, bodyX, bodyTop, bodyWidth, bodyHe
   return selectColumnCandidate([2], bandIndex, "checklist", bodyHeightCap, build);
 }
 
+function layoutCanvas(band, bandIndex, api, bodyX, bodyTop, bodyWidth, bodyHeightCap) {
+  if (band.height > bodyHeightCap) {
+    throw new Error(
+      `band ${bandIndex} (canvas): requested body height ${band.height} exceeds budget ${bodyHeightCap.toFixed(1)}`,
+    );
+  }
+  return { skeletons: [], height: band.height, memberIds: [], columnsUsed: 0 };
+}
+
 const PATTERN_LAYOUTS = {
   flow: layoutFlow,
   "row-of-stages": layoutRowOfStages,
@@ -832,6 +851,7 @@ const PATTERN_LAYOUTS = {
   timeline: layoutTimeline,
   tree: layoutTree,
   checklist: layoutChecklist,
+  canvas: layoutCanvas,
 };
 
 // convertToExcalidrawElements appends every auto-created bound-text element
