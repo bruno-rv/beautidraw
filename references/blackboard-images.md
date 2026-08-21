@@ -21,7 +21,11 @@ reproducible visual system, not a loose request for "something hand-drawn".
 - Use lightly dusty, imperfect chalk linework with clear silhouettes and generous margins.
 - Use restrained chalk colors: powder blue, mint green, lavender violet, warm amber, coral red,
   and off-white. Keep the background dark and the linework brighter than the board.
-- Compose a single left-to-right metaphor: source → transformation → reviewed/reusable outcome.
+- Compose one coherent visual thesis that matches the band’s argument. Use a left-to-right
+  transformation when change is the point; a mirrored composition for comparison; opposing forces
+  for a trade-off; a hub-and-spoke or network for an ecosystem; a central human decision for a
+  judgement call; or a staged path for time. Do not force every concept into the same pipeline
+  metaphor.
 - Keep the main objects inside a 5% safe margin and make the drawing readable when reduced to
   roughly 320 × 180 px.
 - Use symbols, cards, arrows, checkmarks, grids, documents, charts, folders, locks, and simple
@@ -54,8 +58,10 @@ Subject prompts should describe the visual metaphor, not ask the model to render
 
 Motifs that work, as shapes rather than subjects: a source becoming several controlled variants;
 a raw table becoming a decision; a rough idea becoming a packaged set of artifacts; assistance
-passing through review into a human-only gate. Each is a left-to-right transformation, which is
-what the composition rule above asks for.
+passing through review into a human-only gate; competing priorities held in balance; people and
+systems gathering evidence around a decision; a web of contributors feeding a shared outcome.
+Choose the motif from the band’s visual thesis, rather than reusing a left-to-right pipeline by
+default.
 
 ## Frame-native placement contract
 
