@@ -8,8 +8,9 @@ main context, and which inspection command proves the effective state.
 
 ## Central claim
 
-Claude Code artifacts are extension points into different parts of the agent loop. They are not one
-directory hierarchy and they do not share one precedence rule. The useful design questions are:
+Claude Code artifacts are extension points into different parts of the agent loop. The `.claude/`
+directory is a filesystem map for project-scoped artifacts, with `~/.claude/` providing user scope;
+these locations are not one universal precedence rule. The useful design questions are:
 
 1. When does this artifact load?
 2. Does it add context, tools, isolation, packaging, or deterministic control?
@@ -21,6 +22,8 @@ directory hierarchy and they do not share one precedence rule. The useful design
 - Establish the extension layer around the core agent loop.
 - Make context cost and compaction visible.
 - Separate scope from precedence.
+- Map the explicit `.claude/` tree: project instructions, settings, rules, skills, agents, workflows,
+  and the root `.mcp.json`, alongside the user-level `~/.claude/` tree.
 - Explain CLAUDE.md, auto memory, rules, and skills by loading behavior.
 - Show additive, path-sensitive instruction discovery in a monorepo.
 - Replace the settings flowchart with layered scalar resolution plus array and security exceptions.
@@ -45,6 +48,7 @@ Every conceptual frame includes:
 - Non-sequential field, evidence, constellation, spotlight, and matrix compositions for the
   remaining concepts.
 - One precise comparison frame for CLAUDE.md vs rules vs skills.
+- One non-connector spotlight frame for the filesystem-oriented `.claude/` map and nested activation.
 - No flow frame for settings precedence, scope, hierarchy, or priority.
 
 ## Sources

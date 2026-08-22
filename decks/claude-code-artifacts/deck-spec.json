@@ -1,7 +1,7 @@
 {
   "title": "Claude Code artifacts",
   "subtitle": "How context, configuration, extensions, and state combine in a working session",
-  "footer": "Sources: current Claude Code docs • context, memory, settings, skills, subagents, hooks, MCP • 2026-08-21",
+  "footer": "Sources: current Claude Code docs • context, memory, settings, skills, subagents, hooks, MCP • 2026-08-22",
   "bands": [
     {
       "heading": "Claude Code is an agent loop wrapped in an extension layer",
@@ -88,6 +88,36 @@
         "tradeoff": "Broad scope increases reuse and blast radius. Narrow scope improves relevance but is easier to overlook.",
         "inspect": "Compare ~/.claude with the repository root and .claude directory; use /context to see loaded instruction files.",
         "caption": "Choose scope from ownership and sharing needs before choosing a filename.",
+        "surface": "light"
+      }
+    },
+    {
+      "heading": "The `.claude` hierarchy is a filesystem map, not one precedence ladder",
+      "deck": "User, project, and nested paths decide ownership, sharing, and when context becomes visible",
+      "pattern": "canvas",
+      "accent": "blue",
+      "height": 800,
+      "visual": {
+        "family": "spotlight",
+        "focus": "A filesystem map with several loading rules",
+        "nodes": [
+          { "label": "~/.claude/", "note": "personal context and defaults across projects" },
+          { "label": "repo/", "note": "shared instructions and project configuration" },
+          { "label": "repo/.claude/", "note": "rules, skills, agents, workflows, and settings" },
+          { "label": "packages/billing/", "note": "nested context activated by file access" }
+        ],
+        "callouts": [
+          { "label": "User-owned", "note": "CLAUDE.md, settings, skills, agents, and rules under ~/.claude/" },
+          { "label": "Project-owned", "note": "CLAUDE.md, .claude/, and root .mcp.json can be reviewed in git" },
+          { "label": "Private project state", "note": "CLAUDE.local.md and settings.local.json stay out of version control" },
+          { "label": "Nested activation", "note": "billing instructions and path rules join only near matching files" }
+        ],
+        "explanation": "The filesystem layout tells you ownership and discovery, but not one universal precedence. User artifacts live under ~/.claude. Project instructions may live at repo/CLAUDE.md or repo/.claude/CLAUDE.md; shared settings, rules, skills, agents, and workflows live under repo/.claude; project MCP servers live in repo/.mcp.json. Nested CLAUDE.md and .claude directories can activate later when Claude works in that subtree.",
+        "example": "A billing task can combine ~/.claude/CLAUDE.md, repo/CLAUDE.md, repo/.claude/settings.json, packages/billing/CLAUDE.md, and a matching packages/billing/.claude/rules rule without any one file replacing the others universally.",
+        "evidence": ["Claude Code documents project and user locations separately, then defines loading or precedence rules per artifact type."],
+        "tradeoff": "A directory tree is discoverable, but treating it as a single override ladder produces wrong conclusions for additive instructions, merged hooks, named skills, and MCP servers.",
+        "inspect": "Read invoice.ts, run /context, and compare the loaded files with ~/.claude, repo/.claude, and repo/.mcp.json.",
+        "caption": "Map the files first; apply each artifact's own loading rule second.",
         "surface": "light"
       }
     },
