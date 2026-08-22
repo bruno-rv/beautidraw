@@ -1,6 +1,6 @@
 {
   "name": "beautidraw",
-  "description": "Turn a document or a topic into a single .excalidraw presentation — stacked labelled bands on one continuous canvas, all geometry computed by a deterministic layout engine.",
+  "description": "Turn a document or topic into a single .excalidraw presentation — a continuous canvas with semantic visual scenes, diagrams, and deterministic geometry.",
   "version": "0.1.0",
   "author": {
     "name": "Bruno",

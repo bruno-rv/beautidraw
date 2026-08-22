@@ -5,8 +5,9 @@ one continuous canvas, sections stacked top to bottom, each wrapped in a numbere
 and panned by hand on excalidraw.com — no slideshow, no export, no presenter mode.
 
 The design decision the whole thing rests on: **the model never types a coordinate.** It writes
-semantic content into a `deck-spec.json`; a deterministic layout engine running inside a real
-browser computes every coordinate from Excalidraw's own text measurement.
+semantic content plus a visual thesis into one `deck-spec.json`; a deterministic layout engine and
+automatic visual composer running inside a real browser compute every coordinate from Excalidraw's
+own text measurement.
 
 ## Setup
 
@@ -51,12 +52,14 @@ As a plugin: invoke the `beautidraw` skill by name.
 Directly — the script path must be reachable from wherever you are, so give it in full:
 
 ```
-node /path/to/beautidraw/scripts/generate.mjs <spec.json> <outdir>
+node /path/to/beautidraw/scripts/build-deck.mjs <spec.json> <outdir>
 ```
 
-Writes `deck.excalidraw`, one `band-NN.png` per band, `scene.png`, and `diagnostics.json`. The
-script resolves its *own* root from `import.meta.url`, so it finds the bundle and harness no
-matter where it is invoked from; the two arguments are yours and resolve against your cwd.
+Writes `deck.excalidraw`, one `band-NN.png` per band, `scene.png`, `diagnostics.json`, and the
+derived `auto-composition-spec.json`. The script resolves its *own* root from `import.meta.url`, so
+it finds the bundle and harness no matter where it is invoked from; the two arguments are yours and
+resolve against your cwd. `generate.mjs` remains available as the base-layout primitive, while
+`build-deck.mjs` is the automatic user-facing entry point.
 
 ## Layout
 
@@ -65,8 +68,8 @@ The repo root *is* the skill — `plugin.json` declares `"skills": ["."]`, so `S
 
 ```
 SKILL.md                       what Claude reads; the build procedure
-references/                    deck-spec schema, patterns, visual system, images
-scripts/                       layout engine, generator, harness, setup, bundler
+references/                    deck-spec schema, semantic visuals, patterns, visual system, images
+scripts/                       layout engine, automatic composer, generator, harness, setup, bundler
 scripts/spike/                 measurement probes; probe-06 is the viewer-drift gate
 .claude-plugin/plugin.json     plugin manifest
 ```

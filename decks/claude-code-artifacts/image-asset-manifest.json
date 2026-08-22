@@ -1,0 +1,42 @@
+{
+  "tool": "built-in image_gen",
+  "generatedAt": "2026-08-21",
+  "assets": [
+    {
+      "file": "assets/control-plane-hero.png",
+      "sha1": "b36fe1a703cd876cc4746f4cbe504ee84630e28c",
+      "pixelWidth": 1672,
+      "pixelHeight": 941,
+      "suggestedBand": 1,
+      "use": "Developer inside a repository-shaped control environment surrounded by five artifact types.",
+      "promptSummary": "Editorial paper-cut control room; five distinct artifact sources; no text, arrows, logos, or UI screenshots."
+    },
+    {
+      "file": "assets/monorepo-city.png",
+      "sha1": "b5981f18ae45856cbfb6e291b47545b06825a18f",
+      "pixelWidth": 1672,
+      "pixelHeight": 941,
+      "suggestedBand": 5,
+      "use": "Monorepo as a paper-cut city with the billing district illuminated.",
+      "promptSummary": "Top-down blueprint-paper city map; distinct package districts; spotlighted billing area; no text or arrows."
+    },
+    {
+      "file": "assets/settings-precedence-layers.png",
+      "sha1": "ef08cb8eb7ecd3b27e348cf4f58a093be1cab713",
+      "pixelWidth": 1672,
+      "pixelHeight": 941,
+      "suggestedBand": 7,
+      "use": "Settings precedence as layered scalar resolution, with separate motifs for merged arrays and restrictive safety exceptions.",
+      "promptSummary": "Translucent acrylic settings layers, a resolved dial, merged strands, and a restrictive clamp; no text, arrows, or flowchart boxes."
+    },
+    {
+      "file": "assets/trust-boundary.png",
+      "sha1": "488dd187034fd337f8e618304217045d03d99b38",
+      "pixelWidth": 1672,
+      "pixelHeight": 941,
+      "suggestedBand": 10,
+      "use": "Soft guidance contrasted with a physical enforcement checkpoint and human decision.",
+      "promptSummary": "Cinematic handcrafted diorama; suggestion cloud versus lockable gate; no labels, arrows, logos, or UI."
+    }
+  ]
+}

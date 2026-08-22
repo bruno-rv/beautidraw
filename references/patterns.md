@@ -28,6 +28,11 @@ delivery.
 The only pattern with connectors, so it is the only one that asserts causality. Use it when
 reversing two nodes would be *wrong*, not merely odd.
 
+Every flow band must declare `relation: "causal"`, `"dependency"`, or `"temporal"`. Settings
+precedence, instruction scope, hierarchy, and priority do not qualify: they describe layering or
+resolution, not one step causing the next. Use a comparison, field, matrix, map, threshold, or
+illustration for those relationships.
+
 Cards are narrow and centred rather than page-wide, which is why a flow band is tall. Seven
 nodes is near the height cap — past that, split into two bands or switch to `row-of-stages`.
 
@@ -80,3 +85,9 @@ at the end of a deck and wrong at the start.
 - **6–12 bands** is a session. One band is a diagram, not a deck.
 - A band with a single node is almost always a heading that should have been folded into its
   neighbour.
+
+For 8 or more bands, the pattern engine is the minority treatment: at most half the bands may be
+structured, at least one band in every three must be a filled `canvas`, and no structured pattern
+may appear more than twice. The `canvas` bands are where the argument changes visual form; they must
+contain an actual map, scene, transformation, tension, or network rather than a card stack moved
+onto a dark surface.

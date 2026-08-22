@@ -1,0 +1,393 @@
+{
+  "title": "Claude Code artifacts",
+  "subtitle": "How context, configuration, extensions, and state combine in a working session",
+  "footer": "Sources: current Claude Code docs • context, memory, settings, skills, subagents, hooks, MCP • 2026-08-21",
+  "bands": [
+    {
+      "heading": "Claude Code is an agent loop wrapped in an extension layer",
+      "deck": "Artifacts change what the model sees, what tools exist, and what must happen",
+      "pattern": "canvas",
+      "accent": "blue",
+      "height": 780,
+      "visual": {
+        "family": "illustration",
+        "focus": "One session, several extension surfaces",
+        "nodes": [
+          { "label": "Persistent context", "note": "CLAUDE.md and memory" },
+          { "label": "On-demand knowledge", "note": "skills and path rules" },
+          { "label": "External capability", "note": "MCP and code intelligence" },
+          { "label": "Isolated work", "note": "subagents and workflows" },
+          { "label": "Deterministic control", "note": "settings, permissions, and hooks" }
+        ],
+        "callouts": [
+          { "label": "What enters context", "note": "instructions, files, summaries, and returned tool output" },
+          { "label": "What stays external", "note": "hooks run as code unless they return context" }
+        ],
+        "image": {
+          "file": "assets/control-plane-hero.png",
+          "side": "left",
+          "use": "Show a developer operating inside a repository-shaped environment surrounded by context, tools, controls, and state."
+        },
+        "explanation": "Claude Code begins with built-in tools for reading, editing, searching, and executing. The extension layer changes the agent loop at different points: some artifacts enter the prompt, some add tools, some isolate work, and some run deterministically around tool calls.",
+        "example": "Invoking a review skill adds its full instructions to context; delegating the same research to a subagent keeps the file reads in a separate context and returns only a summary.",
+        "evidence": ["At startup, CLAUDE.md, auto memory, MCP tool names, and skill descriptions can already occupy context before the first user prompt."],
+        "tradeoff": "Every extension adds context, tools, trust, or maintenance cost. A larger setup is not automatically a better setup.",
+        "inspect": "Run /context for the live context breakdown, then inspect the project and user .claude directories.",
+        "caption": "Choose an artifact by where it enters the loop, not by its filename.",
+        "surface": "light"
+      }
+    },
+    {
+      "heading": "The context window is the budget every artifact competes for",
+      "deck": "Loading time matters because context affects cost, attention, and compaction",
+      "pattern": "canvas",
+      "accent": "violet",
+      "height": 800,
+      "visual": {
+        "family": "field",
+        "focus": "Context budget",
+        "nodes": [
+          { "label": "Startup", "note": "CLAUDE.md + auto memory" },
+          { "label": "Discovery", "note": "skill descriptions + MCP names" },
+          { "label": "File reads", "note": "source content joins history" },
+          { "label": "Path rules", "note": "load with matching files" },
+          { "label": "Skill body", "note": "loads when invoked" },
+          { "label": "Subagent summary", "note": "large reads stay isolated" }
+        ],
+        "axisX": "loads later →",
+        "axisY": "main-context cost ↑",
+        "explanation": "Claude's context contains the system prompt, persistent instructions, user conversation, file contents, tool results, and hidden startup material. These sources do not have equal cost: descriptions and tool names are light, while full files and invoked skill bodies can be large.",
+        "example": "A research subagent can read dozens of files in its own window and return a short summary, while reading those files directly would keep all of them in the main conversation until compaction.",
+        "evidence": ["After compaction, root CLAUDE.md and auto memory are re-injected; path-scoped rules and nested CLAUDE.md reload only after matching files are read again."],
+        "tradeoff": "Always-on context improves consistency but consumes every request. On-demand and isolated mechanisms reduce noise but require the correct trigger.",
+        "inspect": "Use /context for a live category breakdown; use /compact with a focus when changing phases of work.",
+        "caption": "Context is a managed working set, not an unlimited knowledge base.",
+        "surface": "light"
+      }
+    },
+    {
+      "heading": "Scope answers two questions: who receives it, and where it applies",
+      "deck": "Managed, user, project, and local artifacts differ in ownership and blast radius",
+      "pattern": "canvas",
+      "accent": "green",
+      "height": 780,
+      "visual": {
+        "family": "field",
+        "focus": "Scope and shareability",
+        "nodes": [
+          { "label": "Managed", "note": "organization policy" },
+          { "label": "User", "note": "personal across projects" },
+          { "label": "Project", "note": "shared through version control" },
+          { "label": "Local", "note": "private to one repository" }
+        ],
+        "axisX": "more project-specific →",
+        "axisY": "more centrally controlled ↑",
+        "explanation": "Scope is not one universal hierarchy across every artifact type. Settings use managed, CLI, local, project, and user precedence; instructions are additive; skills and subagents override by name; MCP has its own local, project, and user order.",
+        "example": "A personal formatting preference belongs in ~/.claude/CLAUDE.md, while a team build command belongs in the repository's CLAUDE.md and a machine-specific sandbox URL belongs in CLAUDE.local.md.",
+        "evidence": ["Project files are reviewable and shareable; user files apply across projects but remain private to the user."],
+        "tradeoff": "Broad scope increases reuse and blast radius. Narrow scope improves relevance but is easier to overlook.",
+        "inspect": "Compare ~/.claude with the repository root and .claude directory; use /context to see loaded instruction files.",
+        "caption": "Choose scope from ownership and sharing needs before choosing a filename.",
+        "surface": "light"
+      }
+    },
+    {
+      "heading": "CLAUDE.md and auto memory are complementary context, not enforcement",
+      "deck": "One is authored policy; the other is Claude's repository-specific learning",
+      "pattern": "canvas",
+      "accent": "amber",
+      "height": 800,
+      "visual": {
+        "family": "evidence",
+        "focus": "Persistent context, not a hard control",
+        "nodes": [
+          { "label": "CLAUDE.md", "note": "human-authored instructions" },
+          { "label": "Auto memory", "note": "Claude-authored learnings" },
+          { "label": "/memory", "note": "audit and edit both" },
+          { "label": "PreToolUse", "note": "enforce when guidance is insufficient" }
+        ],
+        "explanation": "CLAUDE.md carries facts and rules that should be present every session: build commands, conventions, architecture, and stable 'always do X' guidance. Auto memory records useful corrections and preferences that Claude cannot derive from the repository. Both are prompt context, so Claude still interprets them.",
+        "example": "Put 'run pnpm test before committing' in project CLAUDE.md. Let auto memory retain a correction such as your preferred review style. Block an unsafe command with a PreToolUse hook rather than relying on prose.",
+        "evidence": ["Claude loads only the first 200 lines or 25KB of auto-memory MEMORY.md at startup."],
+        "tradeoff": "Long always-on instructions consume context and reduce adherence. Multi-step procedures and occasional reference material belong in skills or path-scoped rules.",
+        "inspect": "Run /memory to view and edit memory files; run /context to confirm which memory files loaded.",
+        "caption": "Write what every session must know; enforce what every session must obey.",
+        "surface": "light"
+      }
+    },
+    {
+      "heading": "CLAUDE.md loading is additive and path-sensitive",
+      "deck": "Launch location establishes the baseline; subtree reads activate local context",
+      "pattern": "canvas",
+      "accent": "blue",
+      "height": 780,
+      "visual": {
+        "family": "illustration",
+        "focus": "packages/billing/ in a larger monorepo",
+        "nodes": [
+          { "label": "Ancestor files", "note": "loaded root to working directory" },
+          { "label": "Local file", "note": "appended after CLAUDE.md at that level" },
+          { "label": "Nested files", "note": "load only when subtree files are read" },
+          { "label": "Path rules", "note": "activate beside matching files" }
+        ],
+        "callouts": [
+          { "label": "Shared landscape", "note": "root instructions remain visible" },
+          { "label": "Focused district", "note": "billing context activates near billing files" }
+        ],
+        "image": {
+          "file": "assets/monorepo-city.png",
+          "side": "right",
+          "use": "Show a monorepo as a city whose shared root remains visible while the billing package gains local detail."
+        },
+        "explanation": "At launch, Claude Code walks upward from the working directory and concatenates every CLAUDE.md and CLAUDE.local.md it finds. Content is ordered from the filesystem root toward the working directory, and local files are appended after shared files at the same level. Descendant instructions join later when Claude reads files in that subtree.",
+        "example": "Starting in repo/packages/billing loads repo/CLAUDE.md and packages/billing/CLAUDE.md. Starting at repo loads only the root file initially; the billing file joins when Claude reads invoice.ts.",
+        "evidence": ["Ancestor instruction files are concatenated rather than replaced, while nested files are demand-loaded."],
+        "tradeoff": "Nested context keeps monorepos focused, but after compaction it must be triggered again by reading a matching file. Additional directories do not load CLAUDE.md by default without the dedicated environment flag.",
+        "inspect": "Run /context before and after reading a package file; use claudeMdExcludes when unrelated ancestor instructions are discovered.",
+        "caption": "Directory position controls when instruction context becomes active.",
+        "surface": "light"
+      }
+    },
+    {
+      "heading": "CLAUDE.md, rules, and skills differ mainly by loading behavior",
+      "deck": "Use the cheapest context mechanism that still triggers reliably",
+      "pattern": "comparison",
+      "accent": "slate",
+      "nodes": [
+        {
+          "label": "CLAUDE.md",
+          "tone": "blue",
+          "items": [
+            "Full content loads at session start",
+            "Best for core commands, architecture, and conventions",
+            "Keep roughly under 200 lines; imports still consume startup context",
+            "Example: package manager and mandatory test command",
+            "Inspect under Memory files in /context"
+          ]
+        },
+        {
+          "label": ".claude/rules/",
+          "tone": "amber",
+          "items": [
+            "Unscoped rules load every session; paths rules load with matching files",
+            "Best for language, directory, and security-specific guidance",
+            "Recursive discovery supports frontend/ and backend/ organization",
+            "Example: input-validation rules for src/api/**/*.ts",
+            "Inspect paths frontmatter and trigger by reading a matching file"
+          ]
+        },
+        {
+          "label": "Skill",
+          "tone": "green",
+          "items": [
+            "Description loads at start; full SKILL.md loads when used",
+            "Best for reusable knowledge and repeatable workflows",
+            "May be invoked as /name or loaded automatically when relevant",
+            "Example: deployment checklist or API reference",
+            "Inspect the skill source and invoke it explicitly to test"
+          ]
+        }
+      ]
+    },
+    {
+      "heading": "Settings precedence resolves values; it is not a workflow",
+      "deck": "Scalar winners, merged arrays, and restrictive exceptions need separate explanations",
+      "pattern": "canvas",
+      "accent": "violet",
+      "height": 800,
+      "visual": {
+        "family": "illustration",
+        "focus": "Layered settings resolve one effective configuration",
+        "nodes": [
+          { "label": "Scalar value", "note": "highest-precedence source wins" },
+          { "label": "Array value", "note": "sources concatenate and deduplicate" },
+          { "label": "Security exception", "note": "restrictive value may win outside normal order" },
+          { "label": "Managed tier", "note": "organization delivery has its own source rules" }
+        ],
+        "callouts": [
+          { "label": "Normal order", "note": "managed, CLI, local, project, user" },
+          { "label": "Not one rule", "note": "merge behavior depends on the setting's type" }
+        ],
+        "image": {
+          "file": "assets/settings-precedence-layers.png",
+          "side": "left",
+          "use": "Show settings as translucent authoritative layers, with merged-array strands and a restrictive safety clamp as separate exception motifs."
+        },
+        "explanation": "For a scalar key, Claude Code reads managed settings first, then command-line settings, local project settings, shared project settings, and user settings. A higher source supplies the effective value. That model does not apply uniformly: most arrays concatenate and deduplicate across scopes, and selected security-sensitive keys honor restrictive values from lower scopes.",
+        "example": "If user settings enable spinner tips and project settings disable them, the project value wins. If several scopes add permissions.allow entries, the arrays are combined rather than replaced.",
+        "evidence": ["Managed settings normally cannot be overridden, but the settings reference documents narrow restrictive-value exceptions."],
+        "tradeoff": "A simple precedence list is easy to remember but misleading for arrays, hooks, managed-tier sources, and security exceptions.",
+        "inspect": "Compare ~/.claude/settings.json, .claude/settings.json, and .claude/settings.local.json; use /status to surface configuration errors.",
+        "caption": "Model settings as layered resolution rules, not boxes causing one another.",
+        "surface": "dark"
+      }
+    },
+    {
+      "heading": "Skills are on-demand capabilities with their own discovery and precedence",
+      "deck": "A skill's location controls ownership; its description controls when Claude loads it",
+      "pattern": "canvas",
+      "accent": "green",
+      "height": 800,
+      "visual": {
+        "family": "constellation",
+        "focus": "One command name can exist at several levels",
+        "nodes": [
+          { "label": "Enterprise", "note": "highest skill priority" },
+          { "label": "Personal", "note": "available across projects" },
+          { "label": "Project", "note": "shared with the repository" },
+          { "label": "Plugin", "note": "namespaced to avoid collisions" },
+          { "label": "Command", "note": "skill wins when names collide" },
+          { "label": "Nested package", "note": "directory-qualified variant remains available" }
+        ],
+        "explanation": "Skills package knowledge, reference material, or workflows in SKILL.md. By default Claude sees descriptions at startup and loads full bodies only when invoked or relevant. Name conflicts resolve by source: enterprise overrides personal, personal overrides project, and a skill overrides a command with the same name. Plugin skills are namespaced.",
+        "example": "A root /deploy skill can coexist with apps/web/.claude/skills/deploy. The nested variant appears as apps/web:deploy and becomes relevant when Claude works in that package.",
+        "evidence": ["Nested skills discovered below the working directory remain separately addressable instead of silently replacing the root skill."],
+        "tradeoff": "Broad personal skills are reusable but can unexpectedly override project behavior. Project skills are reviewable but affect only that repository.",
+        "inspect": "Open the matching SKILL.md, invoke /name explicitly, and verify the directory-qualified name when testing a nested variant.",
+        "caption": "Skills are a loading and ownership system, not just saved prompts.",
+        "surface": "light"
+      }
+    },
+    {
+      "heading": "Subagents buy context isolation, not merely parallel speed",
+      "deck": "A specialized worker has its own prompt, tools, permissions, and context window",
+      "pattern": "canvas",
+      "accent": "amber",
+      "height": 800,
+      "visual": {
+        "family": "spotlight",
+        "focus": "Separate context, summarized return",
+        "nodes": [
+          { "label": "Custom prompt", "note": "specialized role" },
+          { "label": "Tool policy", "note": "allowlist or denylist" },
+          { "label": "Independent permissions", "note": "subject to parent constraints" },
+          { "label": "Optional memory", "note": "user, project, or local scope" }
+        ],
+        "callouts": [
+          { "label": "Isolation", "note": "large file reads stay outside the main conversation" },
+          { "label": "Return value", "note": "only the summary and metadata come back" },
+          { "label": "Specialization", "note": "preload relevant skills and restrict tools" },
+          { "label": "Lifecycle", "note": "foreground, background, resume, and hooks" }
+        ],
+        "explanation": "A subagent runs a separate agent loop with its own context window, system prompt, tool set, and permissions. It is useful when a side task would flood the main conversation with logs or file contents, or when the same specialized worker is needed repeatedly. The parent receives a summary rather than the full trace.",
+        "example": "Send a codebase-wide search to a read-only research subagent. It can read fifty files while the main conversation receives only the relevant symbols, risks, and file paths.",
+        "evidence": ["Custom subagents can preload skills and maintain persistent memory at user, project, or local scope."],
+        "tradeoff": "Isolation protects the main context but hides intermediate reasoning. Parent permission mode and managed policy can still constrain the subagent.",
+        "inspect": "Use /tasks to inspect a running or recently completed subagent and open its transcript when deeper evidence is needed.",
+        "caption": "Delegate when the intermediate work is expensive but the result is small.",
+        "surface": "light"
+      }
+    },
+    {
+      "heading": "Hooks and permissions are the enforcement plane",
+      "deck": "Prompt instructions guide judgment; runtime controls can block an operation",
+      "pattern": "canvas",
+      "accent": "red",
+      "height": 780,
+      "visual": {
+        "family": "illustration",
+        "focus": "Guidance and enforcement occupy different sides of the boundary",
+        "nodes": [
+          { "label": "Instruction", "note": "Claude interprets prose" },
+          { "label": "Permission rule", "note": "allow, deny, or ask" },
+          { "label": "PreToolUse", "note": "runs before processing the call" },
+          { "label": "Hook result", "note": "allow, deny, ask, or defer" }
+        ],
+        "callouts": [
+          { "label": "Guidance", "note": "CLAUDE.md and skills can influence judgment" },
+          { "label": "Enforcement", "note": "permissions and hooks can deny unsafe action" }
+        ],
+        "image": {
+          "file": "assets/trust-boundary.png",
+          "side": "left",
+          "use": "Contrast a soft cloud of guidance with a physical enforcement checkpoint and a human decision between them."
+        },
+        "explanation": "Hooks are event-driven automation. A hook configuration chooses a lifecycle event, a matcher, and one or more handlers. PreToolUse runs after Claude creates tool parameters but before the tool call is processed, so it can allow, deny, ask, or defer. Permissions provide another deterministic policy layer.",
+        "example": "A PreToolUse hook can reject destructive shell commands and return the reason to Claude. A PostToolUse hook can run a linter after an edit and feed the result back into context.",
+        "evidence": ["Hooks can be defined at managed, user, project, local, plugin, skill, or subagent scope; matching hooks merge and all fire."],
+        "tradeoff": "PreToolUse fires only for tool calls. Files inserted through an @ reference do not trigger a Read hook, so use a Read deny rule when the path itself must be blocked.",
+        "inspect": "Use /hooks to review registered hooks and inspect settings.json for permission rules and hook sources.",
+        "caption": "Use prose for judgment and runtime controls for guarantees.",
+        "surface": "dark"
+      }
+    },
+    {
+      "heading": "MCP, skills, and plugins extend different layers",
+      "deck": "Connections, operating knowledge, and distribution should not be conflated",
+      "pattern": "canvas",
+      "accent": "violet",
+      "height": 800,
+      "visual": {
+        "family": "field",
+        "focus": "Connection, knowledge, packaging",
+        "nodes": [
+          { "label": "MCP", "note": "external tools and data" },
+          { "label": "Skill", "note": "knowledge and workflow" },
+          { "label": "Plugin", "note": "distributable bundle" },
+          { "label": "Local MCP", "note": "private to one project entry" },
+          { "label": "Project MCP", "note": "shared .mcp.json" },
+          { "label": "User MCP", "note": "available across projects" }
+        ],
+        "axisX": "more external capability →",
+        "axisY": "more reusable packaging ↑",
+        "explanation": "MCP connects Claude to external services and actions. A skill teaches Claude how and when to use those tools. A plugin packages skills, hooks, subagents, and MCP servers for reuse and distribution. These layers combine: a database MCP server provides access while a skill supplies schema knowledge and query conventions.",
+        "example": "Commit a project-scoped server to .mcp.json so the team shares the connection, then add a project skill that documents safe query patterns and expected result handling.",
+        "evidence": ["Project MCP servers require interactive workspace approval; duplicate server names resolve local before project before user, and the winning entry is not field-merged."],
+        "tradeoff": "External tools enlarge the trust surface. Environment-variable expansion keeps shared configuration flexible, but secrets and approval behavior still require review.",
+        "inspect": "Run claude mcp list and claude mcp get <name>; inspect .mcp.json and the approval state before assuming a server is usable.",
+        "caption": "Connect the system, teach the workflow, package the setup.",
+        "surface": "light"
+      }
+    },
+    {
+      "heading": "Worked example: editing packages/billing/invoice.ts",
+      "deck": "Different artifacts enter at startup, on file access, on invocation, and on events",
+      "pattern": "canvas",
+      "accent": "green",
+      "height": 820,
+      "visual": {
+        "family": "evidence",
+        "focus": "Effective working context for invoice.ts",
+        "nodes": [
+          { "label": "Startup", "note": "root memory, auto memory, descriptions, tool names" },
+          { "label": "File access", "note": "billing CLAUDE.md + matching path rules" },
+          { "label": "Invocation", "note": "selected skill body + MCP schema on use" },
+          { "label": "Isolation", "note": "subagent summary returns without its full reads" }
+        ],
+        "explanation": "Before the prompt, Claude already has root instructions, auto memory, skill descriptions, and MCP tool names. Reading invoice.ts can activate billing-specific CLAUDE.md and path-scoped rules. Invoking a skill adds its body; calling an MCP tool loads its full schema; a subagent can isolate broad research; hooks run at matching events.",
+        "example": "A billing review task reads invoice.ts, activates packages/billing/CLAUDE.md and an API validation rule, invokes /review-invoice, queries an accounting MCP tool, and runs a post-edit test hook.",
+        "evidence": ["The same task can combine additive instructions, on-demand skills, external tools, isolated workers, and deterministic event automation."],
+        "tradeoff": "Each layer improves specialization but adds another place to debug. A file existing on disk does not prove it loaded, won precedence, or received approval.",
+        "inspect": "Check /context, /memory, /tasks, /hooks, and claude mcp get <name>; compare the result with the repository's .claude files.",
+        "caption": "Debug the effective session, not the directory tree in isolation.",
+        "surface": "light"
+      }
+    },
+    {
+      "heading": "Choose the artifact by load behavior, context cost, and trust",
+      "deck": "The narrowest mechanism that reliably triggers is usually the best one",
+      "pattern": "canvas",
+      "accent": "slate",
+      "height": 820,
+      "visual": {
+        "family": "matrix",
+        "focus": "Smallest reliable mechanism",
+        "nodes": [
+          { "label": "Always-on context", "note": "CLAUDE.md and unscoped rules" },
+          { "label": "On-demand knowledge", "note": "skills and path rules" },
+          { "label": "Isolated work", "note": "subagents and workflows" },
+          { "label": "Deterministic control", "note": "permissions and hooks" }
+        ],
+        "axisX": "more deterministic →",
+        "axisY": "more main-context cost ↑",
+        "explanation": "Start from the trigger. If every session needs a fact, use CLAUDE.md. If only matching files need it, use a path rule. If the content or procedure is occasional, use a skill. If intermediate work is expensive, use a subagent. If the action must happen every time or block unsafe behavior, use a hook or permission rule.",
+        "example": "Do not place a 100-line deployment playbook in CLAUDE.md. Store it as a /deploy skill, keep the mandatory branch protection in a hook or CI rule, and delegate environment research when it would crowd the session.",
+        "evidence": ["Claude Code's extension guide distinguishes features by loading point, context cost, isolation, external capability, and determinism."],
+        "tradeoff": "The narrowest mechanism reduces noise, but too much fragmentation makes the setup hard to discover. Keep ownership and inspection commands visible.",
+        "inspect": "Use /context as the final audit: verify what loaded, what stayed external, and which tools or descriptions consume the session budget.",
+        "caption": "Design the effective agent loop, not a decorative .claude folder.",
+        "surface": "light"
+      }
+    }
+  ]
+}

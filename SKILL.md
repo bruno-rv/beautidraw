@@ -21,6 +21,42 @@ A good Beautidraw deck must make the audience understand something they could no
 of headings. It develops a point of view, uses concrete evidence or examples, preserves meaningful
 tensions, and changes visual form when the idea changes.
 
+## Composition budget (hard gate)
+
+The deterministic patterns are a vocabulary, not a default visual treatment. A substantial deck
+with 8 or more bands must satisfy all of these constraints:
+
+- At most half of the bands may use `flow`, `row-of-stages`, `comparison`, `timeline`, `tree`, or
+  `checklist`.
+- At least one band in every three must be `canvas` and filled through a composed or hybrid
+  semantic visual plan.
+- A deck with 10 or more bands must include at least two topic-specific raster illustration
+  frames. Generate them after the visual thesis is known, review them, save them under the deck's
+  `assets/` directory, and reference them through the `illustration` family.
+- No structured pattern may appear more than twice, and structured bands may not run for more than
+  two consecutive bands.
+- Every canvas band must contain a visual relationship—such as a spatial map, transformation,
+  tension, evidence collage, or network—with at least two non-text primitives (arrows, lines,
+  ellipses, diamonds, or a scene image). A surface plus labels is still a box layout.
+- Non-sequential canvas families may use at most three connectors. A pipeline or journey may use
+  more only when order is the claim; do not turn every visual into a flowchart.
+- A structured `flow` band must declare `relation: causal`, `dependency`, or `temporal`. Scope,
+  precedence, hierarchy, taxonomy, and priority are not flows; use a field, matrix, layered
+  illustration, comparison, or map.
+- Develop the supporting explanation before shrinking it into a label. The audit expects roughly
+  42 words of support per band on average and a depth field (`explanation`, `evidence`, or
+  `tradeoff`) on canvas bands; split a dense mechanism across bands instead of making every frame
+  a title plus cards.
+
+Run the gate before generation:
+
+```bash
+node scripts/audit-deck-spec.mjs decks/<slug>/deck-spec.json
+```
+
+If it fails, revise the treatment map and semantic visual plans. Do not bypass it by rotating colours,
+adding decorative arrows, or putting the same cards on a `canvas` surface.
+
 Reject a deck—even if the geometry passes—when it has any of these characteristics:
 
 - generic headings such as “Benefits”, “Challenges”, or “Next steps” without the actual claim;
@@ -38,8 +74,10 @@ Reject a deck—even if the geometry passes—when it has any of these character
   depth brief, narrative spine, composition lanes, visual treatment map, and acceptance review.
 - Read `references/deck-spec.md` and `references/patterns.md` only for bands using the structured
   lane.
-- Read `references/composition-spec.md` for every composed or hybrid band. It defines the `canvas`
-  frame contract, normalized geometry, supported elements, and deterministic assembly command.
+- Read `references/semantic-visuals.md` for every composed or hybrid band. It defines the semantic
+  visual families and the automatic composer contract.
+- Read `references/composition-spec.md` only when a frame genuinely needs the low-level manual
+  composer for a raster asset or exceptional custom element.
 - Read `references/visual-system.md` for typography, palette, contrast, and frame geometry.
 - Read `references/blackboard-images.md` before generating or embedding any illustration.
 - Read `scripts/LAYOUT-CONTRACT.md` only when changing the deterministic layout engine.
@@ -104,6 +142,11 @@ Across a substantial deck, use several genuinely different composition families.
 not count as variation. Avoid more than two adjacent bands with the same lane and composition unless
 the repetition itself makes a comparison easier.
 
+Treat the composition budget above as a design constraint while making the map. A row of native
+patterns followed by one token scene is not variety. Plan the scene, map, transformation, or
+worked-example frames first; use structured bands only where the relationship truly needs exact
+inspection.
+
 ### 5. Choose the execution lane band by band
 
 #### Structured lane
@@ -124,6 +167,36 @@ merely because it is available.
 
 Use a bespoke frame when the idea is better explained by a scene, spatial metaphor, annotated
 system, before/after, tension, evidence collage, map, or other content-specific composition.
+
+Describe that scene semantically in the same `deck-spec.json` band. Every `canvas` band must include
+a `visual` object with:
+
+```json
+{
+  "family": "illustration | orbit | field | spotlight | constellation | evidence | matrix | threshold | map",
+  "focus": "the visual thesis or focal object",
+  "nodes": [{ "label": "short label", "note": "why it matters" }],
+  "explanation": "two sentences that explain the mechanism or consequence",
+  "example": "a concrete repository or command-level scenario",
+  "evidence": ["source-backed observation or concrete example"],
+  "tradeoff": "boundary, tension, or decision consequence",
+  "inspect": "the command or file that lets the viewer verify the claim",
+  "callouts": [{ "label": "short label", "note": "why this callout matters" }],
+  "image": { "file": "assets/topic-scene.png", "side": "left", "use": "what the scene explains" },
+  "caption": "one sentence that explains the relationship",
+  "surface": "light | dark"
+}
+```
+
+The automatic composer owns all coordinates, spacing, shape selection, colour rotation, and
+connector geometry. Do not hand-author `composition-spec.json` for ordinary decks. Use the manual
+composer only when a source-specific raster image or an exceptional custom element is genuinely
+required.
+
+For `illustration` bands, use the raster `imagegen` workflow and request a text-free, topic-specific
+scene with one coherent visual thesis. The composer reads the PNG dimensions and computes the image
+zone automatically; the model still does not type coordinates. Reject generic wallpaper, accidental
+text, logos, repeated visual metaphors, or an image that merely restates the heading.
 
 The illustration is the explanatory structure, not a background. Generate it only after its visual
 thesis and target aspect ratio are known. Integrate a small number of direct Excalidraw labels,
@@ -146,25 +219,37 @@ needs, not default to the same centre column.
 
 ### 6. Generate and assemble
 
-For structured bands, write semantic content into `deck-spec.json`, then run:
+Run the presentation audit before `generate.mjs`. It is intentionally separate from geometry
+validation so a deck cannot pass by being merely well laid out:
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/scripts/generate.mjs" <spec.json> <outdir>
+node scripts/audit-deck-spec.mjs decks/<slug>/deck-spec.json
 ```
+
+Then run the single automatic build command:
+
+```bash
+node scripts/build-deck.mjs decks/<slug>/deck-spec.json decks/<slug>/out
+```
+
+The build runs the audit, deterministic base layout, and semantic visual composer in sequence. It
+writes the derived `auto-composition-spec.json` into the output directory for inspection; that file
+is generated evidence, not authoring input.
 
 Unless the user names an output directory, keep the tracked spec at
 `decks/<slug>/deck-spec.json` and generated files under `decks/<slug>/out/`.
 
-For composed and hybrid bands:
+For composed and hybrid bands, the automatic composer:
 
-1. obtain the generated frame geometry;
-2. generate or prepare the visual at the exact target aspect ratio;
-3. inspect and reject weak or generic assets before embedding;
-4. add the frame-native image and direct annotations;
-5. preserve explicit `frameId` membership and child-before-frame element order;
-6. update `blackboard-asset-manifest.json` with file, SHA-1, dimensions, placement mode, band,
-   and intended use;
-7. rerender the completed `.excalidraw` after embedding.
+1. reads the semantic `visual` object;
+2. chooses the declared family and a palette variant;
+3. lays out shapes, labels, connectors, and captions in normalized frame coordinates;
+4. converts through Excalidraw's browser API and validates the finished elements;
+5. rerenders the completed `.excalidraw` after embedding.
+
+When a band genuinely needs a raster image, add it as a deliberate visual asset and use the manual
+composer only for that exceptional frame. The image still needs an explanatory visual thesis; it
+must not become wallpaper behind generated cards.
 
 Use the deterministic composer rather than hand-editing the final JSON:
 
@@ -189,6 +274,8 @@ are present. Verify:
 
 - the content brief is visible in the deck rather than reduced to vague labels;
 - each band performs its audience job;
+- each concept names its mechanism, a concrete example, the important boundary or exception, and
+  an inspection command or artifact;
 - the visual form matches the content’s relationship;
 - images are concept-specific, undistorted, and explanatory;
 - text is readable at pan distance and does not cover focal objects;
