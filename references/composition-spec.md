@@ -1,7 +1,10 @@
-# `composition-spec.json`
+# `composition-spec.json` (manual exception)
 
-Use this file to fill `canvas` bands after the base deck is generated. It is the executable
-contract for composed and hybrid frames.
+Use this file only when a canvas frame genuinely needs a raster image or an exceptional custom
+element that the semantic visual families cannot express. Ordinary composed and hybrid frames use
+the higher-level `visual` object in `deck-spec.json` and `scripts/auto-compose.mjs`; the generated
+composition spec is derived evidence, not authoring input. This file remains the executable
+contract for manual composed and hybrid frames.
 
 Run:
 

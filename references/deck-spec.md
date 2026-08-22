@@ -12,9 +12,11 @@ The only file you write. Semantic content, no geometry.
       "heading": "string",                 // the section title
       "deck": "string",                    // one line, <= 75 chars
       "pattern": "flow" | "row-of-stages" | "comparison" | "timeline" | "tree" | "checklist" | "canvas",
+      "relation": "causal" | "dependency" | "temporal", // required only for flow
       "accent": "blue" | "green" | "amber" | "red" | "violet" | "slate",
       "nodes": [ /* required for structured patterns */ ],
-      "height": 620 // required only for canvas; body height in 240..1000
+      "height": 620, // required only for canvas; body height in 240..1000
+      "visual": { /* required for automatic canvas composition */ }
     }
   ]
 }
@@ -25,8 +27,11 @@ Excalidraw frame list shows.
 
 ## Node shapes
 
-### `flow` — `{ label, note? }`
+### `flow` — `{ relation, nodes: [{ label, note? }] }`
 A vertical chain, each card joined to the next by a bound arrow. Cards are narrow and centred.
+
+`relation` is required and must be `causal`, `dependency`, or `temporal`. Do not use flow for
+settings precedence, scope, hierarchy, priority, or a list that happens to have an order.
 
 ```json
 { "label": "Quality gate", "note": "Persona review, diff cards, approvals, source checks" }
@@ -61,12 +66,36 @@ A root row, each root with its children stacked beneath and connected by short l
 Two columns of left-aligned rows, rendered `• label — note`. For dense enumerations where each
 row is a question or a check rather than a stage.
 
-### `canvas` — `{ height }`, no `nodes`
+### `canvas` — `{ height, visual }`, no `nodes`
 
 Allocates an empty deterministic body for a composed or hybrid frame. `height` is the body height,
-from 240 to 1000. The heading and deck line remain normal frame chrome. After base generation,
-fill every canvas band through `scripts/compose.mjs` and a `composition-spec.json`; never deliver
-an empty canvas frame.
+from 240 to 1000. The heading and deck line remain normal frame chrome. `visual` is the semantic
+visual thesis consumed by `scripts/auto-compose.mjs`; it contains a family, focus, nodes, and
+caption. The automatic build pipeline fills every canvas band. Never deliver an empty canvas frame
+or hand-author normalized coordinates for ordinary decks.
+
+```jsonc
+{
+  "heading": "The mechanism is a network, not a list",
+  "deck": "Several inputs converge on one decision",
+  "pattern": "canvas",
+  "accent": "violet",
+  "height": 720,
+  "visual": {
+    "family": "orbit",
+    "focus": "Decision point",
+    "nodes": [
+      { "label": "Evidence", "note": "What the decision can inspect" },
+      { "label": "Constraint", "note": "What the decision cannot ignore" }
+    ],
+    "explanation": "Several scoped inputs shape one decision.",
+    "evidence": ["The same repository can expose different context at different paths."],
+    "tradeoff": "Broader scope increases reuse but also blast radius.",
+    "caption": "The decision is the result of several scoped inputs.",
+    "surface": "light"
+  }
+}
+```
 
 ## Hard rules
 
@@ -78,7 +107,7 @@ Each of these is enforced — the generator throws rather than writing a file.
 - **`accent` is required on every band** and must name one of the six; `tone` is optional and
   only `comparison` reads it. An unknown `pattern` or `accent` throws and lists what is accepted.
 - **Every structured band needs at least one node**. A `canvas` band instead requires `height` from
-  240 to 1000. `bands` itself must be non-empty.
+  240 to 1000 and a semantic `visual` object. `bands` itself must be non-empty.
 
 ## Soft rule: the deck line
 

@@ -94,6 +94,23 @@ Review the treatment map before building:
 - Is any band using a flow only because the source contained a list?
 - Could the bands be shuffled without changing the argument? If so, strengthen the narrative.
 
+## Composition budget
+
+Beautidraw has a deterministic card engine because some relationships need exact inspection. It is
+not a license to make every band a row of cards. For a deck with 8 or more bands:
+
+- use structured patterns for at most half of the bands;
+- use at least one composed or hybrid frame per three bands;
+- use any one structured pattern no more than twice;
+- break structured runs after two bands;
+- give every canvas frame at least two visual relationship primitives beyond text and its surface.
+
+The budget is enforced by `scripts/audit-deck-spec.mjs`. A failed audit means the treatment map is
+still a topic inventory or a template rotation. Add a real scene, map, tension, transformation,
+worked example, or evidence collage; do not satisfy the gate with extra borders or decorative
+arrows around the same cards. Describe each canvas frame with a semantic `visual` object and let
+`scripts/auto-compose.mjs` own the geometry. The derived composition spec is evidence, not input.
+
 ## Acceptance review
 
 Reject and revise when:
