@@ -114,3 +114,32 @@ node --check scripts/*.mjs test/*.mjs
 git diff --check
   clean
 ```
+
+## Fix Round 2 evidence
+
+The final Markdown/path-safety blocker was fixed narrowly after RED coverage
+for arbitrary POSIX roots (`/srv`, `/data`), punctuation-adjacent paths,
+Windows drive paths, escaped UNC paths, `file://` URLs, and preserved
+single-token slash commands (`/context`, `/memory`, `/tasks`). The outline now
+uses token-aware general detection: web URLs are excluded from filesystem
+checks, file URLs are always rejected, and multi-segment POSIX/UNC/drive paths
+are rejected without treating slash commands as path escapes.
+
+Verification after the fix:
+
+```text
+node --test
+  58 passed, 0 failed
+node --test test/outline.test.mjs test/semantic-visuals.test.mjs test/build-recovery.test.mjs
+  16 passed, 0 failed
+node scripts/spike/probe-07-text-geometry.mjs
+  all assertions hold
+node scripts/spike/probe-08-font-gate.mjs
+  all assertions hold
+node --check scripts/*.mjs test/*.mjs
+git diff --check
+  clean
+```
+
+The real Claude build/recovery tests passed, including final artifact
+validation and prior-output preservation.

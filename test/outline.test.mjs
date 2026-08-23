@@ -133,3 +133,27 @@ test("outline rejects POSIX and Windows absolute paths", () => {
     assert.throws(() => buildOutline(unsafe), /portable|absolute|path/i);
   }
 });
+
+test("outline rejects arbitrary POSIX roots, UNC paths, file URLs, and punctuation-adjacent escapes", () => {
+  for (const value of [
+    "/srv/private/secret",
+    "/data/tenant/secret.json",
+    "( /srv/private/secret ),",
+    "\\\\server\\share\\secret.json",
+    "file:///srv/private/secret.json",
+    "file://server/share/secret.json",
+  ]) {
+    const unsafe = structuredClone(spec);
+    unsafe.bands[0].visual.inspect = `Inspect ${value}`;
+    assert.throws(() => buildOutline(unsafe), /absolute|portable|path/i, value);
+  }
+});
+
+test("outline preserves legitimate slash commands", () => {
+  const safe = structuredClone(spec);
+  safe.bands[0].visual.inspect = "Run /context, /memory, and /tasks before comparing sources.";
+  const markdown = buildOutline(safe);
+  assert.match(markdown, /`\/context`/);
+  assert.match(markdown, /`\/memory`/);
+  assert.match(markdown, /`\/tasks`/);
+});

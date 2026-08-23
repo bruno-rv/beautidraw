@@ -10,7 +10,19 @@ export const SEMANTIC_KINDS = new Set(["example", "boundary", "inspect", "warnin
 
 const URL_RE = /https?:\/\/[^\s)]+/gi;
 const PATH_RE = /(?:^|[\s(])((?:\.{0,2}\/)?(?:[A-Za-z0-9_.~-]+\/)+[A-Za-z0-9_.~:-]+|\/[A-Za-z0-9_.~:-]+(?:\/[A-Za-z0-9_.~:-]+)*)/g;
-const ABSOLUTE_PATH_RE = /(?:^|[\s(`])(?:\/(?:Users|home|tmp|private|var|etc|opt|Volumes)(?:\/[^\s)`]+)+|[A-Za-z]:[\\/][^\s)`]+)/;
+const FILE_URL_RE = /\bfile:\/\//i;
+const WINDOWS_PATH_RE = /\b[A-Za-z]:[\\/][^\s`<>\])},;!?]+/;
+const UNC_PATH_RE = /\\{2,}[^\\/\s]+[\\/]+[^\\/\s]+(?:[\\/]+[^\\/\s]+)*/;
+const POSIX_PATH_RE = /(?:^|[\s(`'"[{])\/(?:[A-Za-z0-9_.~-]+\/)+[A-Za-z0-9_.~:-]+/;
+
+function hasAbsolutePath(value) {
+  const source = String(value ?? "");
+  if (FILE_URL_RE.test(source) || WINDOWS_PATH_RE.test(source) || UNC_PATH_RE.test(source)) return true;
+  // Strip ordinary web URLs before checking slash-prefixed tokens: a URL path
+  // is not a local filesystem path, while a file:// URL is explicitly unsafe.
+  const withoutWebUrls = source.replace(/https?:\/\/[^\s)]+/gi, "");
+  return POSIX_PATH_RE.test(withoutWebUrls);
+}
 
 function text(value, where) {
   if (typeof value !== "string" || value.trim() === "") {
@@ -231,7 +243,7 @@ export function buildOutline(spec, { frameNames = [], compositionManifest = {} }
 
   lines.push("", `_${formatInline(footer)}_`, "");
   const markdown = lines.join("\n");
-  if (ABSOLUTE_PATH_RE.test(markdown)) {
+  if (hasAbsolutePath(markdown)) {
     throw new Error("outline contains an absolute source path");
   }
   return markdown;
