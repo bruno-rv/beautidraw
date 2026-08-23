@@ -13,7 +13,7 @@ const PATH_RE = /(?:^|[\s(])((?:\.{0,2}\/)?(?:[A-Za-z0-9_.~-]+\/)+[A-Za-z0-9_.~:
 const FILE_URL_RE = /\bfile:\/\//i;
 const WINDOWS_PATH_RE = /\b[A-Za-z]:[\\/][^\s`<>\])},;!?]+/;
 const UNC_PATH_RE = /\\{2,}[^\\/\s]+[\\/]+[^\\/\s]+(?:[\\/]+[^\\/\s]+)*/;
-const POSIX_PATH_RE = /(?:^|[\s(`'"[{])\/(?:[A-Za-z0-9_.~-]+\/)+[A-Za-z0-9_.~:-]+/;
+const POSIX_PATH_RE = /(?<![A-Za-z0-9_.~-])\/(?:[A-Za-z0-9_.~-]+\/)+[A-Za-z0-9_.~:-]+/;
 
 function hasAbsolutePath(value) {
   const source = String(value ?? "");

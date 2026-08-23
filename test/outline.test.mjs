@@ -157,3 +157,23 @@ test("outline preserves legitimate slash commands", () => {
   assert.match(markdown, /`\/memory`/);
   assert.match(markdown, /`\/tasks`/);
 });
+
+test("outline rejects punctuation-adjacent POSIX escapes without whitespace", () => {
+  for (const value of [
+    "=/srv/private/secret",
+    "foo,/srv/private/secret",
+    "foo:/srv/private/secret",
+    "(/srv/private/secret)",
+    '"/srv/private/secret"',
+  ]) {
+    const unsafe = structuredClone(spec);
+    unsafe.bands[0].visual.inspect = `Inspect ${value}`;
+    assert.throws(() => buildOutline(unsafe), /absolute|portable|path/i, value);
+  }
+});
+
+test("outline permits slash commands and ordinary web URLs", () => {
+  const safe = structuredClone(spec);
+  safe.bands[0].visual.inspect = "Run /context and read https://example.com/path.";
+  assert.doesNotThrow(() => buildOutline(safe));
+});

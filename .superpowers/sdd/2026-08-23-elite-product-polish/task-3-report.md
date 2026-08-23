@@ -143,3 +143,30 @@ git diff --check
 
 The real Claude build/recovery tests passed, including final artifact
 validation and prior-output preservation.
+
+## Fix Round 3 evidence
+
+Added no-whitespace regressions for `=/srv/private/secret`,
+`foo,/srv/private/secret`, `foo:/srv/private/secret`, parenthesized and quoted
+forms, plus allowed `/context` and `https://example.com/path`. The POSIX
+detector now uses a token boundary that accepts arbitrary punctuation before a
+multi-segment absolute path while refusing slashes embedded in legitimate
+relative paths such as `apps/web/.claude/skills`.
+
+Final Fix Round 3 verification:
+
+```text
+node --test
+  60 passed, 0 failed
+node --test test/outline.test.mjs test/semantic-visuals.test.mjs test/build-recovery.test.mjs
+  18 passed, 0 failed
+node scripts/spike/probe-07-text-geometry.mjs
+  all assertions hold
+node scripts/spike/probe-08-font-gate.mjs
+  all assertions hold
+node --check scripts/*.mjs test/*.mjs
+git diff --check
+  clean
+```
+
+The real Claude build/recovery path passed after the boundary correction.
