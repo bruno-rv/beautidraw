@@ -54,7 +54,7 @@ const compositionSpec = {
       band: 1,
       lane: "composed",
       surfaceColor: "#10231f",
-      image: { file: "pixel.png", mode: "focal", use: "Carry the composed visual argument", x: 0.375, y: 0.05, width: 0.25, height: 0.9, opacity: 100 },
+      image: { file: "pixel.png", mode: "focal", use: "Carry the composed visual argument", description: "A focused raster scene anchors the composed frame", x: 0.375, y: 0.05, width: 0.25, height: 0.9, opacity: 100 },
       elements: [
         { id: "scene-label", type: "text", x: 0.08, y: 0.34, text: "Direct scene annotation", fontSize: 30, strokeColor: "#f8fafc" },
       ],
@@ -63,7 +63,7 @@ const compositionSpec = {
       band: 2,
       lane: "hybrid",
       surfaceColor: "#ffffff",
-      image: { file: "pixel.png", mode: "focal", use: "Establish the hybrid visual zone", x: 0.02, y: 0.08, width: 0.25, height: 0.84, opacity: 100 },
+      image: { file: "pixel.png", mode: "focal", use: "Establish the hybrid visual zone", description: "A focused raster scene leaves room for inspectable annotations", x: 0.02, y: 0.08, width: 0.25, height: 0.84, opacity: 100 },
       elements: [
         { id: "hybrid-card", type: "rectangle", x: 0.54, y: 0.24, width: 0.38, height: 0.34, strokeColor: "#047857", backgroundColor: "#d1fae5", label: { text: "Evidence stays inspectable", fontSize: 26 } },
       ],

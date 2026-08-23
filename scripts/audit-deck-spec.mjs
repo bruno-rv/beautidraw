@@ -20,6 +20,8 @@ const status = await runCli("audit-deck-spec", async ({ values }) => {
     return readJsonInput(path, { label: what });
   }
   const spec = await readJsonOrExit(specArg, "deck spec");
+  const composition = compositionArg ? await readJsonOrExit(compositionArg, "composition spec") : null;
+  const failures = [];
     if (!spec || typeof spec !== "object" || Array.isArray(spec)) {
       throw new CliError({
         command: "audit-deck-spec",
@@ -32,6 +34,7 @@ const status = await runCli("audit-deck-spec", async ({ values }) => {
     const semanticFailures = collectDeckPreflightFailures(spec, {
       specPath: specArg,
       specDir: dirname(resolve(specArg)),
+      mode: compositionArg ? "core" : "automatic",
     });
     if (semanticFailures.length) {
       throw new CliError({
@@ -42,9 +45,19 @@ const status = await runCli("audit-deck-spec", async ({ values }) => {
         recovery: "Fix the reported deck fields and rerun the audit.",
       });
     }
-    const composition = compositionArg ? await readJsonOrExit(compositionArg, "composition spec") : null;
+    for (const [index, entry] of (composition?.bands ?? []).entries()) {
+      const image = entry?.image;
+      if (!image) continue;
+      if (typeof image.use !== "string" || image.use.trim() === "") {
+        failures.push(`composition band ${entry.band ?? index}: image requires use`);
+      }
+      if (typeof image.description !== "string" || image.description.trim() === "") {
+        failures.push(`composition band ${entry.band ?? index}: image requires description`);
+      } else if (typeof image.use === "string" && image.description.trim() === image.use.trim()) {
+        failures.push(`composition band ${entry.band ?? index}: image description must be distinct from use`);
+      }
+    }
 
-const failures = [];
 const rawBands = Array.isArray(spec.bands) ? spec.bands : [];
 rawBands.forEach((band, index) => {
   if (!band || typeof band !== "object" || Array.isArray(band)) {

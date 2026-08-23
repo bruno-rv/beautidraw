@@ -25,6 +25,26 @@ test("preflight accepts a minimal valid structured deck", async () => {
   assert.deepEqual(result.failures, []);
 });
 
+test("core preflight permits a manual canvas without visual while automatic preflight rejects it", async () => {
+  const spec = {
+    ...valid(),
+    bands: [{
+      heading: "Manual scene",
+      deck: "Composition supplies the visual later",
+      pattern: "canvas",
+      accent: "violet",
+      height: 620,
+    }],
+  };
+  const core = await preflightDeck({ spec, mode: "core" });
+  assert.equal(core.ok, true);
+  assert.deepEqual(core.failures, []);
+
+  const automatic = await preflightDeck({ spec, mode: "automatic" });
+  assert.equal(automatic.ok, false);
+  assert.ok(automatic.failures.some(({ field, reason }) => field === "bands[0].visual" && /requires a visual declaration/.test(reason)));
+});
+
 test("top-level malformed bands return structured failures", async () => {
   for (const spec of [{}, 42, { bands: "not-an-array" }]) {
     const result = await preflightDeck({ spec });
@@ -208,6 +228,19 @@ test("preflight accepts a structurally valid PNG with non-empty IDAT", async () 
   });
   assert.equal(result.ok, true);
   assert.deepEqual(result.failures, []);
+});
+
+test("declared image use and description must be distinct", async () => {
+  const root = await mkdtemp(join(tmpdir(), "beautidraw-preflight-image-description-"));
+  await writeFile(join(root, "valid.png"), validPng());
+  const spec = illustrationSpec("valid.png");
+  spec.bands[0].visual.image.description = spec.bands[0].visual.image.use;
+  const result = await preflightDeck({
+    specPath: join(root, "deck.json"),
+    spec,
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.failures.map(({ reason }) => reason).join("\n"), /description.*distinct from use/);
 });
 
 test("preflight rejects a structurally complete PNG without an IDAT chunk", async () => {

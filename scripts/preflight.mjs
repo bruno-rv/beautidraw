@@ -73,7 +73,7 @@ export async function readJsonInput(path, { label = "JSON input" } = {}) {
   }
 }
 
-export function collectDeckPreflightFailures(spec, { specPath, specDir } = {}) {
+export function collectDeckPreflightFailures(spec, { specPath, specDir, mode = "automatic" } = {}) {
   const failures = [];
   if (!isObject(spec)) {
     failures.push(failure("spec", "deck spec must be a JSON object", { specPath }));
@@ -130,7 +130,7 @@ export function collectDeckPreflightFailures(spec, { specPath, specDir } = {}) {
       continue;
     }
     if (!visual) {
-      if (band.pattern === "canvas") {
+      if (mode === "automatic" && band.pattern === "canvas") {
         failures.push(failure(`bands[${index}].visual`, `canvas band ${index + 1} requires a visual declaration`, { specPath }));
       }
       continue;
@@ -154,6 +154,13 @@ export function collectDeckPreflightFailures(spec, { specPath, specDir } = {}) {
         if (typeof image[key] !== "string" || image[key].trim() === "") {
           failures.push(failure(`bands[${index}].visual.image.${key}`, `bands[${index}].visual.image.${key} is required and must be distinct`, { specPath }));
         }
+      }
+      if (
+        typeof image.use === "string" && image.use.trim() !== "" &&
+        typeof image.description === "string" && image.description.trim() !== "" &&
+        image.use.trim() === image.description.trim()
+      ) {
+        failures.push(failure(`bands[${index}].visual.image.description`, `bands[${index}].visual.image.description must be distinct from use`, { specPath }));
       }
       if (typeof image.file === "string" && image.file.trim() !== "") {
         const root = resolve(specDir ?? (specPath ? dirname(resolve(specPath)) : process.cwd()));
@@ -283,7 +290,7 @@ async function collectAssetFailures(spec, { specPath, specDir } = {}) {
   return failures;
 }
 
-export async function preflightDeck({ specPath, spec } = {}) {
+export async function preflightDeck({ specPath, spec, mode = "automatic" } = {}) {
   let loaded = spec;
   const failures = [];
   if (loaded === undefined) {
@@ -299,7 +306,7 @@ export async function preflightDeck({ specPath, spec } = {}) {
     }
   }
   const specDir = specPath ? dirname(resolve(specPath)) : process.cwd();
-  failures.push(...collectDeckPreflightFailures(loaded, { specPath, specDir }));
+  failures.push(...collectDeckPreflightFailures(loaded, { specPath, specDir, mode }));
   failures.push(...(await collectAssetFailures(loaded, { specPath, specDir })));
   return { ok: failures.length === 0, failures, spec: loaded };
 }

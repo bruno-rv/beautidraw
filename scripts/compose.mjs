@@ -140,6 +140,9 @@ for (const entry of spec.bands) {
     if (typeof image.description !== "string" || image.description.trim() === "") {
       throw new Error(`band ${entry.band} image requires description distinct from use`);
     }
+    if (image.description.trim() === image.use.trim()) {
+      throw new Error(`band ${entry.band} image description must be distinct from use`);
+    }
     if (!Number.isFinite(image.opacity ?? 100) || (image.opacity ?? 100) < 1 || (image.opacity ?? 100) > 100) {
       throw new Error(`band ${entry.band} image.opacity must be from 1 to 100`);
     }

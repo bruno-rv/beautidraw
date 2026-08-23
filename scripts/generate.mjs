@@ -304,7 +304,7 @@ try {
   throw e;
 }
 
-const preflight = await preflightDeck({ specPath, spec });
+const preflight = await preflightDeck({ specPath, spec, mode: "core" });
 if (!preflight.ok) {
   throw new CliError({
     command: "generate",
