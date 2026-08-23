@@ -7,6 +7,19 @@ import { join, resolve } from "node:path";
 
 import { collectBuildReceipt, formatBuildReceipt } from "../scripts/build-receipt.mjs";
 
+test("receipt requires a published output directory", async () => {
+  const root = await mkdtemp(join(tmpdir(), "beautidraw-receipt-"));
+  const stageDir = join(root, "stage");
+  await assert.rejects(
+    () => collectBuildReceipt(stageDir, { elapsedMs: 321 }),
+    /publishedOutDir is required/,
+  );
+  await assert.rejects(
+    () => collectBuildReceipt(stageDir, { elapsedMs: 321, publishedOutDir: stageDir }),
+    /publishedOutDir must differ from stageDir/,
+  );
+});
+
 test("receipt counts frames, embedded files, recursive bytes, and published paths", async () => {
   const root = await mkdtemp(join(tmpdir(), "beautidraw-receipt-"));
   const stageDir = join(root, "out-stage-token");

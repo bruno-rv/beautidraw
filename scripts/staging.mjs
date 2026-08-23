@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { basename, dirname, resolve } from "node:path";
 
 const defaultIo = { access, mkdir, mkdtemp, rename, rm };
+const BACKUP_CLEANUP_ATTEMPTS = 3;
 
 async function exists(path, io) {
   try {
@@ -21,6 +22,23 @@ function siblingPath(target, kind) {
 
 async function remove(path, io) {
   await io.rm(path, { recursive: true, force: true });
+}
+
+async function cleanupBackup(path, io) {
+  let lastError;
+  for (let attempt = 1; attempt <= BACKUP_CLEANUP_ATTEMPTS; attempt += 1) {
+    try {
+      await remove(path, io);
+      return null;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  return {
+    path,
+    attempts: BACKUP_CLEANUP_ATTEMPTS,
+    reason: String(lastError?.message ?? lastError),
+  };
 }
 
 export async function publishStagedOutput(stageDir, outDir, io = {}) {
@@ -50,8 +68,8 @@ export async function publishStagedOutput(stageDir, outDir, io = {}) {
     throw error;
   }
 
-  if (movedOutput) await remove(backup, fs);
-  return output;
+  const cleanupWarning = movedOutput ? await cleanupBackup(backup, fs) : null;
+  return { output, cleanupWarning };
 }
 
 export async function withStagedOutput(outDir, build, io = {}) {
@@ -62,8 +80,8 @@ export async function withStagedOutput(outDir, build, io = {}) {
   const stage = await fs.mkdtemp(`${resolve(parent)}/.${basename(output)}-stage-`);
   try {
     const result = await build(stage);
-    await publishStagedOutput(stage, output, fs);
-    return result;
+    const publication = await publishStagedOutput(stage, output, fs);
+    return { result, ...publication };
   } catch (error) {
     if (await exists(stage, fs)) await remove(stage, fs);
     throw error;

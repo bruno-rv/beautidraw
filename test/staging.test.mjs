@@ -72,3 +72,34 @@ test("publication failure restores the backup and removes the stage", async () =
   const siblings = await (await import("node:fs/promises")).readdir(dirname(resolve(outDir)));
   assert.equal(siblings.some((name) => name.includes("backup-")), false);
 });
+
+test("cleanup failure does not reject publication and returns an explicit residue warning", async () => {
+  const root = await mkdtemp(join(tmpdir(), "beautidraw-staging-"));
+  const outDir = join(root, "out");
+  const stageDir = join(root, "stage");
+  await mkdir(outDir);
+  await mkdir(stageDir);
+  await writeFile(join(outDir, "sentinel.txt"), "last good build");
+  await writeFile(join(stageDir, "new.txt"), "new build");
+
+  let cleanupAttempts = 0;
+  const io = {
+    rm: async (path, options) => {
+      if (path.includes("-backup-")) {
+        cleanupAttempts += 1;
+        throw new Error("injected backup cleanup failure");
+      }
+      return (await import("node:fs/promises")).rm(path, options);
+    },
+  };
+
+  const publication = await publishStagedOutput(stageDir, outDir, io);
+  assert.equal(publication.output, resolve(outDir));
+  assert.equal(publication.cleanupWarning?.path.includes("-backup-"), true);
+  assert.equal(publication.cleanupWarning?.attempts, 3);
+  assert.equal(cleanupAttempts, 3);
+  assert.equal(await readFile(join(outDir, "new.txt"), "utf8"), "new build");
+  assert.equal(await pathExists(join(outDir, "sentinel.txt")), false);
+  const siblings = await (await import("node:fs/promises")).readdir(dirname(resolve(outDir)));
+  assert.equal(siblings.some((name) => name.includes("backup-")), true);
+});

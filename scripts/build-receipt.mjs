@@ -16,9 +16,15 @@ export async function collectBuildReceipt(stageDir, {
   elapsedMs,
   publishedOutDir,
 } = {}) {
+  if (typeof publishedOutDir !== "string" || publishedOutDir.trim() === "") {
+    throw new Error("publishedOutDir is required to collect a build receipt");
+  }
   const stage = resolve(stageDir);
+  const published = resolve(publishedOutDir);
+  if (published === stage) {
+    throw new Error("publishedOutDir must differ from stageDir");
+  }
   const deck = JSON.parse(await readFile(join(stage, "deck.excalidraw"), "utf8"));
-  const published = resolve(publishedOutDir ?? stage);
   return {
     elapsedMs,
     frameCount: (deck.elements ?? []).filter((element) => element.type === "frame").length,
