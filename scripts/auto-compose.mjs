@@ -17,7 +17,7 @@ import { preflightDeck, readJsonInput } from "./preflight.mjs";
 const exec = promisify(execFile);
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const usage = "usage: node scripts/auto-compose.mjs <deck-spec.json> <outdir>\n       turns semantic `visual` declarations into composed canvas frames\n       (writes auto-composition-spec.json, then runs compose.mjs).";
-const status = await runCli("auto-compose", async ({ values }) => {
+const status = await runCli("auto-compose", async ({ values, debug }) => {
 const { specArg, outArg } = values;
 
 let spec;
@@ -536,7 +536,13 @@ const compositionPath = resolve(outDir, "auto-composition-spec.json");
 await writeFile(compositionPath, JSON.stringify(composition, null, 2) + "\n");
 
 if (canvasBands.length) {
-  await exec(process.execPath, [resolve(ROOT, "scripts/compose.mjs"), resolve(outDir, "deck.excalidraw"), compositionPath, outDir], { stdio: "inherit" });
+  await exec(process.execPath, [
+    resolve(ROOT, "scripts/compose.mjs"),
+    resolve(outDir, "deck.excalidraw"),
+    compositionPath,
+    outDir,
+    ...(debug ? ["--debug"] : []),
+  ], { stdio: "inherit" });
 }
 
 console.error(`AUTO-COMPOSE OK — ${canvasBands.length} semantic canvas bands rendered via ${[...new Set(composition.bands.map((band) => band.elements.find((element) => element.id === "thesis")?.text ?? ""))].length} visual plans`);

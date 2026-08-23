@@ -132,7 +132,7 @@ export async function runCli(
   try {
     parsed = parseCli(argv, { command, usage, positional, options });
   } catch (error) {
-    stderr.write(`${formatDiagnostic(error)}\n`);
+    stderr.write(`${formatDiagnostic(error, { debug: argv.some((arg) => arg === "--debug"), command })}\n`);
     return 1;
   }
   if (parsed.help) {

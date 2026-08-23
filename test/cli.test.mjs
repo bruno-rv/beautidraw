@@ -55,6 +55,20 @@ test("debug diagnostics may include a stack", async () => {
   assert.match(stderr, /at .*\.mjs:/);
 });
 
+test("debug diagnostics may include a stack for parse errors", async () => {
+  let stderr = "";
+  const status = await runCli("example", () => 0, {
+    argv: ["--debug"],
+    positional: ["required"],
+    stderr: { write: (value) => { stderr += value; } },
+    stdout: { write: () => {} },
+  });
+  assert.equal(status, 1);
+  assert.match(stderr, /stage: arguments/);
+  assert.match(stderr, /stack:/);
+  assert.match(stderr, /at .*\.mjs:/);
+});
+
 test("normal diagnostics bound reason and recovery text", () => {
   const huge = "x".repeat(12_000);
   const message = formatDiagnostic(new CliError({

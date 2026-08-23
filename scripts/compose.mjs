@@ -33,7 +33,6 @@ const diagnostics = await readJsonOrExit(resolve(dirname(deckPath), "diagnostics
 if (!Array.isArray(spec.bands) || spec.bands.length === 0) {
   throw new Error("composition-spec.bands must be a non-empty array");
 }
-const { withHarness } = await import("./harness-runner.mjs");
 
 const canvasBands = new Set(
   (diagnostics.diagnostics?.bands ?? [])
@@ -256,6 +255,7 @@ for (const band of canvasBands) {
   if (!requestedBands.has(band)) throw new Error(`canvas band ${band} has no composition entry`);
 }
 
+const { withHarness } = await import("./harness-runner.mjs");
 const result = await withHarness(async ({ page }) =>
   page.evaluate(
     async ({ deck, prepared, files, validationConfig }) => {

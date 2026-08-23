@@ -20,7 +20,7 @@ import { CliError, runCli } from "./cli.mjs";
 import { preflightDeck } from "./preflight.mjs";
 
 const usage = "usage: node scripts/build-deck.mjs <deck-spec.json> <outdir>\n       audits the spec, lays out every band, composes canvas visuals,\n       and writes deck.excalidraw plus band/scene PNGs into <outdir>.";
-const status = await runCli("build-deck", async ({ values }) => {
+const status = await runCli("build-deck", async ({ values, debug }) => {
 const { specArg, outArg } = values;
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -57,7 +57,7 @@ if (!existsSync(resolve(ROOT, "node_modules", "playwright", "package.json"))) {
 }
 
 // Idempotent; provisions deps/Chromium/bundle before any stage needs them.
-execFileSync(node, [resolve(ROOT, "scripts/setup.mjs")], { stdio: "inherit" });
+execFileSync(node, [resolve(ROOT, "scripts/setup.mjs"), ...(debug ? ["--debug"] : [])], { stdio: "inherit" });
 
 const stages = [
   ["presentation audit", [resolve(ROOT, "scripts/audit-deck-spec.mjs"), spec]],
@@ -67,7 +67,7 @@ const stages = [
 ];
 
 for (const [name, args] of stages) {
-  const result = spawnSync(node, args, { stdio: "inherit" });
+  const result = spawnSync(node, [...args, ...(debug ? ["--debug"] : [])], { stdio: "inherit" });
   if (result.error) {
     throw new CliError({
       command: "build-deck",

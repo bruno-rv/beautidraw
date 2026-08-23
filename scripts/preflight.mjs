@@ -16,9 +16,20 @@ export const CONTENT_BUDGETS = Object.freeze({
 
 const MAX_HEADING_CHARS = 2000;
 const PNG_SIGNATURE = "89504e470d0a1a0a";
+const CRC_TABLE = Array.from({ length: 256 }, (_, value) => {
+  let crc = value;
+  for (let bit = 0; bit < 8; bit += 1) crc = (crc & 1) ? 0xedb88320 ^ (crc >>> 1) : crc >>> 1;
+  return crc >>> 0;
+});
 
 const words = (value) => String(value ?? "").trim().split(/\s+/).filter(Boolean).length;
 const chars = (value) => String(value ?? "").trim().length;
+
+function crc32(bytes) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) crc = CRC_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  return (crc ^ 0xffffffff) >>> 0;
+}
 
 function failure(field, reason, { specPath, recovery } = {}) {
   return {
@@ -125,6 +136,13 @@ export function collectDeckPreflightFailures(spec, { specPath, specDir } = {}) {
       continue;
     }
 
+    if (visual.evidence !== undefined && !Array.isArray(visual.evidence)) {
+      failures.push(failure(`bands[${index}].visual.evidence`, `bands[${index}].visual.evidence must be an array`, { specPath }));
+    }
+    if (visual.nodes !== undefined && !Array.isArray(visual.nodes)) {
+      failures.push(failure(`bands[${index}].visual.nodes`, `bands[${index}].visual.nodes must be an array`, { specPath }));
+    }
+
     const image = visual.image;
     if (visual.family === "illustration" && (!isObject(image) || typeof image.file !== "string" || image.file.trim() === "")) {
       failures.push(failure(`bands[${index}].visual.image.file`, `bands[${index}].visual.image.file is required for illustration visuals`, { specPath }));
@@ -159,7 +177,8 @@ export function collectDeckPreflightFailures(spec, { specPath, specDir } = {}) {
     if (explanationWords > CONTENT_BUDGETS.explanationWords) {
       failures.push(failure(`bands[${index}].visual.explanation`, `visual.explanation is ${explanationWords} words; the renderer truncates past approximately 130`, { specPath }));
     }
-    const footerParts = chars(visual.explanation) + (visual.example ? chars(visual.example) + 9 : 0) + (visual.tradeoff ? chars(visual.tradeoff) + 11 : 0) + Math.min((visual.evidence ?? []).length, 1) * ((visual.evidence ?? [])[0] ? chars(visual.evidence[0]) + 10 : 0);
+    const evidence = Array.isArray(visual.evidence) ? visual.evidence : [];
+    const footerParts = chars(visual.explanation) + (visual.example ? chars(visual.example) + 9 : 0) + (visual.tradeoff ? chars(visual.tradeoff) + 11 : 0) + Math.min(evidence.length, 1) * (evidence[0] ? chars(evidence[0]) + 10 : 0);
     if (footerParts > CONTENT_BUDGETS.footerChars) {
       failures.push(failure(`bands[${index}].visual`, `visual footer content is ${footerParts} characters; rendered column holds approximately ${CONTENT_BUDGETS.footerChars}`, { specPath }));
     }
@@ -209,6 +228,7 @@ async function collectAssetFailures(spec, { specPath, specDir } = {}) {
       let offset = 8;
       let sawIhdr = false;
       let sawIend = false;
+      let sawIdat = false;
       let malformed = false;
       while (offset < bytes.length) {
         if (bytes.length - offset < 12) {
@@ -222,11 +242,21 @@ async function collectAssetFailures(spec, { specPath, specDir } = {}) {
           malformed = true;
           break;
         }
+        if (!/^[A-Za-z]{4}$/.test(chunkType)) {
+          malformed = true;
+          break;
+        }
+        const crcOffset = offset + 8 + chunkLength;
+        if (crc32(bytes.subarray(offset + 4, crcOffset)) !== bytes.readUInt32BE(crcOffset)) {
+          malformed = true;
+          break;
+        }
         if (offset === 8 && (chunkType !== "IHDR" || chunkLength !== 13)) {
           malformed = true;
           break;
         }
         if (chunkType === "IHDR") sawIhdr = true;
+        if (chunkType === "IDAT" && chunkLength > 0) sawIdat = true;
         if (chunkType === "IEND") {
           if (chunkLength !== 0 || chunkEnd !== bytes.length) malformed = true;
           sawIend = true;
@@ -234,8 +264,11 @@ async function collectAssetFailures(spec, { specPath, specDir } = {}) {
         }
         offset = chunkEnd;
       }
-      if (malformed || !sawIhdr || !sawIend) {
-        failures.push(failure(field, `${field} PNG is truncated or has invalid chunk boundaries`, { specPath }));
+      if (malformed || !sawIhdr || !sawIend || !sawIdat) {
+        const reason = !sawIdat && sawIend
+          ? `${field} PNG must include at least one non-empty IDAT chunk`
+          : `${field} PNG is truncated or has invalid chunk boundaries or CRCs`;
+        failures.push(failure(field, reason, { specPath }));
         continue;
       }
       const width = bytes.readUInt32BE(16);

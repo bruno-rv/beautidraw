@@ -110,6 +110,39 @@ export async function resolve(specifier, context, nextResolve) {
   assert.match(debugDiagnostics.error, /\bat .*\.mjs:/);
 });
 
+test("build-deck propagates debug to child diagnostics only when requested", async () => {
+  const tempRoot = await mkdtemp(resolve(tmpdir(), "beautidraw-build-deck-debug-"));
+  const specPath = resolve(tempRoot, "audit-failure.json");
+  const spec = {
+    title: "Audit failure fixture",
+    subtitle: "A valid deck that should fail the substantial-deck gate",
+    footer: "Source fixture",
+    bands: Array.from({ length: 8 }, (_, index) => ({
+      heading: `Structured band ${index + 1}`,
+      deck: "A valid structured band with enough content to reach the audit stage",
+      pattern: "flow",
+      accent: "blue",
+      nodes: [{ label: "Input", note: "A source value" }],
+    })),
+  };
+  await writeFile(specPath, JSON.stringify(spec));
+  const normal = spawnSync(process.execPath, [resolve(root, "scripts/build-deck.mjs"), specPath, resolve(tempRoot, "normal")], {
+    cwd: root,
+    encoding: "utf8",
+  });
+  const debug = spawnSync(process.execPath, [resolve(root, "scripts/build-deck.mjs"), "--debug", specPath, resolve(tempRoot, "debug")], {
+    cwd: root,
+    encoding: "utf8",
+  });
+  const normalOutput = `${normal.stdout}${normal.stderr}`;
+  const debugOutput = `${debug.stdout}${debug.stderr}`;
+  assert.notEqual(normal.status, 0, normalOutput);
+  assert.notEqual(debug.status, 0, debugOutput);
+  assert.doesNotMatch(normalOutput, /\bstack:\n|\bat .*audit-deck-spec\.mjs:/);
+  assert.match(debugOutput, /\bstack:\n/);
+  assert.match(debugOutput, /\bat .*audit-deck-spec\.mjs:/);
+});
+
 test("audit and compose route invalid input through shared diagnostics", async () => {
   const rootDir = await mkdtemp(resolve(tmpdir(), "beautidraw-entrypoint-"));
   const invalidSpecPath = resolve(rootDir, "invalid.json");

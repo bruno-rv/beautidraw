@@ -22,7 +22,7 @@ import { EXPECTED_FONT_SUBSETS } from "./metric-fonts.mjs";
 import { CliError, runCli } from "./cli.mjs";
 
 const usage = "usage: node scripts/setup.mjs\n       idempotently provisions pinned dependencies, Chromium, and the vendored bundle.";
-const status = await runCli("setup", async () => {
+const status = await runCli("setup", async ({ debug }) => {
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const MANIFEST_SCHEMA = "beautidraw.bundle-manifest/3";
 const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
@@ -276,7 +276,7 @@ function vendorProblem() {
 const problem = vendorProblem();
 if (problem) {
   console.log(`[setup] rebuilding the vendored Excalidraw bundle — ${problem}`);
-  run("node", [resolve(ROOT, "scripts/build-bundle.mjs")]);
+  run("node", [resolve(ROOT, "scripts/build-bundle.mjs"), ...(debug ? ["--debug"] : [])]);
   didWork = true;
 
   // Same reasoning as the dependency re-check: a build that ran is not a build

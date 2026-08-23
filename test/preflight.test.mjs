@@ -166,3 +166,81 @@ test("malformed visual callouts produce structured failures", () => {
   const failures = collectDeckPreflightFailures(spec);
   assert.match(failures.map(({ field, reason }) => `${field}: ${reason}`).join("\n"), /callouts/);
 });
+
+test("visual evidence and nodes must be arrays", async () => {
+  for (const [field, value] of [["evidence", { source: "not-an-array" }], ["nodes", { label: "not-an-array" }]]) {
+    const spec = valid();
+    spec.bands[0].visual = { family: "orbit", [field]: value };
+    const result = await preflightDeck({ spec });
+    assert.equal(result.ok, false);
+    assert.ok(result.failures.some((failure) => failure.field === `bands[0].visual.${field}`));
+    assert.ok(result.failures.every((failure) => failure.stage === "preflight"));
+  }
+});
+
+const validPng = () => Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+  "base64",
+);
+
+function illustrationSpec(file) {
+  const spec = valid();
+  spec.bands[0] = {
+    heading: "Illustration",
+    deck: "Uses a complete PNG",
+    pattern: "canvas",
+    accent: "blue",
+    height: 780,
+    visual: {
+      family: "illustration",
+      image: { file, use: "Use the scene", description: "Describe the scene" },
+    },
+  };
+  return spec;
+}
+
+test("preflight accepts a structurally valid PNG with non-empty IDAT", async () => {
+  const root = await mkdtemp(join(tmpdir(), "beautidraw-preflight-valid-png-"));
+  await writeFile(join(root, "valid.png"), validPng());
+  const result = await preflightDeck({
+    specPath: join(root, "deck.json"),
+    spec: illustrationSpec("valid.png"),
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.failures, []);
+});
+
+test("preflight rejects a structurally complete PNG without an IDAT chunk", async () => {
+  const root = await mkdtemp(join(tmpdir(), "beautidraw-preflight-no-idat-"));
+  const png = validPng();
+  const idat = png.indexOf(Buffer.from("IDAT"));
+  assert.ok(idat > 4);
+  const chunkStart = idat - 4;
+  const chunkLength = png.readUInt32BE(chunkStart);
+  const withoutIdat = Buffer.concat([
+    png.subarray(0, chunkStart),
+    png.subarray(chunkStart + 12 + chunkLength),
+  ]);
+  await writeFile(join(root, "no-idat.png"), withoutIdat);
+  const result = await preflightDeck({
+    specPath: join(root, "deck.json"),
+    spec: illustrationSpec("no-idat.png"),
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.failures.map(({ reason }) => reason).join("\n"), /IDAT/i);
+});
+
+test("preflight rejects a structurally complete PNG with a corrupt chunk CRC", async () => {
+  const root = await mkdtemp(join(tmpdir(), "beautidraw-preflight-corrupt-png-"));
+  const corrupt = validPng();
+  const idat = corrupt.indexOf(Buffer.from("IDAT"));
+  assert.ok(idat > 0);
+  corrupt[idat + 4] ^= 0xff;
+  await writeFile(join(root, "corrupt.png"), corrupt);
+  const result = await preflightDeck({
+    specPath: join(root, "deck.json"),
+    spec: illustrationSpec("corrupt.png"),
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.failures.map(({ reason }) => reason).join("\n"), /CRC|checksum|corrupt/i);
+});
