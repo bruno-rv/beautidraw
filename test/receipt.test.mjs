@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, symlink, writeFile } from "node:fs/promises";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -14,9 +14,54 @@ test("receipt requires a published output directory", async () => {
     () => collectBuildReceipt(stageDir, { elapsedMs: 321 }),
     /publishedOutDir is required/,
   );
+  await mkdir(stageDir);
   await assert.rejects(
     () => collectBuildReceipt(stageDir, { elapsedMs: 321, publishedOutDir: stageDir }),
-    /publishedOutDir must differ from stageDir/,
+    /overlap|nested/,
+  );
+});
+
+test("receipt rejects published paths nested under or above the stage", async () => {
+  const root = await mkdtemp(join(tmpdir(), "beautidraw-receipt-"));
+  const stageDir = join(root, "stage");
+  await mkdir(stageDir);
+
+  await assert.rejects(
+    () => collectBuildReceipt(stageDir, { publishedOutDir: join(stageDir, "published") }),
+    /overlap|nested|containment/,
+  );
+
+  const publishedDir = join(root, "published");
+  const nestedStage = join(publishedDir, "stage");
+  await mkdir(nestedStage, { recursive: true });
+  await assert.rejects(
+    () => collectBuildReceipt(nestedStage, { publishedOutDir: publishedDir }),
+    /overlap|nested|containment/,
+  );
+});
+
+test("receipt rejects stage and published symlink aliases", async () => {
+  const root = await mkdtemp(join(tmpdir(), "beautidraw-receipt-"));
+  const realStage = join(root, "real-stage");
+  const stageAlias = join(root, "stage-alias");
+  const publishedDir = join(root, "published");
+  await mkdir(realStage);
+  await mkdir(publishedDir);
+  await symlink(realStage, stageAlias, "dir");
+  await assert.rejects(
+    () => collectBuildReceipt(stageAlias, { publishedOutDir: publishedDir }),
+    /symlink/,
+  );
+
+  const realPublished = join(root, "real-published");
+  const publishedAlias = join(root, "published-alias");
+  const stageDir = join(root, "stage");
+  await mkdir(realPublished);
+  await mkdir(stageDir);
+  await symlink(realPublished, publishedAlias, "dir");
+  await assert.rejects(
+    () => collectBuildReceipt(stageDir, { publishedOutDir: publishedAlias }),
+    /symlink/,
   );
 });
 

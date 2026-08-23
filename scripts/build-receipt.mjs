@@ -1,5 +1,25 @@
-import { readdir, readFile, stat } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { lstat, readdir, readFile, realpath, stat } from "node:fs/promises";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+
+function containsPath(parent, child) {
+  const remainder = relative(parent, child);
+  return remainder === "" || (!remainder.startsWith("..") && !isAbsolute(remainder));
+}
+
+async function inspectDirectory(path, label, { allowMissing = false } = {}) {
+  const absolute = resolve(path);
+  let info;
+  try {
+    info = await lstat(absolute);
+  } catch (error) {
+    if (!allowMissing || error?.code !== "ENOENT") throw error;
+    const parent = await realpath(dirname(absolute));
+    return { absolute, real: resolve(parent, basename(absolute)) };
+  }
+  if (info.isSymbolicLink()) throw new Error(`${label} must not be a symlink`);
+  if (!info.isDirectory()) throw new Error(`${label} must be a directory`);
+  return { absolute, real: await realpath(absolute) };
+}
 
 async function recursiveBytes(path) {
   const entries = await readdir(path, { withFileTypes: true });
@@ -19,11 +39,13 @@ export async function collectBuildReceipt(stageDir, {
   if (typeof publishedOutDir !== "string" || publishedOutDir.trim() === "") {
     throw new Error("publishedOutDir is required to collect a build receipt");
   }
-  const stage = resolve(stageDir);
-  const published = resolve(publishedOutDir);
-  if (published === stage) {
-    throw new Error("publishedOutDir must differ from stageDir");
+  const stageInfo = await inspectDirectory(stageDir, "stage directory");
+  const publishedInfo = await inspectDirectory(publishedOutDir, "published output", { allowMissing: true });
+  if (containsPath(stageInfo.real, publishedInfo.real) || containsPath(publishedInfo.real, stageInfo.real)) {
+    throw new Error("stage and published output paths must not overlap or be nested");
   }
+  const stage = stageInfo.absolute;
+  const published = publishedInfo.absolute;
   const deck = JSON.parse(await readFile(join(stage, "deck.excalidraw"), "utf8"));
   return {
     elapsedMs,
