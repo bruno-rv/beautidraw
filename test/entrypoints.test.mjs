@@ -2,8 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { pathToFileURL } from "node:url";
 
 const root = resolve(import.meta.dirname, "..");
 const commands = [
@@ -71,6 +72,42 @@ test("help stays available when heavy dependencies are blocked", async () => {
     assert.match(output, /usage:/i);
     assert.doesNotMatch(output, /blocked heavy dependency|at .*\.mjs:/);
   }
+});
+
+test("generate diagnostics preserve raw detail only in debug mode", async () => {
+  const tempRoot = await mkdtemp(resolve(tmpdir(), "beautidraw-generate-debug-"));
+  const fakeHarness = resolve(tempRoot, "fake-harness.mjs");
+  const loader = resolve(tempRoot, "inject-harness.mjs");
+  await writeFile(fakeHarness, `export async function withHarness() {
+  return { error: "Error: browser failed\\n    at page.evaluate (file:///tmp/engine.mjs:10:2)" };
+}\n`);
+  await writeFile(loader, `const target = ${JSON.stringify(pathToFileURL(fakeHarness).href)};
+export async function resolve(specifier, context, nextResolve) {
+  if (specifier === "./harness-runner.mjs") return { url: target, shortCircuit: true };
+  return nextResolve(specifier, context);
+}\n`);
+  const env = {
+    ...process.env,
+    NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --experimental-loader=${loader}`.trim(),
+  };
+  const normalOut = resolve(tempRoot, "normal");
+  const debugOut = resolve(tempRoot, "debug");
+  const normal = spawnSync(process.execPath, [resolve(root, "scripts/generate.mjs"), resolve(root, "test/fixtures/minimal-deck.json"), normalOut], {
+    cwd: root,
+    env,
+    encoding: "utf8",
+  });
+  const debug = spawnSync(process.execPath, [resolve(root, "scripts/generate.mjs"), "--debug", resolve(root, "test/fixtures/minimal-deck.json"), debugOut], {
+    cwd: root,
+    env,
+    encoding: "utf8",
+  });
+  assert.notEqual(normal.status, 0);
+  assert.notEqual(debug.status, 0);
+  const normalDiagnostics = JSON.parse(await readFile(resolve(normalOut, "diagnostics.json"), "utf8"));
+  const debugDiagnostics = JSON.parse(await readFile(resolve(debugOut, "diagnostics.json"), "utf8"));
+  assert.doesNotMatch(normalDiagnostics.error, /\bat .*\.mjs:/);
+  assert.match(debugDiagnostics.error, /\bat .*\.mjs:/);
 });
 
 test("audit and compose route invalid input through shared diagnostics", async () => {

@@ -25,8 +25,8 @@ import {
 } from "./layout.mjs";
 
 const usage = "usage: node scripts/generate.mjs <spec.json> <outdir>\n       runs the deterministic base layout in the harness and writes\n       deck.excalidraw, band PNGs, scene.png, and diagnostics.json.";
-const status = await runCli("generate", async ({ values }) => {
-const { specPath, outDirArg, debug } = values;
+const status = await runCli("generate", async ({ values, debug }) => {
+const { specPath, outDirArg } = values;
 const EPSILON = 0.08 * PAGE_WIDTH; // edge-coverage tolerance, LAYOUT-CONTRACT.md §Deliverables
 
 async function writeDiagnosticsAndExit(outDir, diagnostics, message) {
