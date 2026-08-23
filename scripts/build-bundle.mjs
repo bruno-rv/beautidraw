@@ -13,6 +13,12 @@ import { fileURLToPath } from "node:url";
 
 import { EXPECTED_FONT_SUBSETS } from "./metric-fonts.mjs";
 
+if (process.argv.includes("--help") || process.argv.includes("-h")) {
+  console.log("usage: node scripts/build-bundle.mjs");
+  console.log("       builds the offline Excalidraw bundle and records its manifest.");
+  process.exit(0);
+}
+
 const require = createRequire(import.meta.url);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const vendorDir = resolve(root, "scripts/vendor");

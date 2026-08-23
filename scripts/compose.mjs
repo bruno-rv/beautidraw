@@ -13,6 +13,8 @@ import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { withHarness } from "./harness-runner.mjs";
 import { BODY_INSET, DECK_BODY_GAP, FRAME_PAD_BOTTOM, PAGE_WIDTH, USABLE_H, USABLE_W } from "./layout.mjs";
+import { formatDiagnostic } from "./cli.mjs";
+import { readJsonInput } from "./preflight.mjs";
 
 const [, , deckArg, compositionArg, outArg] = process.argv;
 if (!deckArg || !compositionArg || !outArg || deckArg === "--help" || deckArg === "-h") {
@@ -25,9 +27,17 @@ const deckPath = resolve(deckArg);
 const compositionPath = resolve(compositionArg);
 const compositionDir = dirname(compositionPath);
 const outDir = resolve(outArg);
-const deck = JSON.parse(await readFile(deckPath, "utf8"));
-const spec = JSON.parse(await readFile(compositionPath, "utf8"));
-const diagnostics = JSON.parse(await readFile(resolve(dirname(deckPath), "diagnostics.json"), "utf8"));
+async function readJsonOrExit(path, label) {
+  try {
+    return await readJsonInput(path, { label });
+  } catch (error) {
+    console.error(formatDiagnostic(error));
+    process.exit(1);
+  }
+}
+const deck = await readJsonOrExit(deckPath, "deck");
+const spec = await readJsonOrExit(compositionPath, "composition spec");
+const diagnostics = await readJsonOrExit(resolve(dirname(deckPath), "diagnostics.json"), "layout diagnostics");
 
 if (!Array.isArray(spec.bands) || spec.bands.length === 0) {
   throw new Error("composition-spec.bands must be a non-empty array");
@@ -136,6 +146,9 @@ for (const entry of spec.bands) {
     if (typeof image.use !== "string" || image.use.trim() === "") {
       throw new Error(`band ${entry.band} image requires use`);
     }
+    if (typeof image.description !== "string" || image.description.trim() === "") {
+      throw new Error(`band ${entry.band} image requires description distinct from use`);
+    }
     if (!Number.isFinite(image.opacity ?? 100) || (image.opacity ?? 100) < 1 || (image.opacity ?? 100) > 100) {
       throw new Error(`band ${entry.band} image.opacity must be from 1 to 100`);
     }
@@ -178,6 +191,7 @@ for (const entry of spec.bands) {
       band: entry.band,
       mode: image.mode,
       use: image.use,
+      description: image.description,
       pixelWidth,
       pixelHeight,
       targetWidth,

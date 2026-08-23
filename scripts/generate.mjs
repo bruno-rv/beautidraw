@@ -10,9 +10,11 @@
 // never writes deck.excalidraw — a blocked run that explains nothing is
 // useless, but a blocked run that ships a file anyway is worse.
 
-import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { withHarness } from "./harness-runner.mjs";
+import { formatDiagnostic } from "./cli.mjs";
+import { preflightDeck, readJsonInput } from "./preflight.mjs";
 import {
   BAND_HEIGHT_CAP,
   FONT_NAME,
@@ -299,9 +301,21 @@ const outDir = resolve(outDirArg);
 
 let spec;
 try {
-  spec = JSON.parse(await readFile(resolve(specPath), "utf8"));
+  spec = await readJsonInput(specPath, { label: "deck spec" });
 } catch (e) {
-  console.error(`could not read/parse spec "${specPath}": ${e.message}`);
+  console.error(formatDiagnostic(e));
+  process.exit(1);
+}
+
+const preflight = await preflightDeck({ specPath, spec });
+if (!preflight.ok) {
+  console.error(formatDiagnostic({
+    command: "generate",
+    stage: "preflight",
+    input: specPath,
+    reason: preflight.failures.map((failure) => `${failure.field}: ${failure.reason}`).join("; "),
+    recovery: "Fix the deck spec and rerun generation.",
+  }));
   process.exit(1);
 }
 

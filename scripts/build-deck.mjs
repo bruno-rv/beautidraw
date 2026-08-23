@@ -16,6 +16,8 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { formatDiagnostic } from "./cli.mjs";
+import { preflightDeck } from "./preflight.mjs";
 
 const [, , specArg, outArg] = process.argv;
 if (!specArg || !outArg || specArg === "--help" || specArg === "-h") {
@@ -31,7 +33,24 @@ const spec = resolve(specArg);
 const out = resolve(outArg);
 
 if (!existsSync(spec)) {
-  console.error(`build-deck: spec file not found: ${spec}`);
+  console.error(formatDiagnostic({
+    command: "build-deck",
+    stage: "preflight",
+    input: spec,
+    reason: "deck spec file does not exist",
+    recovery: "Pass an existing deck-spec.json path.",
+  }));
+  process.exit(1);
+}
+const preflight = await preflightDeck({ specPath: spec });
+if (!preflight.ok) {
+  console.error(formatDiagnostic({
+    command: "build-deck",
+    stage: "preflight",
+    input: spec,
+    reason: preflight.failures.map((failure) => `${failure.field}: ${failure.reason}`).join("; "),
+    recovery: "Fix the deck spec and rerun the build.",
+  }));
   process.exit(1);
 }
 if (!existsSync(resolve(ROOT, "node_modules", "playwright", "package.json"))) {

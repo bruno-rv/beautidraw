@@ -19,6 +19,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { EXPECTED_FONT_SUBSETS } from "./metric-fonts.mjs";
+import { formatDiagnostic } from "./cli.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const MANIFEST_SCHEMA = "beautidraw.bundle-manifest/3";
@@ -46,7 +47,14 @@ function run(cmd, args) {
       console.error("[setup] or: npm install -g pnpm@11.0.3   (package.json pins this version)");
       process.exit(1);
     }
-    throw e;
+    console.error(formatDiagnostic({
+      command: "setup",
+      stage: "provision",
+      reason: `${cmd} failed while provisioning dependencies`,
+      recovery: "Check the command output and rerun setup after correcting the environment.",
+      stack: e.stack,
+    }, { debug: process.argv.includes("--debug") }));
+    process.exit(1);
   }
 }
 

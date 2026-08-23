@@ -9,6 +9,7 @@
       "pixelHeight": 941,
       "suggestedBand": 1,
       "use": "Developer inside a repository-shaped control environment surrounded by five artifact types.",
+      "description": "Paper-cut developer control room showing context, tools, trust, state, and extension sources around one working session.",
       "promptSummary": "Editorial paper-cut control room; five distinct artifact sources; no text, arrows, logos, or UI screenshots."
     },
     {
@@ -18,6 +19,7 @@
       "pixelHeight": 941,
       "suggestedBand": 5,
       "use": "Monorepo as a paper-cut city with the billing district illuminated.",
+      "description": "Top-down repository city whose illuminated billing district shows how path-scoped instructions narrow to one package.",
       "promptSummary": "Top-down blueprint-paper city map; distinct package districts; spotlighted billing area; no text or arrows."
     },
     {
@@ -27,6 +29,7 @@
       "pixelHeight": 941,
       "suggestedBand": 7,
       "use": "Settings precedence as layered scalar resolution, with separate motifs for merged arrays and restrictive safety exceptions.",
+      "description": "Translucent configuration layers resolving into one value beside separate merge strands and a restrictive safety clamp.",
       "promptSummary": "Translucent acrylic settings layers, a resolved dial, merged strands, and a restrictive clamp; no text, arrows, or flowchart boxes."
     },
     {
@@ -36,6 +39,7 @@
       "pixelHeight": 941,
       "suggestedBand": 10,
       "use": "Soft guidance contrasted with a physical enforcement checkpoint and human decision.",
+      "description": "Handcrafted scene contrasting soft guidance with a lockable enforcement gate and a deliberate human decision.",
       "promptSummary": "Cinematic handcrafted diorama; suggestion cloud versus lockable gate; no labels, arrows, logos, or UI."
     }
   ]

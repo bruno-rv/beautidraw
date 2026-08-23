@@ -1,0 +1,19 @@
+{
+  "title": "Minimal deck",
+  "subtitle": "A valid structured frame",
+  "footer": "Source fixture",
+  "bands": [
+    {
+      "heading": "One structured frame",
+      "deck": "A small valid fixture for CLI and preflight tests",
+      "pattern": "flow",
+      "accent": "blue",
+      "nodes": [
+        {
+          "label": "Input",
+          "note": "A source value"
+        }
+      ]
+    }
+  ]
+}

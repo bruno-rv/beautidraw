@@ -8,8 +8,9 @@
 // decks use semantic `visual` declarations; the optional second argument is
 // only for legacy/manual image compositions.
 
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { collectDeckPreflightFailures, readJsonInput } from "./preflight.mjs";
+import { formatDiagnostic } from "./cli.mjs";
 
 const [, , specArg, compositionArg] = process.argv;
 if (!specArg || specArg === "--help" || specArg === "-h") {
@@ -20,13 +21,9 @@ if (!specArg || specArg === "--help" || specArg === "-h") {
 
 async function readJsonOrExit(path, what) {
   try {
-    return JSON.parse(await readFile(resolve(path), "utf8"));
+    return await readJsonInput(path, { label: what });
   } catch (e) {
-    if (e.code === "ENOENT") {
-      console.error(`AUDIT ABORTED — ${what} not found: ${resolve(path)}`);
-    } else {
-      console.error(`AUDIT ABORTED — ${what} is not valid JSON (${resolve(path)}): ${e.message}`);
-    }
+    console.error(formatDiagnostic(e));
     process.exit(1);
   }
 }
@@ -34,6 +31,15 @@ async function readJsonOrExit(path, what) {
 const spec = await readJsonOrExit(specArg, "deck spec");
 if (!spec || typeof spec !== "object" || Array.isArray(spec)) {
   console.error("AUDIT ABORTED — deck spec must be a JSON object");
+  process.exit(1);
+}
+const semanticFailures = collectDeckPreflightFailures(spec, {
+  specPath: specArg,
+  specDir: dirname(resolve(specArg)),
+});
+if (semanticFailures.length) {
+  console.error("PRESENTATION AUDIT FAILED");
+  for (const failure of semanticFailures) console.error(`- ${failure.field}: ${failure.reason}`);
   process.exit(1);
 }
 const composition = compositionArg ? await readJsonOrExit(compositionArg, "composition spec") : null;

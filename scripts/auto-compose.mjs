@@ -11,6 +11,8 @@ import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { BODY_INSET, PAGE_WIDTH } from "./layout.mjs";
+import { formatDiagnostic } from "./cli.mjs";
+import { preflightDeck, readJsonInput } from "./preflight.mjs";
 
 const exec = promisify(execFile);
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -23,7 +25,24 @@ if (!specArg || !outArg || specArg === "--help" || specArg === "-h") {
   process.exit(specArg === "--help" || specArg === "-h" ? 0 : 1);
 }
 
-const spec = JSON.parse(await readFile(resolve(specArg), "utf8"));
+let spec;
+try {
+  spec = await readJsonInput(specArg, { label: "deck spec" });
+} catch (error) {
+  console.error(formatDiagnostic(error));
+  process.exit(1);
+}
+const preflight = await preflightDeck({ specPath: specArg, spec });
+if (!preflight.ok) {
+  console.error(formatDiagnostic({
+    command: "auto-compose",
+    stage: "preflight",
+    input: specArg,
+    reason: preflight.failures.map((failure) => `${failure.field}: ${failure.reason}`).join("; "),
+    recovery: "Fix the deck spec and rerun composition.",
+  }));
+  process.exit(1);
+}
 const specDir = dirname(resolve(specArg));
 const outDir = resolve(outArg);
 const families = ["illustration", "orbit", "field", "spotlight", "constellation", "evidence", "matrix", "threshold", "map"];
@@ -398,6 +417,7 @@ async function illustration(meta) {
       file: imagePath,
       mode: "side",
       use: clean(meta.image.use, meta.caption),
+      description: clean(meta.image.description, ""),
       x,
       y,
       width,

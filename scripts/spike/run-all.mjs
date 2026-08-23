@@ -9,6 +9,11 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
+if (process.argv.includes("--help") || process.argv.includes("-h")) {
+  console.log("usage: node scripts/spike/run-all.mjs [--network]");
+  console.log("       runs the local probes, optionally including the network parity probe.");
+  process.exit(0);
+}
 const withNetwork = process.argv.includes("--network");
 
 const probes = (await readdir(here))

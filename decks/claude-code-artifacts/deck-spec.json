@@ -47,7 +47,8 @@
         "image": {
           "file": "assets/control-plane-hero.png",
           "side": "left",
-          "use": "Show a developer operating inside a repository-shaped environment surrounded by context, tools, controls, and state."
+          "use": "Show a developer operating inside a repository-shaped environment surrounded by context, tools, controls, and state.",
+          "description": "Paper-cut developer control room showing context, tools, trust, state, and extension sources around one working session."
         },
         "explanation": "Claude Code starts with built-in tools for reading, editing, searching, executing. The extension layer changes the loop at different points: some artifacts enter the prompt, some add tools, some isolate work, some run around tool calls.",
         "example": "Invoking a review skill adds its instructions to context; a subagent keeps the file reads separate and returns only a summary.",
@@ -275,7 +276,8 @@
         "image": {
           "file": "assets/monorepo-city.png",
           "side": "right",
-          "use": "Show a monorepo as a city whose shared root remains visible while the billing package gains local detail."
+          "use": "Show a monorepo as a city whose shared root remains visible while the billing package gains local detail.",
+          "description": "Top-down repository city whose illuminated billing district shows how path-scoped instructions narrow to one package."
         },
         "explanation": "At launch Claude Code walks upward from the working directory and concatenates every CLAUDE.md and CLAUDE.local.md it finds, ordered root toward the working directory, local files appended after shared ones. Descendant files join later, when Claude reads into that subtree.",
         "example": "Starting in repo/packages/billing loads repo and billing CLAUDE.md; starting at repo loads only the root until invoice.ts is read.",
@@ -367,7 +369,8 @@
         "image": {
           "file": "assets/settings-precedence-layers.png",
           "side": "left",
-          "use": "Show settings as translucent authoritative layers, with merged-array strands and a restrictive safety clamp as separate exception motifs."
+          "use": "Show settings as translucent authoritative layers, with merged-array strands and a restrictive safety clamp as separate exception motifs.",
+          "description": "Translucent configuration layers resolving into one value beside separate merge strands and a restrictive safety clamp."
         },
         "explanation": "For a scalar key, managed settings are read first, then command-line, local project, shared project, and user settings; the higher source supplies the value. The model is not uniform: most arrays concatenate across scopes, and security-sensitive keys honor restrictive lower values.",
         "example": "User settings enable spinner tips, project settings disable them: project wins. Several scopes adding permissions.allow combine rather than replace.",
@@ -518,7 +521,8 @@
         "image": {
           "file": "assets/trust-boundary.png",
           "side": "left",
-          "use": "Contrast a soft cloud of guidance with a physical enforcement checkpoint and a human decision between them."
+          "use": "Contrast a soft cloud of guidance with a physical enforcement checkpoint and a human decision between them.",
+          "description": "Handcrafted scene contrasting soft guidance with a lockable enforcement gate and a deliberate human decision."
         },
         "explanation": "Hooks are event-driven automation: a lifecycle event, a matcher, one or more handlers. PreToolUse runs after tool parameters exist but before the call processes, so it can allow, deny, ask, or defer. Permissions are the other deterministic layer.",
         "example": "A PreToolUse hook rejects destructive shell commands and returns the reason; a PostToolUse hook lints an edit and feeds the result back.",
