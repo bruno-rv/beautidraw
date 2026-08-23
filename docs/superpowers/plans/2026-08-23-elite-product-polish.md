@@ -294,6 +294,12 @@ git commit -m "feat: fail early with useful diagnostics"
 - Create: `scripts/build-receipt.mjs`
 - Create: `test/staging.test.mjs`
 - Create: `test/receipt.test.mjs`
+- Modify: `scripts/preflight.mjs`
+- Modify: `scripts/generate.mjs`
+- Modify: `scripts/audit-deck-spec.mjs`
+- Modify: `scripts/compose.mjs`
+- Modify: `scripts/spike/probe-09-mixed-lanes.mjs`
+- Modify: `test/preflight.test.mjs`
 
 **Interfaces:**
 - Consumes `CliError`, `runCli()`, and `preflightDeck()` from Task 1.
@@ -301,6 +307,38 @@ git commit -m "feat: fail early with useful diagnostics"
   `collectBuildReceipt()`, and `formatBuildReceipt()`.
 - Task 3 integrates these pure modules only after `outline.md` and the complete
   manifest contract exist.
+
+- [ ] **Step 0: Resolve the carried manual-composition preflight ruling**
+
+Task 1's five-round breaker left one real load-bearing regression: automatic
+semantic validation was applied to the established manual-composition path.
+Split the contract without weakening either mode:
+
+```js
+export async function preflightDeck({
+  specPath,
+  spec,
+  mode = "automatic", // "automatic" | "core"
+} = {}) {}
+```
+
+`core` validates deck shape, content budgets, and any semantic assets that are
+actually declared, but permits a canvas band with no `visual` because a manual
+composition spec supplies it later. `automatic` additionally requires the
+semantic `visual` contract for every canvas band. `generate.mjs` uses `core`;
+`build-deck` and `auto-compose` use `automatic`; audit uses `automatic` without
+a manual composition path and `core` plus composition validation when one is
+provided. Manual composition images still require distinct `use` and
+`description` values.
+
+Write RED tests proving a manual canvas without `visual` passes core preflight
+but fails automatic preflight. Add descriptions to the manual image entries in
+`probe-09-mixed-lanes.mjs`, then require both of these gates before continuing:
+
+```sh
+node scripts/spike/probe-09-mixed-lanes.mjs
+pnpm spike
+```
 
 - [ ] **Step 1: Write failing rollback and receipt tests**
 
@@ -386,7 +424,10 @@ Run `node --test test/staging.test.mjs test/receipt.test.mjs` and
 
 ```sh
 git add scripts/staging.mjs scripts/build-receipt.mjs \
-  test/staging.test.mjs test/receipt.test.mjs
+  test/staging.test.mjs test/receipt.test.mjs \
+  scripts/preflight.mjs scripts/generate.mjs scripts/audit-deck-spec.mjs \
+  scripts/compose.mjs scripts/spike/probe-09-mixed-lanes.mjs \
+  test/preflight.test.mjs
 git commit -m "feat: add rollback-safe build staging"
 ```
 
@@ -403,6 +444,7 @@ git commit -m "feat: add rollback-safe build staging"
 - Modify: `scripts/auto-compose.mjs`
 - Modify: `scripts/compose.mjs`
 - Modify: `scripts/layout.mjs`
+- Modify: `scripts/generate.mjs`
 - Modify: `scripts/build-deck.mjs`
 - Modify: `scripts/LAYOUT-CONTRACT.md`
 - Modify: `references/deck-spec.md`
@@ -468,7 +510,13 @@ export function buildOverview(spec) {
 
 Render the overview into the existing unframed opening block, include its text
 in font requirements and bounds checks, and mirror it in the outline. Frame and
-band counts stay unchanged.
+band counts stay unchanged. `layoutDeck()` emits stable IDs
+`deck-overview-map`, `deck-overview-navigation`, and
+`deck-overview-small-screen`. The map begins below the existing subtitle,
+stays within `[PAGE_X + MARGIN, PAGE_X + PAGE_WIDTH - MARGIN]`, and pushes the
+first frame down rather than overlapping it. `generate.mjs` includes the three
+IDs in browser bounds/legibility diagnostics and tests assert they precede the
+first frame.
 
 - [ ] **Step 3: Make text roles explicit and measured**
 
@@ -554,7 +602,8 @@ git diff --check
 ```sh
 git add scripts/outline.mjs scripts/audit-deck-spec.mjs \
   scripts/auto-compose.mjs scripts/compose.mjs scripts/layout.mjs \
-  scripts/build-deck.mjs scripts/LAYOUT-CONTRACT.md references/deck-spec.md \
+  scripts/generate.mjs scripts/build-deck.mjs scripts/LAYOUT-CONTRACT.md \
+  references/deck-spec.md \
   references/semantic-visuals.md references/visual-system.md \
   test/outline.test.mjs test/semantic-visuals.test.mjs \
   test/build-recovery.test.mjs
@@ -567,6 +616,7 @@ git commit -m "feat: emit accessible semantic learning output"
 
 **Files:**
 - Create: `test/harness.browser.test.mjs`
+- Create: `test/fixtures/editor-fidelity-deck.json`
 - Create: `scripts/spike/probe-10-editor-fidelity.mjs`
 - Modify: `scripts/harness.html`
 - Modify: `scripts/harness-runner.mjs`
@@ -590,6 +640,11 @@ git commit -m "feat: emit accessible semantic learning output"
 Test loading -> ready/error visibility, status live semantics, main-menu name,
 keyboard traversal, image readiness, frame navigation cue, fit-frame effective
 text >=12 px, and no text/image clipping at 1600x900 and 1280x800.
+
+`test/harness.browser.test.mjs` reads
+`test/fixtures/editor-fidelity-deck.json`, a checked-in one-frame scene with
+prose text, mono text, a bound label, and one embedded 1x1 red PNG. The `deck`
+variable below is that parsed fixture, not an ambient global.
 
 ```js
 for (const viewport of [
@@ -622,13 +677,29 @@ status UI, APIs, parameterized viewport, and clipping.
 and recovery. The main menu trigger receives an accessible name without
 patching the vendored bundle.
 
+`__bdLoadScene()` catches restore, file-load, decode, timeout, and fidelity
+errors and returns:
+
+```js
+{
+  state: "error",
+  error: {
+    reason: "Image red did not render before the 2000ms deadline.",
+    recovery: "Verify the embedded data URL and rebuild the deck.",
+  },
+}
+```
+
+The browser test supplies one invalid image fixture, asserts this exact shape,
+and verifies the visible `role="alert"` text plus keyboard-reachable recovery.
+
 - [ ] **Step 3: Add the deterministic scene/image readiness API**
 
 ```js
 window.__bdLoadScene = async scene => {
-  window.__bdEditor.addFiles(Object.values(scene.files || {}));
   const elements = window.__bdApi.restoreElements(scene.elements, null);
   window.__bdEditor.updateScene({ elements, appState: scene.appState });
+  window.__bdEditor.addFiles(Object.values(scene.files || {}));
   await window.__bdWaitForImages(
     scene.files || {},
     elements.filter(element => element.type === "image"),
@@ -704,7 +775,8 @@ No screenshot assertion may run before `__bdLoadScene()` reports ready.
 git add scripts/harness.html scripts/harness-runner.mjs \
   scripts/vendor-entry.js scripts/auto-compose.mjs scripts/compose.mjs \
   scripts/spike/run-all.mjs scripts/spike/probe-10-editor-fidelity.mjs \
-  scripts/LAYOUT-CONTRACT.md test/harness.browser.test.mjs
+  scripts/LAYOUT-CONTRACT.md test/harness.browser.test.mjs \
+  test/fixtures/editor-fidelity-deck.json
 git commit -m "fix: make editor output readable and deterministic"
 ```
 
@@ -1099,8 +1171,20 @@ module failure.
 - [ ] **Step 2: Implement the benchmark command**
 
 `node scripts/benchmark.mjs <spec> --samples 3 --warmups 1 --output <path>`
-runs setup no-op, audit, generation, composition, full build, and offline
-probes. It records OS, CPU, physical memory, Node, pnpm, Excalidraw version,
+runs these exact stage commands in isolated directories:
+
+```text
+setup:       node scripts/setup.mjs
+audit:       node scripts/audit-deck-spec.mjs <spec>
+generation:  node scripts/generate.mjs <spec> <sample>/generate
+composition: node scripts/auto-compose.mjs <spec> <sample>/generate
+fullBuild:   node scripts/build-deck.mjs <spec> <sample>/build
+offline:     node scripts/spike/run-all.mjs
+```
+
+Generation completes before the composition sample in the same sample root;
+full build uses a separate empty sibling. It records OS, CPU, physical memory,
+Node, pnpm, Excalidraw version,
 stage command, warmup count, three wall-time samples, median time, per-sample
 maximum RSS from `/usr/bin/time -l`, maximum RSS, and artifact bytes. On a
 non-Darwin host it exits with a concise unsupported-measurement diagnostic
@@ -1110,6 +1194,12 @@ Every warmup and measured sample receives its own `mkdtemp()` output directory.
 The benchmark asserts the directory is initially empty, never reuses it, and
 removes it in `finally`. Unit tests inject the temp-directory factory and prove
 unique paths plus cleanup after both success and failure.
+
+Tests require sample arrays and median/maximum summaries for all six stages,
+artifact-byte samples for generation/composition/full build, and explicit
+guardrail failures. The 2.2-second composition budget is the reference Claude
+deck's 13 canvas bands; reports record `canvasBandCount`, and every deck with
+13 or fewer canvas bands must meet that ceiling.
 
 - [ ] **Step 3: Prove the live parity gate and its negative controls**
 
@@ -1150,6 +1240,16 @@ repin around it.
 Write three benchmark reports under the plan's SDD workspace. Require three
 samples after one warmup for each deck. Compare medians and maximum RSS/artifact
 bytes against the Global Constraints; a breach is a task failure, not a note.
+
+Use these exact ignored evidence paths:
+
+```text
+.superpowers/sdd/2026-08-23-elite-product-polish/evidence/task-9-claude-benchmark.json
+.superpowers/sdd/2026-08-23-elite-product-polish/evidence/task-9-llm-benchmark.json
+.superpowers/sdd/2026-08-23-elite-product-polish/evidence/task-9-rag-benchmark.json
+.superpowers/sdd/2026-08-23-elite-product-polish/evidence/task-9-viewer-parity-baseline.json
+.superpowers/sdd/2026-08-23-elite-product-polish/evidence/task-9-viewer-parity-final.json
+```
 
 - [ ] **Step 5: Run focused verification and commit**
 
