@@ -66,3 +66,14 @@ test("normal diagnostics bound reason and recovery text", () => {
   assert.ok(message.length < 1_000);
   assert.equal(message.includes(huge), false);
 });
+
+test("normal diagnostics remove raw stack frames", () => {
+  const message = formatDiagnostic(new CliError({
+    command: "example",
+    stage: "runtime",
+    reason: "browser failed\n    at page.evaluate (file:///tmp/engine.mjs:10:2)\n    at async run (file:///tmp/cli.mjs:20:1)",
+    recovery: "Retry the command.",
+  }));
+  assert.match(message, /browser failed/);
+  assert.doesNotMatch(message, /\bat .*\.mjs:/);
+});

@@ -30,11 +30,14 @@ test("public entry points provide concrete help without a stack", () => {
   }
 });
 
-test("invalid deck input fails before browser work without a raw stack", () => {
+test("invalid deck input fails before browser work without a raw stack", async () => {
+  const tempRoot = await mkdtemp(resolve(tmpdir(), "beautidraw-entrypoint-"));
+  const missing = resolve(tempRoot, "missing.json");
+  const outputDir = resolve(tempRoot, "out");
   for (const script of ["scripts/audit-deck-spec.mjs", "scripts/generate.mjs", "scripts/auto-compose.mjs", "scripts/build-deck.mjs"]) {
     const args = script.endsWith("generate.mjs") || script.endsWith("auto-compose.mjs") || script.endsWith("build-deck.mjs")
-      ? ["/tmp/beautidraw-missing.json", "/tmp/beautidraw-out"]
-      : ["/tmp/beautidraw-missing.json"];
+      ? [missing, outputDir]
+      : [missing];
     const result = spawnSync(process.execPath, [resolve(root, script), ...args], {
       cwd: root,
       encoding: "utf8",
@@ -43,6 +46,30 @@ test("invalid deck input fails before browser work without a raw stack", () => {
     assert.notEqual(result.status, 0, `${script} unexpectedly passed`);
     assert.match(output, /preflight|not found|does not exist/i);
     assert.doesNotMatch(output, /at .*\.mjs:/, `${script} printed a raw stack: ${output}`);
+  }
+});
+
+test("help stays available when heavy dependencies are blocked", async () => {
+  const tempRoot = await mkdtemp(resolve(tmpdir(), "beautidraw-loader-"));
+  const loader = resolve(tempRoot, "block-heavy.mjs");
+  await writeFile(loader, `export async function resolve(specifier, context, nextResolve) {
+  if (specifier === "esbuild" || specifier === "playwright") throw new Error("blocked heavy dependency");
+  return nextResolve(specifier, context);
+}\n`);
+  const env = {
+    ...process.env,
+    NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --experimental-loader=${loader}`.trim(),
+  };
+  for (const script of ["scripts/generate.mjs", "scripts/compose.mjs", "scripts/build-bundle.mjs"]) {
+    const result = spawnSync(process.execPath, [resolve(root, script), "--help"], {
+      cwd: root,
+      env,
+      encoding: "utf8",
+    });
+    const output = `${result.stdout}${result.stderr}`;
+    assert.equal(result.status, 0, `${script}: ${output}`);
+    assert.match(output, /usage:/i);
+    assert.doesNotMatch(output, /blocked heavy dependency|at .*\.mjs:/);
   }
 });
 

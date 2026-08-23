@@ -4,7 +4,6 @@
 // The bundle hash is part of oracle_hash, so this script also
 // writes a manifest recording exactly what went in.
 
-import { build } from "esbuild";
 import { createHash } from "node:crypto";
 import { cp, mkdir, readdir, readFile, writeFile, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -16,6 +15,7 @@ import { runCli } from "./cli.mjs";
 
 const usage = "usage: node scripts/build-bundle.mjs\n       builds the offline Excalidraw bundle and records its manifest.";
 const status = await runCli("build-bundle", async () => {
+const { build } = await import("esbuild");
 
 const require = createRequire(import.meta.url);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");

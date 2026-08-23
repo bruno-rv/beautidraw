@@ -11,7 +11,6 @@
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { withHarness } from "./harness-runner.mjs";
 import { BODY_INSET, DECK_BODY_GAP, FRAME_PAD_BOTTOM, PAGE_WIDTH, USABLE_H, USABLE_W } from "./layout.mjs";
 import { runCli } from "./cli.mjs";
 import { readJsonInput } from "./preflight.mjs";
@@ -34,6 +33,7 @@ const diagnostics = await readJsonOrExit(resolve(dirname(deckPath), "diagnostics
 if (!Array.isArray(spec.bands) || spec.bands.length === 0) {
   throw new Error("composition-spec.bands must be a non-empty array");
 }
+const { withHarness } = await import("./harness-runner.mjs");
 
 const canvasBands = new Set(
   (diagnostics.diagnostics?.bands ?? [])

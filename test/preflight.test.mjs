@@ -25,6 +25,15 @@ test("preflight accepts a minimal valid structured deck", async () => {
   assert.deepEqual(result.failures, []);
 });
 
+test("top-level malformed bands return structured failures", async () => {
+  for (const spec of [{}, 42, { bands: "not-an-array" }]) {
+    const result = await preflightDeck({ spec });
+    assert.equal(result.ok, false);
+    assert.ok(result.failures.length > 0);
+    assert.equal(result.failures[0].stage, "preflight");
+  }
+});
+
 test("non-object bands fail with a field path", () => {
   const failures = collectDeckPreflightFailures({ ...valid(), bands: [null] });
   assert.equal(failures[0].stage, "preflight");
@@ -66,6 +75,67 @@ test("truncated PNG and missing image description are reported", async () => {
   assert.equal(result.ok, false);
   assert.match(result.failures.map(({ reason }) => reason).join("\n"), /visual\.image\.description/);
   assert.match(result.failures.map(({ reason }) => reason).join("\n"), /truncated|IHDR/);
+});
+
+test("missing semantic image use is reported independently", async () => {
+  const root = await mkdtemp(join(tmpdir(), "beautidraw-preflight-"));
+  const png = Buffer.alloc(33);
+  Buffer.from("89504e470d0a1a0a", "hex").copy(png);
+  png.writeUInt32BE(13, 8);
+  png.write("IHDR", 12, "ascii");
+  png.writeUInt32BE(1, 16);
+  png.writeUInt32BE(1, 20);
+  await writeFile(join(root, "broken.png"), png);
+  const spec = valid();
+  spec.bands[0] = {
+    heading: "Illustration",
+    deck: "Needs a semantic image",
+    pattern: "canvas",
+    accent: "blue",
+    height: 780,
+    visual: {
+      family: "illustration",
+      image: { file: "broken.png", description: "Describe the scene" },
+    },
+  };
+  const result = await preflightDeck({ specPath: join(root, "deck.json"), spec });
+  assert.match(result.failures.map(({ reason }) => reason).join("\n"), /visual\.image\.use/);
+});
+
+test("a 29-byte IHDR prefix is still a truncated PNG", async () => {
+  const root = await mkdtemp(join(tmpdir(), "beautidraw-preflight-"));
+  const png = Buffer.alloc(29);
+  Buffer.from("89504e470d0a1a0a", "hex").copy(png);
+  png.writeUInt32BE(13, 8);
+  png.write("IHDR", 12, "ascii");
+  png.writeUInt32BE(1, 16);
+  png.writeUInt32BE(1, 20);
+  await writeFile(join(root, "truncated.png"), png);
+  const spec = valid();
+  spec.bands[0] = {
+    heading: "Illustration",
+    deck: "Needs a semantic image",
+    pattern: "canvas",
+    accent: "blue",
+    height: 780,
+    visual: {
+      family: "illustration",
+      image: { file: "truncated.png", use: "Use the scene", description: "Describe the scene" },
+    },
+  };
+  const result = await preflightDeck({ specPath: join(root, "deck.json"), spec });
+  assert.equal(result.ok, false);
+  assert.match(result.failures.map(({ reason }) => reason).join("\n"), /truncated|IHDR/);
+});
+
+test("malformed JSON is a preflight failure without a stack", async () => {
+  const root = await mkdtemp(join(tmpdir(), "beautidraw-preflight-"));
+  const path = join(root, "malformed.json");
+  await writeFile(path, '{ "bands": [ }');
+  const result = await preflightDeck({ specPath: path });
+  assert.equal(result.ok, false);
+  assert.match(result.failures[0].reason, /valid JSON/);
+  assert.doesNotMatch(result.failures[0].reason, /\bat .*\.mjs:/);
 });
 
 test("content budgets report measured values without echoing large input", () => {

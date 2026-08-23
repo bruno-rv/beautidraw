@@ -185,7 +185,8 @@ export function collectDeckPreflightFailures(spec, { specPath, specDir } = {}) {
 async function collectAssetFailures(spec, { specPath, specDir } = {}) {
   const failures = [];
   const root = resolve(specDir ?? (specPath ? dirname(resolve(specPath)) : process.cwd()));
-  for (const [index, band] of (spec?.bands ?? []).entries()) {
+  const bands = Array.isArray(spec?.bands) ? spec.bands : [];
+  for (const [index, band] of bands.entries()) {
     const image = band?.visual?.image;
     if (!image || typeof image.file !== "string" || image.file.trim() === "") continue;
     const field = `bands[${index}].visual.image.file`;
@@ -195,14 +196,46 @@ async function collectAssetFailures(spec, { specPath, specDir } = {}) {
     try {
       await access(file, constants.R_OK);
       const bytes = await readFile(file);
-      if (bytes.length < 24 || bytes.subarray(0, 8).toString("hex") !== PNG_SIGNATURE) {
+      if (bytes.length < 33 || bytes.subarray(0, 8).toString("hex") !== PNG_SIGNATURE) {
         failures.push(failure(field, `${field} must be a readable PNG with an IHDR header`, { specPath }));
         continue;
       }
       const ihdrLength = bytes.readUInt32BE(8);
       const ihdrType = bytes.subarray(12, 16).toString("ascii");
-      if (ihdrLength < 13 || ihdrType !== "IHDR" || bytes.length < 29) {
+      if (ihdrLength !== 13 || ihdrType !== "IHDR") {
         failures.push(failure(field, `${field} PNG is truncated or missing its IHDR header`, { specPath }));
+        continue;
+      }
+      let offset = 8;
+      let sawIhdr = false;
+      let sawIend = false;
+      let malformed = false;
+      while (offset < bytes.length) {
+        if (bytes.length - offset < 12) {
+          malformed = true;
+          break;
+        }
+        const chunkLength = bytes.readUInt32BE(offset);
+        const chunkType = bytes.subarray(offset + 4, offset + 8).toString("ascii");
+        const chunkEnd = offset + 12 + chunkLength;
+        if (chunkEnd > bytes.length) {
+          malformed = true;
+          break;
+        }
+        if (offset === 8 && (chunkType !== "IHDR" || chunkLength !== 13)) {
+          malformed = true;
+          break;
+        }
+        if (chunkType === "IHDR") sawIhdr = true;
+        if (chunkType === "IEND") {
+          if (chunkLength !== 0 || chunkEnd !== bytes.length) malformed = true;
+          sawIend = true;
+          break;
+        }
+        offset = chunkEnd;
+      }
+      if (malformed || !sawIhdr || !sawIend) {
+        failures.push(failure(field, `${field} PNG is truncated or has invalid chunk boundaries`, { specPath }));
         continue;
       }
       const width = bytes.readUInt32BE(16);

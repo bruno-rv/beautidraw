@@ -84,8 +84,25 @@ function safeInput(input) {
 
 function safeDiagnosticText(value) {
   if (value == null) return "";
-  const text = String(value);
+  const text = String(value)
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*at\s+/.test(line))
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
   return text.length > 240 ? `${text.slice(0, 237)}...` : text;
+}
+
+export function sanitizeDiagnosticPayload(value, { debug = false } = {}) {
+  if (debug || value == null) return value;
+  if (typeof value === "string") return safeDiagnosticText(value);
+  if (Array.isArray(value)) return value.map((item) => sanitizeDiagnosticPayload(item, { debug }));
+  if (typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, sanitizeDiagnosticPayload(item, { debug })]),
+    );
+  }
+  return value;
 }
 
 export function formatDiagnostic(error, { debug = false, command } = {}) {

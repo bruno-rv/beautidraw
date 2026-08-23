@@ -12,8 +12,7 @@
 
 import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { withHarness } from "./harness-runner.mjs";
-import { CliError, runCli } from "./cli.mjs";
+import { CliError, runCli, sanitizeDiagnosticPayload } from "./cli.mjs";
 import { preflightDeck, readJsonInput } from "./preflight.mjs";
 import {
   BAND_HEIGHT_CAP,
@@ -27,14 +26,14 @@ import {
 
 const usage = "usage: node scripts/generate.mjs <spec.json> <outdir>\n       runs the deterministic base layout in the harness and writes\n       deck.excalidraw, band PNGs, scene.png, and diagnostics.json.";
 const status = await runCli("generate", async ({ values }) => {
-const { specPath, outDirArg } = values;
+const { specPath, outDirArg, debug } = values;
 const EPSILON = 0.08 * PAGE_WIDTH; // edge-coverage tolerance, LAYOUT-CONTRACT.md §Deliverables
 
 async function writeDiagnosticsAndExit(outDir, diagnostics, message) {
   await mkdir(outDir, { recursive: true });
   await writeFile(
     resolve(outDir, "diagnostics.json"),
-    JSON.stringify(diagnostics, null, 2) + "\n",
+    JSON.stringify(sanitizeDiagnosticPayload(diagnostics, { debug }), null, 2) + "\n",
   );
   throw new CliError({
     command: "generate",
@@ -315,6 +314,7 @@ if (!preflight.ok) {
     recovery: "Fix the deck spec and rerun generation.",
   });
 }
+const { withHarness } = await import("./harness-runner.mjs");
 
 // Pure validation + font corpus, before the harness even boots.
 let fontReq;

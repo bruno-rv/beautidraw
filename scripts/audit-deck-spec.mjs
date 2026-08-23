@@ -9,7 +9,7 @@
 // only for legacy/manual image compositions.
 
 import { dirname, resolve } from "node:path";
-import { collectDeckPreflightFailures, readJsonInput } from "./preflight.mjs";
+import { CONTENT_BUDGETS, collectDeckPreflightFailures, readJsonInput } from "./preflight.mjs";
 import { CliError, runCli } from "./cli.mjs";
 
 const usage = "usage: node scripts/audit-deck-spec.mjs <deck-spec.json> [composition-spec.json]\n       presentation-quality gate: composition budget, band depth, family variety.";
@@ -131,20 +131,18 @@ if (bands.length >= 8) {
   // characters because that is what wraps: every canvas family renders
   // explanation + "Example:" + "Boundary:" inside its footer column — six
   // ~100-character lines for most families, ten ~57-character lines in the
-  // illustration family's text column — the thesis renders as one
-  // ~120-character line, and the inspect command renders inside two
-  // ~46-character lines after its "Inspect: " prefix (~84 characters of
-  // command). The renderer ellipsizes past those budgets; a deck that
+  // illustration family's text column — the thesis renders as one line,
+  // and the inspect command renders inside two lines after its "Inspect: "
+  // prefix. The renderer ellipsizes past those shared budgets; a deck that
   // silently drops its own mechanism, boundary, or ships an untypeable
   // command is worse than one that fails here.
-  const CAPS = { footer: 560, thesis: 120, inspect: 84 };
   for (const [index, band] of bands.entries()) {
     const visual = band.visual;
     if (!visual) continue;
     const chars = (value) => String(value ?? "").trim().length;
-    if (chars(visual.thesis) > CAPS.thesis) {
+    if (chars(visual.thesis) > CONTENT_BUDGETS.thesisChars) {
       failures.push(
-        `canvas band ${index + 1}: visual.thesis is ${chars(visual.thesis)} characters; it renders as ONE line of at most ${CAPS.thesis}`,
+        `canvas band ${index + 1}: visual.thesis is ${chars(visual.thesis)} characters; it renders as ONE line of at most ${CONTENT_BUDGETS.thesisChars}`,
       );
     }
     const footerChars =
@@ -152,15 +150,15 @@ if (bands.length >= 8) {
       (visual.example ? chars(visual.example) + 9 : 0) +
       (visual.tradeoff ? chars(visual.tradeoff) + 11 : 0) +
       Math.min((visual.evidence ?? []).length, 1) * ((visual.evidence ?? [])[0] ? chars(visual.evidence[0]) + 10 : 0);
-    if (footerChars > CAPS.footer) {
+    if (footerChars > CONTENT_BUDGETS.footerChars) {
       failures.push(
-        `canvas band ${index + 1}: explanation + example + boundary total ${footerChars} characters; the rendered column holds ~${CAPS.footer} — split the mechanism across bands instead`,
+        `canvas band ${index + 1}: explanation + example + boundary total ${footerChars} characters; the rendered column holds ~${CONTENT_BUDGETS.footerChars} — split the mechanism across bands instead`,
       );
     }
     const inspectChars = chars(visual.inspect);
-    if (inspectChars > CAPS.inspect) {
+    if (inspectChars > CONTENT_BUDGETS.inspectChars) {
       failures.push(
-        `canvas band ${index + 1}: visual.inspect is ${inspectChars} characters; keep it to ${CAPS.inspect} so the rendered "Inspect:" command stays typeable`,
+        `canvas band ${index + 1}: visual.inspect is ${inspectChars} characters; keep it to ${CONTENT_BUDGETS.inspectChars} so the rendered "Inspect:" command stays typeable`,
       );
     }
   }
@@ -188,9 +186,9 @@ for (const [index, band] of bands.entries()) {
   if (visual) {
     // The composer wraps the explanation at six lines (~105 characters each,
     // ~945 characters total) and ellipsizes past that; a rendered deck that
-    // silently drops its own mechanism is worse than one that fails here. 140
-    // words ≈ the composer's capacity with margin.
-    if (words(visual.explanation) > 140) {
+    // silently drops its own mechanism is worse than one that fails here.
+    // The shared word budget is tuned to the composer's capacity with margin.
+    if (words(visual.explanation) > CONTENT_BUDGETS.explanationWords) {
       failures.push(
         `canvas band ${index + 1}: visual.explanation is ${words(visual.explanation)} words; the renderer truncates past ~130 — split the mechanism across bands instead`,
       );
