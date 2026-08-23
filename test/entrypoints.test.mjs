@@ -143,6 +143,51 @@ test("build-deck propagates debug to child diagnostics only when requested", asy
   assert.match(debugOutput, /\bat .*audit-deck-spec\.mjs:/);
 });
 
+test("spike bounds probe failures and preserves child detail only in debug mode", async () => {
+  const tempRoot = await mkdtemp(resolve(tmpdir(), "beautidraw-spike-debug-"));
+  const loader = resolve(tempRoot, "probe-failure-loader.mjs");
+  const probeDir = pathToFileURL(resolve(root, "scripts/spike")).href;
+  await writeFile(loader, `const probeDir = ${JSON.stringify(`${probeDir}/probe-`)};
+const success = encodeURIComponent('console.error("synthetic probe success");');
+export async function resolve(specifier, context, nextResolve) {
+  if (specifier.startsWith(probeDir)) {
+    if (specifier === ${JSON.stringify(`${probeDir}/probe-01-api.mjs`)}) {
+      throw new Error("synthetic probe import failure");
+    }
+    return { url: \`data:text/javascript,\${success}\`, shortCircuit: true };
+  }
+  return nextResolve(specifier, context);
+}
+`);
+  const env = {
+    ...process.env,
+    NODE_NO_WARNINGS: "1",
+    NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --experimental-loader=${loader}`.trim(),
+  };
+  const run = (args) => spawnSync(process.execPath, [resolve(root, "scripts/spike/run-all.mjs"), ...args], {
+    cwd: root,
+    env,
+    encoding: "utf8",
+  });
+
+  const normal = run([]);
+  const normalOutput = `${normal.stdout}${normal.stderr}`;
+  assert.notEqual(normal.status, 0, normalOutput);
+  assert.match(normalOutput, /stage: probe/);
+  assert.match(normalOutput, /probe-01-api\.mjs/);
+  assert.match(normalOutput, /synthetic probe import failure/);
+  assert.match(normalOutput, /synthetic probe success/);
+  assert.match(normalOutput, /=== spike summary ===/);
+  assert.doesNotMatch(normalOutput, /\bat .*\.mjs:/);
+  assert.ok(normalOutput.length < 10000, `normal diagnostics were unbounded: ${normalOutput.length}`);
+
+  const debug = run(["--debug"]);
+  const debugOutput = `${debug.stdout}${debug.stderr}`;
+  assert.notEqual(debug.status, 0, debugOutput);
+  assert.match(debugOutput, /synthetic probe import failure/);
+  assert.match(debugOutput, /\bat .*probe-failure-loader\.mjs:/);
+});
+
 test("audit and compose route invalid input through shared diagnostics", async () => {
   const rootDir = await mkdtemp(resolve(tmpdir(), "beautidraw-entrypoint-"));
   const invalidSpecPath = resolve(rootDir, "invalid.json");
