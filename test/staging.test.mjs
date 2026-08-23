@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { access, mkdir, readFile, symlink, writeFile } from "node:fs/promises";
+import { access, lstat, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { mkdtemp } from "node:fs/promises";
@@ -32,6 +32,28 @@ test("failed build preserves the previous output and removes its stage", async (
   assert.equal(await pathExists(join(outDir, "partial.txt")), false);
   const siblings = await (await import("node:fs/promises")).readdir(dirname(resolve(outDir)));
   assert.equal(siblings.some((name) => name.includes("stage-")), false);
+});
+
+test("failed build removes a broken stage symlink without masking the build error", async () => {
+  const root = await mkdtemp(join(tmpdir(), "beautidraw-staging-"));
+  const outDir = join(root, "out");
+  let stagePath;
+
+  await assert.rejects(
+    () => withStagedOutput(outDir, async (stageDir) => {
+      stagePath = stageDir;
+      await rm(stageDir, { recursive: true, force: true });
+      await symlink(join(root, "missing-stage-target"), stageDir, "dir");
+      throw new Error("build failed");
+    }),
+    (error) => {
+      assert.equal(error.message, "build failed");
+      assert.equal(error.cleanupError, undefined);
+      return true;
+    },
+  );
+
+  await assert.rejects(() => lstat(stagePath), { code: "ENOENT" });
 });
 
 test("successful build publishes the complete stage and removes the stage", async () => {

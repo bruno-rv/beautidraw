@@ -126,7 +126,7 @@ export async function withStagedOutput(outDir, build, io = {}) {
   } catch (error) {
     let cleanupError;
     try {
-      if (await exists(stage, fs)) await remove(stage, fs);
+      await remove(stage, fs);
     } catch (error) {
       cleanupError = error;
     }
