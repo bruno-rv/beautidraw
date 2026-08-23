@@ -16,16 +16,12 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { formatDiagnostic } from "./cli.mjs";
+import { CliError, runCli } from "./cli.mjs";
 import { preflightDeck } from "./preflight.mjs";
 
-const [, , specArg, outArg] = process.argv;
-if (!specArg || !outArg || specArg === "--help" || specArg === "-h") {
-  console.error("usage: node scripts/build-deck.mjs <deck-spec.json> <outdir>");
-  console.error("       audits the spec, lays out every band, composes canvas visuals,");
-  console.error("       and writes deck.excalidraw plus band/scene PNGs into <outdir>.");
-  process.exit(specArg === "--help" || specArg === "-h" ? 0 : 1);
-}
+const usage = "usage: node scripts/build-deck.mjs <deck-spec.json> <outdir>\n       audits the spec, lays out every band, composes canvas visuals,\n       and writes deck.excalidraw plus band/scene PNGs into <outdir>.";
+const status = await runCli("build-deck", async ({ values }) => {
+const { specArg, outArg } = values;
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const node = process.execPath;
@@ -33,29 +29,31 @@ const spec = resolve(specArg);
 const out = resolve(outArg);
 
 if (!existsSync(spec)) {
-  console.error(formatDiagnostic({
+  throw new CliError({
     command: "build-deck",
     stage: "preflight",
     input: spec,
     reason: "deck spec file does not exist",
     recovery: "Pass an existing deck-spec.json path.",
-  }));
-  process.exit(1);
+  });
 }
 const preflight = await preflightDeck({ specPath: spec });
 if (!preflight.ok) {
-  console.error(formatDiagnostic({
+  throw new CliError({
     command: "build-deck",
     stage: "preflight",
     input: spec,
     reason: preflight.failures.map((failure) => `${failure.field}: ${failure.reason}`).join("; "),
     recovery: "Fix the deck spec and rerun the build.",
-  }));
-  process.exit(1);
+  });
 }
 if (!existsSync(resolve(ROOT, "node_modules", "playwright", "package.json"))) {
-  console.error(`build-deck: dependencies are missing — run: node ${resolve(ROOT, "scripts/setup.mjs")}`);
-  process.exit(1);
+  throw new CliError({
+    command: "build-deck",
+    stage: "setup",
+    reason: "dependencies are missing",
+    recovery: `Run node ${resolve(ROOT, "scripts/setup.mjs")} and retry the build.`,
+  });
 }
 
 // Idempotent; provisions deps/Chromium/bundle before any stage needs them.
@@ -71,13 +69,26 @@ const stages = [
 for (const [name, args] of stages) {
   const result = spawnSync(node, args, { stdio: "inherit" });
   if (result.error) {
-    console.error(`build-deck: ${name} could not run: ${result.error.message}`);
-    process.exit(1);
+    throw new CliError({
+      command: "build-deck",
+      stage: name,
+      reason: "stage could not run",
+      recovery: "Check the stage dependencies and rerun the build with --debug for details.",
+      cause: result.error,
+    });
   }
   if (result.status !== 0) {
-    console.error(`build-deck: stopped at ${name}; the report above explains why. Nothing further was built.`);
-    process.exit(result.status ?? 1);
+    throw new CliError({
+      command: "build-deck",
+      stage: name,
+      reason: `stage exited with status ${result.status ?? 1}`,
+      recovery: "Fix the stage failure reported above and rerun the build.",
+    });
   }
 }
 
 console.error(`BUILD DECK OK — ${out}`);
+return 0;
+}, { argv: process.argv.slice(2), usage, positional: ["specArg", "outArg"] });
+
+process.exitCode = status;

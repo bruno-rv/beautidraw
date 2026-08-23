@@ -88,3 +88,11 @@ test("content budgets report measured values without echoing large input", () =>
   assert.match(message, /callout note.*181/);
   assert.equal(message.includes(hugeHeading), false);
 });
+
+test("malformed visual callouts produce structured failures", () => {
+  const spec = valid();
+  spec.bands[0].visual = { callouts: "not-an-array" };
+  assert.doesNotThrow(() => collectDeckPreflightFailures(spec));
+  const failures = collectDeckPreflightFailures(spec);
+  assert.match(failures.map(({ field, reason }) => `${field}: ${reason}`).join("\n"), /callouts/);
+});

@@ -45,7 +45,7 @@ export async function readJsonInput(path, { label = "JSON input" } = {}) {
         stage: "preflight",
         input: path,
         reason: `${label} is not valid JSON`,
-        recovery: `Fix the JSON syntax in ${path}.`,
+        recovery: `Fix the JSON syntax in the supplied ${label.toLowerCase()} path.`,
         cause,
       });
     }
@@ -163,7 +163,10 @@ export function collectDeckPreflightFailures(spec, { specPath, specDir } = {}) {
     if (footerParts > CONTENT_BUDGETS.footerChars) {
       failures.push(failure(`bands[${index}].visual`, `visual footer content is ${footerParts} characters; rendered column holds approximately ${CONTENT_BUDGETS.footerChars}`, { specPath }));
     }
-    for (const [calloutIndex, callout] of (visual.callouts ?? []).entries()) {
+    if (visual.callouts !== undefined && !Array.isArray(visual.callouts)) {
+      failures.push(failure(`bands[${index}].visual.callouts`, `visual.callouts must be an array`, { specPath }));
+    }
+    for (const [calloutIndex, callout] of (Array.isArray(visual.callouts) ? visual.callouts : []).entries()) {
       const label = typeof callout === "string" ? "" : callout?.label;
       const note = typeof callout === "string" ? callout : callout?.note ?? callout?.text;
       const labelLength = chars(label);
@@ -208,7 +211,7 @@ async function collectAssetFailures(spec, { specPath, specDir } = {}) {
         failures.push(failure(field, `${field} PNG dimensions must be positive (measured ${width}x${height})`, { specPath }));
       }
     } catch (cause) {
-      failures.push(failure(field, `${field} is not readable`, { specPath, recovery: `Provide a readable PNG at ${image.file}.` }));
+      failures.push(failure(field, `${field} is not readable`, { specPath, recovery: "Provide a readable PNG at the deck-relative image path." }));
     }
   }
   return failures;

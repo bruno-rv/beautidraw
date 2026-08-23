@@ -13,27 +13,19 @@ import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { withHarness } from "./harness-runner.mjs";
 import { BODY_INSET, DECK_BODY_GAP, FRAME_PAD_BOTTOM, PAGE_WIDTH, USABLE_H, USABLE_W } from "./layout.mjs";
-import { formatDiagnostic } from "./cli.mjs";
+import { runCli } from "./cli.mjs";
 import { readJsonInput } from "./preflight.mjs";
 
-const [, , deckArg, compositionArg, outArg] = process.argv;
-if (!deckArg || !compositionArg || !outArg || deckArg === "--help" || deckArg === "-h") {
-  console.error("usage: node scripts/compose.mjs <deck.excalidraw> <composition-spec.json> <outdir>");
-  console.error("       embeds composed canvas frames into a generated deck and rerenders it.");
-  process.exit(deckArg === "--help" || deckArg === "-h" ? 0 : 1);
-}
+const usage = "usage: node scripts/compose.mjs <deck.excalidraw> <composition-spec.json> <outdir>\n       embeds composed canvas frames into a generated deck and rerenders it.";
+const status = await runCli("compose", async ({ values }) => {
+const { deckArg, compositionArg, outArg } = values;
 
 const deckPath = resolve(deckArg);
 const compositionPath = resolve(compositionArg);
 const compositionDir = dirname(compositionPath);
 const outDir = resolve(outArg);
 async function readJsonOrExit(path, label) {
-  try {
-    return await readJsonInput(path, { label });
-  } catch (error) {
-    console.error(formatDiagnostic(error));
-    process.exit(1);
-  }
+  return readJsonInput(path, { label });
 }
 const deck = await readJsonOrExit(deckPath, "deck");
 const spec = await readJsonOrExit(compositionPath, "composition spec");
@@ -463,3 +455,7 @@ await writeFile(
   JSON.stringify({ assets: manifest, bands: spec.bands.map(({ band, lane }) => ({ band, lane })) }, null, 2) + "\n",
 );
 console.error(`OK: composed ${prepared.length} canvas bands in ${resolve(outDir, "deck.excalidraw")}`);
+return 0;
+}, { argv: process.argv.slice(2), usage, positional: ["deckArg", "compositionArg", "outArg"] });
+
+process.exitCode = status;

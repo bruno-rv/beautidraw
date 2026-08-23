@@ -12,12 +12,10 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { EXPECTED_FONT_SUBSETS } from "./metric-fonts.mjs";
+import { runCli } from "./cli.mjs";
 
-if (process.argv.includes("--help") || process.argv.includes("-h")) {
-  console.log("usage: node scripts/build-bundle.mjs");
-  console.log("       builds the offline Excalidraw bundle and records its manifest.");
-  process.exit(0);
-}
+const usage = "usage: node scripts/build-bundle.mjs\n       builds the offline Excalidraw bundle and records its manifest.";
+const status = await runCli("build-bundle", async () => {
 
 const require = createRequire(import.meta.url);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -114,3 +112,7 @@ await writeFile(
 );
 
 console.log(JSON.stringify(manifest, null, 2));
+return 0;
+}, { argv: process.argv.slice(2), usage });
+
+process.exitCode = status;

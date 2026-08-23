@@ -50,6 +50,7 @@ export function parseCli(
     positionals.push(arg);
   }
 
+  const requiredPositionals = positional.filter((name) => !name.endsWith("?")).length;
   if (!help && positionals.length > positional.length) {
     throw new CliError({
       command,
@@ -58,17 +59,17 @@ export function parseCli(
       recovery: usage ?? "Run with --help to see the accepted arguments.",
     });
   }
-  if (!help && positionals.length < positional.length) {
+  if (!help && positionals.length < requiredPositionals) {
     throw new CliError({
       command,
       stage: "arguments",
-      reason: `expected ${positional.length} positional argument${positional.length === 1 ? "" : "s"}`,
+      reason: `expected ${requiredPositionals} positional argument${requiredPositionals === 1 ? "" : "s"}`,
       recovery: usage ?? "Run with --help to see the accepted arguments.",
     });
   }
   if (!help) {
     positional.forEach((name, index) => {
-      values[name] = positionals[index];
+      if (positionals[index] !== undefined) values[name.replace(/\?$/, "")] = positionals[index];
     });
   }
 
@@ -81,7 +82,13 @@ function safeInput(input) {
   return value.length > 240 ? `${value.slice(0, 237)}...` : value;
 }
 
-export function formatDiagnostic(error, { debug = false } = {}) {
+function safeDiagnosticText(value) {
+  if (value == null) return "";
+  const text = String(value);
+  return text.length > 240 ? `${text.slice(0, 237)}...` : text;
+}
+
+export function formatDiagnostic(error, { debug = false, command } = {}) {
   const diagnostic = error instanceof CliError || (error && typeof error === "object" && "reason" in error)
     ? error
     : new CliError({
@@ -90,11 +97,11 @@ export function formatDiagnostic(error, { debug = false } = {}) {
         reason: error?.message ?? String(error),
         cause: error,
       });
-  const lines = [`${diagnostic.command ?? "beautidraw"} failed`];
+  const lines = [`${command ?? diagnostic.command ?? "beautidraw"} failed`];
   if (diagnostic.stage) lines.push(`stage: ${diagnostic.stage}`);
   if (diagnostic.input) lines.push(`input: ${safeInput(diagnostic.input)}`);
-  if (diagnostic.reason) lines.push(`reason: ${diagnostic.reason}`);
-  if (diagnostic.recovery) lines.push(`recovery: ${diagnostic.recovery}`);
+  if (diagnostic.reason) lines.push(`reason: ${safeDiagnosticText(diagnostic.reason)}`);
+  if (diagnostic.recovery) lines.push(`recovery: ${safeDiagnosticText(diagnostic.recovery)}`);
   if (debug && diagnostic.stack) lines.push(`stack:\n${diagnostic.stack}`);
   return lines.join("\n");
 }
@@ -119,7 +126,7 @@ export async function runCli(
     const result = await main(parsed);
     return typeof result === "number" ? result : 0;
   } catch (error) {
-    stderr.write(`${formatDiagnostic(error, { debug: parsed.debug })}\n`);
+    stderr.write(`${formatDiagnostic(error, { debug: parsed.debug, command })}\n`);
     return 1;
   }
 }

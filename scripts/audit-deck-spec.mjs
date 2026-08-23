@@ -10,39 +10,39 @@
 
 import { dirname, resolve } from "node:path";
 import { collectDeckPreflightFailures, readJsonInput } from "./preflight.mjs";
-import { formatDiagnostic } from "./cli.mjs";
+import { CliError, runCli } from "./cli.mjs";
 
-const [, , specArg, compositionArg] = process.argv;
-if (!specArg || specArg === "--help" || specArg === "-h") {
-  console.error("usage: node scripts/audit-deck-spec.mjs <deck-spec.json> [composition-spec.json]");
-  console.error("       presentation-quality gate: composition budget, band depth, family variety.");
-  process.exit(specArg === "--help" || specArg === "-h" ? 0 : 1);
-}
+const usage = "usage: node scripts/audit-deck-spec.mjs <deck-spec.json> [composition-spec.json]\n       presentation-quality gate: composition budget, band depth, family variety.";
 
-async function readJsonOrExit(path, what) {
-  try {
-    return await readJsonInput(path, { label: what });
-  } catch (e) {
-    console.error(formatDiagnostic(e));
-    process.exit(1);
+const status = await runCli("audit-deck-spec", async ({ values }) => {
+  const { specArg, compositionArg } = values;
+  async function readJsonOrExit(path, what) {
+    return readJsonInput(path, { label: what });
   }
-}
-
-const spec = await readJsonOrExit(specArg, "deck spec");
-if (!spec || typeof spec !== "object" || Array.isArray(spec)) {
-  console.error("AUDIT ABORTED — deck spec must be a JSON object");
-  process.exit(1);
-}
-const semanticFailures = collectDeckPreflightFailures(spec, {
-  specPath: specArg,
-  specDir: dirname(resolve(specArg)),
-});
-if (semanticFailures.length) {
-  console.error("PRESENTATION AUDIT FAILED");
-  for (const failure of semanticFailures) console.error(`- ${failure.field}: ${failure.reason}`);
-  process.exit(1);
-}
-const composition = compositionArg ? await readJsonOrExit(compositionArg, "composition spec") : null;
+  const spec = await readJsonOrExit(specArg, "deck spec");
+    if (!spec || typeof spec !== "object" || Array.isArray(spec)) {
+      throw new CliError({
+        command: "audit-deck-spec",
+        stage: "preflight",
+        input: specArg,
+        reason: "deck spec must be a JSON object",
+        recovery: "Pass a JSON object with a non-empty bands array.",
+      });
+    }
+    const semanticFailures = collectDeckPreflightFailures(spec, {
+      specPath: specArg,
+      specDir: dirname(resolve(specArg)),
+    });
+    if (semanticFailures.length) {
+      throw new CliError({
+        command: "audit-deck-spec",
+        stage: "preflight",
+        input: specArg,
+        reason: semanticFailures.map((failure) => `${failure.field}: ${failure.reason}`).join("; "),
+        recovery: "Fix the reported deck fields and rerun the audit.",
+      });
+    }
+    const composition = compositionArg ? await readJsonOrExit(compositionArg, "composition spec") : null;
 
 const failures = [];
 const rawBands = Array.isArray(spec.bands) ? spec.bands : [];
@@ -52,9 +52,13 @@ rawBands.forEach((band, index) => {
   }
 });
 if (failures.length) {
-  console.error("PRESENTATION AUDIT FAILED");
-  for (const failure of failures) console.error(`- ${failure}`);
-  process.exit(1);
+  throw new CliError({
+    command: "audit-deck-spec",
+    stage: "audit",
+    input: specArg,
+    reason: failures.join("; "),
+    recovery: "Address the presentation audit findings and rerun the audit.",
+  });
 }
 const bands = rawBands;
 const structured = bands.filter((band) => band.pattern !== "canvas");
@@ -246,12 +250,20 @@ for (const [index, band] of bands.entries()) {
 }
 
 if (failures.length) {
-  console.error("PRESENTATION AUDIT FAILED");
-  for (const failure of failures) console.error(`- ${failure}`);
-  process.exit(1);
+  throw new CliError({
+    command: "audit-deck-spec",
+    stage: "audit",
+    input: specArg,
+    reason: failures.join("; "),
+    recovery: "Address the presentation audit findings and rerun the audit.",
+  });
 }
 
 console.error(
   `PRESENTATION AUDIT OK — ${bands.length} bands, ${structured.length} structured, ${canvas.length} canvas, ` +
     `${density.length ? Math.round(density.reduce((sum, value) => sum + value, 0) / density.length) : 0} average support words`,
 );
+return 0;
+}, { argv: process.argv.slice(2), usage, positional: ["specArg", "compositionArg?"] });
+
+process.exitCode = status;

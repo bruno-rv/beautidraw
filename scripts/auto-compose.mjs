@@ -11,37 +11,30 @@ import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { BODY_INSET, PAGE_WIDTH } from "./layout.mjs";
-import { formatDiagnostic } from "./cli.mjs";
+import { CliError, runCli } from "./cli.mjs";
 import { preflightDeck, readJsonInput } from "./preflight.mjs";
 
 const exec = promisify(execFile);
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const [, , specArg, outArg] = process.argv;
-
-if (!specArg || !outArg || specArg === "--help" || specArg === "-h") {
-  console.error("usage: node scripts/auto-compose.mjs <deck-spec.json> <outdir>");
-  console.error("       turns semantic `visual` declarations into composed canvas frames");
-  console.error("       (writes auto-composition-spec.json, then runs compose.mjs).");
-  process.exit(specArg === "--help" || specArg === "-h" ? 0 : 1);
-}
+const usage = "usage: node scripts/auto-compose.mjs <deck-spec.json> <outdir>\n       turns semantic `visual` declarations into composed canvas frames\n       (writes auto-composition-spec.json, then runs compose.mjs).";
+const status = await runCli("auto-compose", async ({ values }) => {
+const { specArg, outArg } = values;
 
 let spec;
 try {
   spec = await readJsonInput(specArg, { label: "deck spec" });
 } catch (error) {
-  console.error(formatDiagnostic(error));
-  process.exit(1);
+  throw error;
 }
 const preflight = await preflightDeck({ specPath: specArg, spec });
 if (!preflight.ok) {
-  console.error(formatDiagnostic({
+  throw new CliError({
     command: "auto-compose",
     stage: "preflight",
     input: specArg,
     reason: preflight.failures.map((failure) => `${failure.field}: ${failure.reason}`).join("; "),
     recovery: "Fix the deck spec and rerun composition.",
-  }));
-  process.exit(1);
+  });
 }
 const specDir = dirname(resolve(specArg));
 const outDir = resolve(outArg);
@@ -200,7 +193,7 @@ function metaForBand(band, index) {
     focus: clean(visual.focus, band.heading),
     caption: clean(visual.caption, band.deck),
     explanation: clean(visual.explanation, band.deck),
-    callouts: (visual.callouts ?? []).map((callout, calloutIndex) =>
+    callouts: (Array.isArray(visual.callouts) ? visual.callouts : []).map((callout, calloutIndex) =>
       typeof callout === "string"
         ? { label: `Callout ${calloutIndex + 1}`, note: callout }
         : { label: clean(callout?.label, `Callout ${calloutIndex + 1}`), note: clean(callout?.note ?? callout?.text, "") },
@@ -547,3 +540,7 @@ if (canvasBands.length) {
 }
 
 console.error(`AUTO-COMPOSE OK — ${canvasBands.length} semantic canvas bands rendered via ${[...new Set(composition.bands.map((band) => band.elements.find((element) => element.id === "thesis")?.text ?? ""))].length} visual plans`);
+return 0;
+}, { argv: process.argv.slice(2), usage, positional: ["specArg", "outArg"] });
+
+process.exitCode = status;

@@ -19,20 +19,13 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { EXPECTED_FONT_SUBSETS } from "./metric-fonts.mjs";
-import { formatDiagnostic } from "./cli.mjs";
+import { CliError, runCli } from "./cli.mjs";
 
+const usage = "usage: node scripts/setup.mjs\n       idempotently provisions pinned dependencies, Chromium, and the vendored bundle.";
+const status = await runCli("setup", async () => {
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const MANIFEST_SCHEMA = "beautidraw.bundle-manifest/3";
 const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
-
-const [, , arg] = process.argv;
-if (arg === "--help" || arg === "-h") {
-  console.log("usage: node scripts/setup.mjs");
-  console.log("       idempotently provisions node_modules (pinned deps), Chromium,");
-  console.log("       and the vendored Excalidraw bundle; prints 'already provisioned,'");
-  console.log("       and does nothing when everything verifies.");
-  process.exit(0);
-}
 
 function run(cmd, args) {
   // cwd is pinned to ROOT so this works when invoked from any directory —
@@ -45,16 +38,21 @@ function run(cmd, args) {
       console.error("[setup] (see pnpm-workspace.yaml); install it first:");
       console.error("[setup]   corepack enable && corepack prepare pnpm@11.0.3 --activate");
       console.error("[setup] or: npm install -g pnpm@11.0.3   (package.json pins this version)");
-      process.exit(1);
+      throw new CliError({
+        command: "setup",
+        stage: "provision",
+        reason: `${cmd} is not on PATH`,
+        recovery: "Install pnpm 11.0.3 and rerun setup.",
+        cause: e,
+      });
     }
-    console.error(formatDiagnostic({
+    throw new CliError({
       command: "setup",
       stage: "provision",
       reason: `${cmd} failed while provisioning dependencies`,
       recovery: "Check the command output and rerun setup after correcting the environment.",
-      stack: e.stack,
-    }, { debug: process.argv.includes("--debug") }));
-    process.exit(1);
+      cause: e,
+    });
   }
 }
 
@@ -115,7 +113,12 @@ if (depIssue) {
     console.error(`[setup] dependencies are still wrong after install: ${stillBroken}`);
     console.error("[setup] refusing to build the bundle against an unpinned tree.");
     console.error("[setup] remove node_modules and re-run, or reconcile the pins in package.json.");
-    process.exit(1);
+    throw new CliError({
+      command: "setup",
+      stage: "dependencies",
+      reason: "dependencies are still wrong after install",
+      recovery: "Remove node_modules or reconcile package pins, then rerun setup.",
+    });
   }
 }
 
@@ -136,7 +139,13 @@ if (!existsSync(chromiumPath)) {
   // An install that exits 0 is not a browser that exists.
   if (!existsSync(chromiumPath)) {
     console.error(`[setup] Chromium is still absent after install: ${chromiumPath}`);
-    process.exit(1);
+    throw new CliError({
+      command: "setup",
+      stage: "browser",
+      reason: "Chromium is still absent after install",
+      recovery: "Install Playwright Chromium and rerun setup.",
+      input: chromiumPath,
+    });
   }
 }
 
@@ -278,8 +287,17 @@ if (problem) {
   if (stillBroken) {
     console.error(`[setup] the rebuilt bundle is still invalid: ${stillBroken}`);
     console.error("[setup] remove node_modules and scripts/vendor, then re-run.");
-    process.exit(1);
+    throw new CliError({
+      command: "setup",
+      stage: "bundle",
+      reason: "the rebuilt bundle is still invalid",
+      recovery: "Remove scripts/vendor and rerun setup.",
+    });
   }
 }
 
 console.log(didWork ? "[setup] ready" : "[setup] already provisioned, nothing to do");
+return 0;
+}, { argv: process.argv.slice(2), usage });
+
+process.exitCode = status;

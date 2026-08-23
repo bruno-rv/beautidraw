@@ -7,14 +7,12 @@ import { spawn } from "node:child_process";
 import { readdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { runCli } from "../cli.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
-if (process.argv.includes("--help") || process.argv.includes("-h")) {
-  console.log("usage: node scripts/spike/run-all.mjs [--network]");
-  console.log("       runs the local probes, optionally including the network parity probe.");
-  process.exit(0);
-}
-const withNetwork = process.argv.includes("--network");
+const usage = "usage: node scripts/spike/run-all.mjs [--network]\n       runs the local probes, optionally including the network parity probe.";
+const status = await runCli("spike", async ({ values }) => {
+const withNetwork = values.network === true;
 
 const probes = (await readdir(here))
   .filter((f) => /^probe-\d+-.*\.mjs$/.test(f))
@@ -49,4 +47,7 @@ for (const r of results) {
 if (!withNetwork) {
   console.log("\nviewer-parity skipped — rerun with --network to include it.");
 }
-process.exit(results.some((r) => r.code !== 0) ? 1 : 0);
+return results.some((r) => r.code !== 0) ? 1 : 0;
+}, { argv: process.argv.slice(2), usage, options: ["--network"] });
+
+process.exitCode = status;

@@ -13,7 +13,7 @@
 import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { withHarness } from "./harness-runner.mjs";
-import { formatDiagnostic } from "./cli.mjs";
+import { CliError, runCli } from "./cli.mjs";
 import { preflightDeck, readJsonInput } from "./preflight.mjs";
 import {
   BAND_HEIGHT_CAP,
@@ -25,14 +25,10 @@ import {
   collectFontRequirements,
 } from "./layout.mjs";
 
+const usage = "usage: node scripts/generate.mjs <spec.json> <outdir>\n       runs the deterministic base layout in the harness and writes\n       deck.excalidraw, band PNGs, scene.png, and diagnostics.json.";
+const status = await runCli("generate", async ({ values }) => {
+const { specPath, outDirArg } = values;
 const EPSILON = 0.08 * PAGE_WIDTH; // edge-coverage tolerance, LAYOUT-CONTRACT.md §Deliverables
-
-function usageAndExit(code = 1) {
-  console.error("usage: node scripts/generate.mjs <spec.json> <outdir>");
-  console.error("       runs the deterministic base layout in the harness and writes");
-  console.error("       deck.excalidraw, band PNGs, scene.png, and diagnostics.json.");
-  process.exit(code);
-}
 
 async function writeDiagnosticsAndExit(outDir, diagnostics, message) {
   await mkdir(outDir, { recursive: true });
@@ -40,8 +36,13 @@ async function writeDiagnosticsAndExit(outDir, diagnostics, message) {
     resolve(outDir, "diagnostics.json"),
     JSON.stringify(diagnostics, null, 2) + "\n",
   );
-  console.error(message);
-  process.exit(1);
+  throw new CliError({
+    command: "generate",
+    stage: diagnostics.stage,
+    input: outDir,
+    reason: message,
+    recovery: "Fix the reported validation failure and rerun generation.",
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -295,28 +296,24 @@ function runValidations(elements, diagnostics) {
 // Main
 // ---------------------------------------------------------------------------
 
-const [, , specPath, outDirArg] = process.argv;
-if (!specPath || !outDirArg) usageAndExit(specPath === "--help" || specPath === "-h" ? 0 : 1);
 const outDir = resolve(outDirArg);
 
 let spec;
 try {
   spec = await readJsonInput(specPath, { label: "deck spec" });
 } catch (e) {
-  console.error(formatDiagnostic(e));
-  process.exit(1);
+  throw e;
 }
 
 const preflight = await preflightDeck({ specPath, spec });
 if (!preflight.ok) {
-  console.error(formatDiagnostic({
+  throw new CliError({
     command: "generate",
     stage: "preflight",
     input: specPath,
     reason: preflight.failures.map((failure) => `${failure.field}: ${failure.reason}`).join("; "),
     recovery: "Fix the deck spec and rerun generation.",
-  }));
-  process.exit(1);
+  });
 }
 
 // Pure validation + font corpus, before the harness even boots.
@@ -449,3 +446,7 @@ await writeFile(
 console.error(
   `OK: wrote ${resolve(outDir, "deck.excalidraw")}, ${bandPngs.length} band PNGs, scene.png, diagnostics.json`,
 );
+return 0;
+}, { argv: process.argv.slice(2), usage, positional: ["specPath", "outDirArg"] });
+
+process.exitCode = status;

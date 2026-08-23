@@ -54,3 +54,15 @@ test("debug diagnostics may include a stack", async () => {
   assert.match(stderr, /stack:/);
   assert.match(stderr, /at .*\.mjs:/);
 });
+
+test("normal diagnostics bound reason and recovery text", () => {
+  const huge = "x".repeat(12_000);
+  const message = formatDiagnostic(new CliError({
+    command: "example",
+    stage: "preflight",
+    reason: huge,
+    recovery: huge,
+  }));
+  assert.ok(message.length < 1_000);
+  assert.equal(message.includes(huge), false);
+});
