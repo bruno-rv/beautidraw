@@ -1,0 +1,116 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
+
+import {
+  FONT,
+  FONT_NAME,
+  collectFontRequirements,
+  fontForRole,
+} from "../scripts/layout.mjs";
+import {
+  normalizeCallout,
+  SEMANTIC_KINDS,
+  validateSemanticVisuals,
+} from "../scripts/outline.mjs";
+
+test("mono, handwritten, and prose roles route to their declared fonts", () => {
+  assert.deepEqual(fontForRole("mono"), { family: FONT.mono, name: FONT_NAME.mono });
+  assert.deepEqual(fontForRole("handwritten"), { family: FONT.handwritten, name: FONT_NAME.handwritten });
+  assert.deepEqual(fontForRole("prose"), { family: FONT.prose, name: FONT_NAME.prose });
+  assert.deepEqual(fontForRole("unknown"), { family: FONT.prose, name: FONT_NAME.prose });
+});
+
+test("semantic callouts accept exactly the four labelled kinds", () => {
+  assert.deepEqual([...SEMANTIC_KINDS].sort(), ["boundary", "example", "inspect", "warning"]);
+  assert.doesNotThrow(() => validateSemanticVisuals({
+    callouts: [
+      { kind: "example", label: "Example", note: "A concrete case" },
+      { kind: "boundary", label: "Boundary", note: "A decision edge" },
+      { kind: "inspect", label: "Inspect", note: "A source check" },
+      { kind: "warning", label: "Warning", note: "A risk" },
+    ],
+  }));
+  assert.throws(() => validateSemanticVisuals({ callouts: [{ kind: "question", label: "Question" }] }), /unsupported.*kind/i);
+  assert.throws(() => validateSemanticVisuals({ callouts: [{ kind: "example", label: "" }] }), /label/i);
+  assert.throws(() => validateSemanticVisuals({ callouts: [{ kind: "example", note: "missing label" }] }), /label/i);
+  assert.deepEqual(normalizeCallout({ label: "Legacy" }, 0), { kind: "example", label: "Legacy", note: "" });
+  assert.deepEqual(normalizeCallout("Legacy string", 1), { kind: "example", label: "Callout 2", note: "Legacy string" });
+});
+
+test("image descriptions are mandatory and distinct from their use", () => {
+  assert.throws(() => validateSemanticVisuals({ image: { file: "scene.png", use: "Show the scene" } }), /description/i);
+  assert.throws(() => validateSemanticVisuals({ image: { file: "scene.png", use: "Show the scene", description: "Show the scene" } }), /distinct/i);
+});
+
+test("font requirements include canvas prose, mono, and handwritten corpora", () => {
+  const requirements = collectFontRequirements({
+    title: "Title",
+    subtitle: "Subtitle",
+    footer: "Footer",
+    bands: [{
+      heading: "Canvas",
+      deck: "Measured content",
+      pattern: "canvas",
+      accent: "blue",
+      height: 620,
+      visual: {
+        family: "field",
+        focus: "Focus /context",
+        caption: "Caption",
+        nodes: [{ label: "Node", note: "A paragraph" }],
+        axisX: "specificity",
+        axisY: "blast radius",
+        explanation: "A paragraph",
+        inspect: "node scripts/build-deck.mjs /context",
+        annotation: "Short note",
+      },
+    }],
+  });
+  assert.ok(requirements.some((item) => item.role === "prose" && [...new Set("Focus")].every((character) => item.chars.includes(character))));
+  assert.ok(requirements.some((item) => item.role === "mono" && item.family === FONT_NAME.mono && [...new Set("/context")].every((character) => item.chars.includes(character))));
+  assert.ok(requirements.some((item) => item.role === "handwritten" && item.family === FONT_NAME.handwritten));
+});
+
+test("compose rejects traversal before reading an outside image", async () => {
+  const root = await mkdtemp(join(tmpdir(), "beautidraw-compose-path-"));
+  const compositionDir = join(root, "composition");
+  const deckDir = join(root, "deck");
+  await mkdir(compositionDir);
+  await mkdir(deckDir);
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
+  await writeFile(join(root, "outside.png"), png);
+  await writeFile(join(deckDir, "deck.excalidraw"), JSON.stringify({
+    elements: [
+      { id: "b0-deck", type: "text", x: 80, y: 100, width: 100, height: 20 },
+      { id: "b0-frame", type: "frame", x: 0, y: 0, width: 2280, height: 620, children: [] },
+    ],
+    files: {},
+  }));
+  await writeFile(join(deckDir, "diagnostics.json"), JSON.stringify({ diagnostics: { bands: [{ index: 0, pattern: "canvas" }] } }));
+  await writeFile(join(compositionDir, "composition.json"), JSON.stringify({ bands: [{
+    band: 0,
+    lane: "composed",
+    surfaceColor: "#f8fafc",
+    image: {
+      file: "../outside.png",
+      path: "assets/outside.png",
+      mode: "side",
+      use: "Use",
+      description: "Description",
+      x: 0,
+      y: 0,
+      width: 0.1,
+      height: 0.1,
+    },
+  }] }));
+  const result = spawnSync(process.execPath, [resolve(import.meta.dirname, "../scripts/compose.mjs"), join(deckDir, "deck.excalidraw"), join(compositionDir, "composition.json"), join(root, "out")], {
+    cwd: resolve(import.meta.dirname, ".."),
+    encoding: "utf8",
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(`${result.stdout}${result.stderr}`, /deck-relative|portable|outside|traversal/i);
+});

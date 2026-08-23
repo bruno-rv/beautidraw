@@ -25,6 +25,15 @@ The only file you write. Semantic content, no geometry.
 Bands render in array order and are numbered `01`, `02`, … in the frame name, which is what the
 Excalidraw frame list shows.
 
+For raster visuals, `visual.image.use` explains the learning purpose and
+`visual.image.description` is a distinct accessible description. Callouts use
+`kind: "example" | "boundary" | "inspect" | "warning"` and always include a
+visible `label`.
+
+While existing exemplars migrate, an omitted callout kind (or legacy string
+callout) is temporarily treated as `example`. Explicit unsupported kinds still
+fail validation.
+
 ## Node shapes
 
 ### `flow` — `{ relation, nodes: [{ label, note? }] }`

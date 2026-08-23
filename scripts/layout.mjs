@@ -23,8 +23,13 @@ export const GUTTER_COL = 56; // between columns
 export const BAND_GAP = 96; // vertical gap between bands
 export const BOUND_TEXT_PADDING = 5; // per side, Excalidraw's own
 export const RAMP = { title: 48, heading: 38, hero: 30, label: 23, note: 18 };
-export const FONT = { prose: 6, mono: 3 }; // Nunito, Cascadia — spike F3
-export const FONT_NAME = { prose: "Nunito", mono: "Cascadia" };
+export const FONT = { prose: 6, mono: 3, handwritten: 5 }; // Nunito, Cascadia, Excalifont — spike F3
+export const FONT_NAME = { prose: "Nunito", mono: "Cascadia", handwritten: "Excalifont" };
+
+export function fontForRole(role) {
+  const normalized = role === "mono" || role === "handwritten" ? role : "prose";
+  return { family: FONT[normalized], name: FONT_NAME[normalized] };
+}
 
 // z_actual / z_scene machinery, used for the legibility gate and
 // recorded in diagnostics.
@@ -230,6 +235,20 @@ export function planDeck(spec) {
   };
 }
 
+export function buildOverview(spec) {
+  if (!spec || typeof spec !== "object" || !Array.isArray(spec.bands)) {
+    throw new Error("spec.bands must be an array to build the overview");
+  }
+  return {
+    title: spec.title,
+    subtitle: spec.subtitle,
+    frames: spec.bands.map((band, index) => ({
+      name: `${String(index + 1).padStart(2, "0")} ${band.heading}`,
+    })),
+    navigation: "Use Excalidraw frame navigation for reading; use outline.md on smaller screens.",
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Text formatters shared between the font-corpus pass and the geometry pass,
 // so the characters loaded/checked are byte-identical to the characters drawn.
@@ -253,8 +272,9 @@ export function formatChecklistRow(label, note) {
 export function collectFontRequirements(spec) {
   const plan = planDeck(spec);
   const corpus = new Map();
-  const add = (text, size) => {
-    const key = `${FONT_NAME.prose}@${size}`;
+  const add = (text, size, role = "prose") => {
+    const font = fontForRole(role);
+    const key = `${role}:${font.name}@${size}`;
     let set = corpus.get(key);
     if (!set) corpus.set(key, (set = new Set()));
     for (const ch of text) set.add(ch);
@@ -270,6 +290,40 @@ export function collectFontRequirements(spec) {
   add(plan.title.text, RAMP.heading);
   add(plan.subtitle.text, plan.subtitle.size);
   add(plan.footer.text, plan.footer.size);
+
+  const overview = buildOverview(spec);
+  add(overview.frames.map(({ name }) => name).join("\n"), RAMP.note);
+  add(overview.navigation, RAMP.note);
+  add("Small screens: use outline.md for reading.", RAMP.note);
+
+  const addCanvasText = (visual) => {
+    if (!visual || typeof visual !== "object") return;
+    for (const field of ["thesis", "focus", "caption", "explanation", "example", "tradeoff", "axisX", "axisY", "left", "middle", "right", "decision"]) {
+      if (typeof visual[field] === "string" && visual[field].trim()) add(visual[field], RAMP.note, "prose");
+    }
+    for (const node of visual.nodes ?? []) {
+      if (typeof node === "string") add(node, RAMP.note, "prose");
+      else {
+        if (typeof node?.label === "string") add(node.label, RAMP.label, "prose");
+        if (typeof node?.note === "string") add(node.note, RAMP.note, "prose");
+        for (const item of node?.items ?? []) if (typeof item === "string") add(item, RAMP.note, "prose");
+      }
+    }
+    for (const item of visual.evidence ?? []) if (typeof item === "string") add(item, RAMP.note, "prose");
+    for (const callout of visual.callouts ?? []) {
+      if (typeof callout === "string") add(callout, RAMP.note, "prose");
+      else {
+        if (typeof callout?.label === "string") add(callout.label, RAMP.label, "prose");
+        if (typeof (callout?.note ?? callout?.text) === "string") add(callout.note ?? callout.text, RAMP.note, "prose");
+      }
+    }
+    if (typeof visual.inspect === "string" && visual.inspect.trim()) add(visual.inspect, RAMP.note, "mono");
+    if (visual.image && typeof visual.image === "object") {
+      for (const field of ["use", "description"]) if (typeof visual.image[field] === "string") add(visual.image[field], RAMP.note, "prose");
+    }
+    const annotations = visual.annotations ?? (visual.annotation ? [visual.annotation] : []);
+    for (const annotation of annotations) if (typeof annotation === "string" && annotation.trim()) add(annotation, RAMP.note, "handwritten");
+  };
 
   for (const band of plan.bands) {
     add(band.heading.text, band.heading.size);
@@ -309,13 +363,14 @@ export function collectFontRequirements(spec) {
         }
         break;
       case "canvas":
+        addCanvasText(spec.bands[band.index]?.visual);
         break;
     }
   }
 
   return [...corpus.entries()].map(([key, set]) => {
-    const [family, sizeStr] = key.split("@");
-    return { family, size: Number(sizeStr), chars: [...set].join("") };
+    const [role, family, sizeStr] = key.match(/^(.*?):(.+)@(\d+)$/).slice(1);
+    return { role, family, size: Number(sizeStr), chars: [...set].join("") };
   });
 }
 
@@ -326,9 +381,10 @@ export function collectFontRequirements(spec) {
 // later single "finalize" call bind arrows and frame membership by id.
 // ---------------------------------------------------------------------------
 
-function measureNatural(api, id, text, fontSize) {
+function measureNatural(api, id, text, fontSize, role = "prose") {
+  const font = fontForRole(role);
   const [el] = api.convertToExcalidrawElements(
-    [{ id, type: "text", x: 0, y: 0, text, fontSize, fontFamily: FONT.prose }],
+    [{ id, type: "text", x: 0, y: 0, text, fontSize, fontFamily: font.family, role }],
     { regenerateIds: false },
   );
   return el;
@@ -337,11 +393,11 @@ function measureNatural(api, id, text, fontSize) {
 // Natural (unbound) text, stepping down the ramp once on overflow, per
 // the fixed-role overflow contract. Throws, naming the role, the
 // measured width and the budget, if it still doesn't fit.
-function fitChromeText(api, id, text, primarySize, fallbackSize, maxWidth, roleName) {
-  let el = measureNatural(api, id, text, primarySize);
+function fitChromeText(api, id, text, primarySize, fallbackSize, maxWidth, roleName, role = "prose") {
+  let el = measureNatural(api, id, text, primarySize, role);
   if (el.width <= maxWidth) return el;
   if (fallbackSize) {
-    const stepped = measureNatural(api, id, text, fallbackSize);
+    const stepped = measureNatural(api, id, text, fallbackSize, role);
     if (stepped.width <= maxWidth) return stepped;
     throw new Error(
       `${roleName} "${text}" measures ${el.width.toFixed(1)}px at ${primarySize} and ` +
@@ -361,8 +417,8 @@ function fitChromeText(api, id, text, primarySize, fallbackSize, maxWidth, roleN
 // on the returned element afterwards — because textAlign is part of the
 // metric tuple the converter lays text out with (it can affect wrapping, not
 // just the drawn position).
-function measureBoundHeight(api, id, text, fontSize, width, textAlign) {
-  const label = { text, fontSize, fontFamily: FONT.prose, ...(textAlign ? { textAlign } : {}) };
+function measureBoundHeight(api, id, text, fontSize, width, textAlign, role = "prose") {
+  const label = { text, fontSize, fontFamily: fontForRole(role).family, role, ...(textAlign ? { textAlign } : {}) };
   const els = api.convertToExcalidrawElements(
     [{ id, type: "rectangle", x: 0, y: 0, width, label }],
     { regenerateIds: false },
@@ -381,8 +437,9 @@ function measureCards(api, idPrefix, cards, width) {
     id: `${idPrefix}-${i}`,
     text: c.text,
     fontSize: c.fontSize,
+    role: c.role ?? "prose",
     textAlign: c.textAlign,
-    height: measureBoundHeight(api, `${idPrefix}-${i}-probe`, c.text, c.fontSize, width, c.textAlign),
+    height: measureBoundHeight(api, `${idPrefix}-${i}-probe`, c.text, c.fontSize, width, c.textAlign, c.role ?? "prose"),
   }));
 }
 
@@ -395,7 +452,7 @@ function placeCards(cards, x, yTop, width, gap, heights) {
   const placed = [];
   cards.forEach((c, i) => {
     const h = heights ? heights[i] : c.height;
-    placed.push({ id: c.id, text: c.text, fontSize: c.fontSize, textAlign: c.textAlign, x, y, width, height: h });
+    placed.push({ id: c.id, text: c.text, fontSize: c.fontSize, role: c.role ?? "prose", textAlign: c.textAlign, x, y, width, height: h });
     y += h + gap;
   });
   const height = placed.length ? y - gap - yTop : 0;
@@ -435,7 +492,8 @@ function accentFor(band, tone) {
 // metric tuple the converter lays text out with, same reasoning as
 // measureBoundHeight above. Omitted entirely when not given, so every
 // existing caller keeps the converter's own default (centred).
-function rectSkeleton(id, x, y, width, height, text, fontSize, accent, textAlign) {
+function rectSkeleton(id, x, y, width, height, text, fontSize, accent, textAlign, role = "prose") {
+  const font = fontForRole(role);
   return {
     id,
     type: "rectangle",
@@ -452,7 +510,9 @@ function rectSkeleton(id, x, y, width, height, text, fontSize, accent, textAlign
     // the label object's own fields, so a bare {text,fontSize,fontFamily}
     // here leaves the bound TEXT element defaulting to roughness "artist" —
     // measured, not assumed — even though the container above is roughness 0.
-    label: { text, fontSize, fontFamily: FONT.prose, roughness: 0, ...(textAlign ? { textAlign } : {}) },
+    role,
+    customData: { beautidrawRole: role },
+    label: { text, fontSize, fontFamily: font.family, role, roughness: 0, ...(textAlign ? { textAlign } : {}) },
   };
 }
 
@@ -528,7 +588,7 @@ function layoutFlow(band, bandIndex, api, bodyX, bodyTop, bodyWidth, bodyHeightC
       const { placed, height } = placeCards(u.cards, x, y, width, CARD_HEADER_GAP);
       const accent = accentFor(band, null);
       placed.forEach((c) => {
-        skeletons.push(rectSkeleton(c.id, c.x, c.y, c.width, c.height, c.text, c.fontSize, accent, c.textAlign));
+        skeletons.push(rectSkeleton(c.id, c.x, c.y, c.width, c.height, c.text, c.fontSize, accent, c.textAlign, c.role));
         memberIds.push(c.id);
       });
       unitAnchors.push({
@@ -610,7 +670,7 @@ function layoutRowOfStages(band, bandIndex, api, bodyX, bodyTop, bodyWidth, body
         const cardX = rowXStart + col * (width + GUTTER_COL);
         const { placed } = placeCards(natural[idx], cardX, rowY, width, CARD_HEADER_GAP, slotHeights);
         placed.forEach((c) => {
-          skeletons.push(rectSkeleton(c.id, c.x, c.y, c.width, c.height, c.text, c.fontSize, accent, c.textAlign));
+          skeletons.push(rectSkeleton(c.id, c.x, c.y, c.width, c.height, c.text, c.fontSize, accent, c.textAlign, c.role));
           memberIds.push(c.id);
         });
       }
@@ -653,7 +713,7 @@ function layoutComparison(band, bandIndex, api, bodyX, bodyTop, bodyWidth, bodyH
       const accent = accentFor(band, n.tone);
       const { placed } = placeCards(natural[i], x, bodyTop, width, CARD_GAP, slotHeights);
       placed.forEach((c) => {
-        skeletons.push(rectSkeleton(c.id, c.x, c.y, c.width, c.height, c.text, c.fontSize, accent, c.textAlign));
+        skeletons.push(rectSkeleton(c.id, c.x, c.y, c.width, c.height, c.text, c.fontSize, accent, c.textAlign, c.role));
         memberIds.push(c.id);
       });
     });
@@ -722,6 +782,8 @@ function layoutTimeline(band, bandIndex, api, bodyX, bodyTop, bodyWidth, bodyHei
         text: n.at,
         fontSize: RAMP.note,
         fontFamily: FONT.prose,
+        role: "prose",
+        customData: { beautidrawRole: "prose" },
         strokeColor: CHROME_COLOR,
         roughness: 0,
       });
@@ -729,7 +791,7 @@ function layoutTimeline(band, bandIndex, api, bodyX, bodyTop, bodyWidth, bodyHei
 
       const { placed } = placeCards(natural[i], colX, cardTop, width, CARD_HEADER_GAP, slotHeights);
       placed.forEach((c) => {
-        skeletons.push(rectSkeleton(c.id, c.x, c.y, c.width, c.height, c.text, c.fontSize, accent, c.textAlign));
+        skeletons.push(rectSkeleton(c.id, c.x, c.y, c.width, c.height, c.text, c.fontSize, accent, c.textAlign, c.role));
         memberIds.push(c.id);
       });
     });
@@ -762,7 +824,7 @@ function layoutTree(band, bandIndex, api, bodyX, bodyTop, bodyWidth, bodyHeightC
     band.nodes.forEach((n, i) => {
       const x = rowXStart + i * (width + GUTTER_COL);
       const rootId = `b${bandIndex}-root${i}`;
-      skeletons.push(rectSkeleton(rootId, x, bodyTop, width, rootHeight, n.label, RAMP.hero, accent));
+      skeletons.push(rectSkeleton(rootId, x, bodyTop, width, rootHeight, n.label, RAMP.hero, accent, undefined, "prose"));
       memberIds.push(rootId);
 
       let childY = bodyTop + rootHeight + ROW_GAP;
@@ -771,7 +833,7 @@ function layoutTree(band, bandIndex, api, bodyX, bodyTop, bodyWidth, bodyHeightC
       n.children.forEach((c, j) => {
         const childId = `b${bandIndex}-root${i}-child${j}`;
         const h = measureBoundHeight(api, childId, c.label, RAMP.note, width);
-        skeletons.push(rectSkeleton(childId, x, childY, width, h, c.label, RAMP.note, accent));
+        skeletons.push(rectSkeleton(childId, x, childY, width, h, c.label, RAMP.note, accent, undefined, "prose"));
         memberIds.push(childId);
 
         const lineId = `${childId}-line`;
@@ -822,7 +884,7 @@ function layoutChecklist(band, bandIndex, api, bodyX, bodyTop, bodyWidth, bodyHe
         // floating mid-row to the left edge as a side effect of the same
         // alignment change, so it no longer needs a separate marker element.
         const h = measureBoundHeight(api, id, text, RAMP.note, width, "left");
-        skeletons.push(rectSkeleton(id, x, y, width, h, text, RAMP.note, accent, "left"));
+        skeletons.push(rectSkeleton(id, x, y, width, h, text, RAMP.note, accent, "left", "prose"));
         memberIds.push(id);
         y += h + CARD_GAP;
       });
@@ -886,7 +948,7 @@ function reorderByOriginalIntent(elements, originalSkeletons) {
 
 export function layoutDeck(spec, api) {
   const plan = planDeck(spec);
-  const diagnostics = { bands: [], zScene: null, sceneBounds: null };
+  const diagnostics = { bands: [], zScene: null, sceneBounds: null, overview: { ids: [], bounds: {} } };
 
   const allSkeletons = [];
 
@@ -902,6 +964,8 @@ export function layoutDeck(spec, api) {
     text: plan.title.text,
     fontSize: titleEl.fontSize,
     fontFamily: FONT.prose,
+    role: "prose",
+    customData: { beautidrawRole: "prose" },
     strokeColor: CHROME_COLOR,
     roughness: 0,
   });
@@ -916,10 +980,98 @@ export function layoutDeck(spec, api) {
     text: plan.subtitle.text,
     fontSize: RAMP.label,
     fontFamily: FONT.prose,
+    role: "prose",
+    customData: { beautidrawRole: "prose" },
     strokeColor: CHROME_COLOR,
     roughness: 0,
   });
   cursorY += subtitleEl.height + G;
+
+  // Unframed overview chrome. It is intentionally outside every frame so the
+  // ordered map remains visible without changing the deck's frame count.
+  const overview = buildOverview(spec);
+  const overviewIds = ["deck-overview-map", "deck-overview-navigation", "deck-overview-small-screen"];
+  const overviewMapText = overview.frames.map(({ name }) => name).join("\n");
+  const overviewMapEl = fitChromeText(
+    api,
+    overviewIds[0],
+    overviewMapText,
+    RAMP.note,
+    null,
+    chromeMaxWidth,
+    "overview frame map",
+  );
+  const overviewMap = {
+    id: overviewIds[0],
+    type: "text",
+    x: PAGE_X + MARGIN,
+    y: cursorY,
+    text: overviewMapText,
+    fontSize: RAMP.note,
+    fontFamily: FONT.prose,
+    role: "prose",
+    customData: { beautidrawRole: "prose", beautidrawOverview: "map" },
+    strokeColor: CHROME_COLOR,
+    roughness: 0,
+  };
+  allSkeletons.push(overviewMap);
+  cursorY += overviewMapEl.height + 12;
+
+  const overviewNavigation = fitChromeText(
+    api,
+    overviewIds[1],
+    overview.navigation,
+    RAMP.note,
+    null,
+    chromeMaxWidth,
+    "overview navigation",
+  );
+  allSkeletons.push({
+    id: overviewIds[1],
+    type: "text",
+    x: PAGE_X + MARGIN,
+    y: cursorY,
+    text: overview.navigation,
+    fontSize: RAMP.note,
+    fontFamily: FONT.prose,
+    role: "prose",
+    customData: { beautidrawRole: "prose", beautidrawOverview: "navigation" },
+    strokeColor: CHROME_COLOR,
+    roughness: 0,
+  });
+  cursorY += overviewNavigation.height + 4;
+
+  const smallScreenText = "Small screens: use outline.md for reading.";
+  const overviewSmallScreen = fitChromeText(
+    api,
+    overviewIds[2],
+    smallScreenText,
+    RAMP.note,
+    null,
+    chromeMaxWidth,
+    "overview small-screen guidance",
+  );
+  allSkeletons.push({
+    id: overviewIds[2],
+    type: "text",
+    x: PAGE_X + MARGIN,
+    y: cursorY,
+    text: smallScreenText,
+    fontSize: RAMP.note,
+    fontFamily: FONT.prose,
+    role: "prose",
+    customData: { beautidrawRole: "prose", beautidrawOverview: "small-screen" },
+    strokeColor: CHROME_COLOR,
+    roughness: 0,
+  });
+  cursorY += overviewSmallScreen.height + G;
+
+  diagnostics.overview.ids = overviewIds;
+  diagnostics.overview.bounds = {
+    [overviewIds[0]]: { x: overviewMap.x, y: overviewMap.y, width: overviewMapEl.width, height: overviewMapEl.height },
+    [overviewIds[1]]: { x: PAGE_X + MARGIN, y: overviewMap.y + overviewMapEl.height + 12, width: overviewNavigation.width, height: overviewNavigation.height },
+    [overviewIds[2]]: { x: PAGE_X + MARGIN, y: overviewMap.y + overviewMapEl.height + 12 + overviewNavigation.height + 4, width: overviewSmallScreen.width, height: overviewSmallScreen.height },
+  };
 
   // Bands.
   plan.bands.forEach((band, i) => {
@@ -956,6 +1108,8 @@ export function layoutDeck(spec, api) {
       text: band.heading.text,
       fontSize: headingEl.fontSize,
       fontFamily: FONT.prose,
+      role: "prose",
+      customData: { beautidrawRole: "prose" },
       strokeColor: CHROME_COLOR,
       roughness: 0,
     });
@@ -969,6 +1123,8 @@ export function layoutDeck(spec, api) {
       text: band.deck.text,
       fontSize: RAMP.label,
       fontFamily: FONT.prose,
+      role: "prose",
+      customData: { beautidrawRole: "prose" },
       strokeColor: CHROME_COLOR,
       roughness: 0,
     });
@@ -1031,6 +1187,8 @@ export function layoutDeck(spec, api) {
     text: plan.footer.text,
     fontSize: RAMP.note,
     fontFamily: FONT.prose,
+    role: "prose",
+    customData: { beautidrawRole: "prose" },
     strokeColor: CHROME_COLOR,
     roughness: 0,
   });
@@ -1054,7 +1212,17 @@ export function layoutDeck(spec, api) {
   // out-of-order run via the library's own fractional-indexing algorithm, so
   // a viewer that trusts `index` over array position agrees with the array
   // we just built. Confirmed no other measured field survives that call.
-  const elements = api.restoreElements(reordered, null);
+  const restored = api.restoreElements(reordered, null);
+  const roleById = new Map(allSkeletons.filter((s) => s.role).map((s) => [s.id, s.role]));
+  const elements = restored.map((element) => {
+    const role = roleById.get(element.id) ?? roleById.get(element.containerId);
+    if (!role) return element;
+    return {
+      ...element,
+      role,
+      customData: { ...(element.customData ?? {}), beautidrawRole: role },
+    };
+  });
 
   // convertToExcalidrawElements refits a frame to its children's bounding box,
   // discarding the x/width the skeleton asked for. That makes frame origin

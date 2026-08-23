@@ -1,94 +1,148 @@
-// Single automatic build entry point for Beautidraw.
+// The single transactional build entry point for Beautidraw.
 //
-// The model writes one semantic deck-spec.json. This command audits it,
-// computes the deterministic base layout, then turns each semantic `visual`
-// declaration into a composed frame. No hand-authored composition coordinates
-// are required.
-//
-// Each stage already explains its own failures on stderr; this wrapper only
-// stops the sequence and names the stage — a raw child-process stack trace on
-// top of that report is noise, not information.
-//
-// Usage:
-//   node scripts/build-deck.mjs <deck-spec.json> <outdir>
+// Every child writes into a sibling stage directory. Only after the audit,
+// layout, composition, outline, final diagnostics, and receipt have all
+// succeeded does staging.mjs replace the requested output directory.
 
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
+import { lstat } from "node:fs/promises";
+import { readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
 import { CliError, runCli } from "./cli.mjs";
-import { preflightDeck } from "./preflight.mjs";
+import { preflightDeck, readJsonInput } from "./preflight.mjs";
+import { withStagedOutput } from "./staging.mjs";
+import { collectBuildReceipt, formatBuildReceipt } from "./build-receipt.mjs";
+import { buildOutline } from "./outline.mjs";
 
-const usage = "usage: node scripts/build-deck.mjs <deck-spec.json> <outdir>\n       audits the spec, lays out every band, composes canvas visuals,\n       and writes deck.excalidraw plus band/scene PNGs into <outdir>.";
+const usage = "usage: node scripts/build-deck.mjs <deck-spec.json> <outdir>\n       audits, lays out, composes, documents, and atomically publishes a deck.";
 const status = await runCli("build-deck", async ({ values, debug }) => {
-const { specArg, outArg } = values;
+  const { specArg, outArg } = values;
+  const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+  const node = process.execPath;
+  const specPath = resolve(specArg);
+  const outDir = resolve(outArg);
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const node = process.execPath;
-const spec = resolve(specArg);
-const out = resolve(outArg);
-
-if (!existsSync(spec)) {
-  throw new CliError({
-    command: "build-deck",
-    stage: "preflight",
-    input: spec,
-    reason: "deck spec file does not exist",
-    recovery: "Pass an existing deck-spec.json path.",
-  });
-}
-const preflight = await preflightDeck({ specPath: spec });
-if (!preflight.ok) {
-  throw new CliError({
-    command: "build-deck",
-    stage: "preflight",
-    input: spec,
-    reason: preflight.failures.map((failure) => `${failure.field}: ${failure.reason}`).join("; "),
-    recovery: "Fix the deck spec and rerun the build.",
-  });
-}
-if (!existsSync(resolve(ROOT, "node_modules", "playwright", "package.json"))) {
-  throw new CliError({
-    command: "build-deck",
-    stage: "setup",
-    reason: "dependencies are missing",
-    recovery: `Run node ${resolve(ROOT, "scripts/setup.mjs")} and retry the build.`,
-  });
-}
-
-// Idempotent; provisions deps/Chromium/bundle before any stage needs them.
-execFileSync(node, [resolve(ROOT, "scripts/setup.mjs"), ...(debug ? ["--debug"] : [])], { stdio: "inherit" });
-
-const stages = [
-  ["presentation audit", [resolve(ROOT, "scripts/audit-deck-spec.mjs"), spec]],
-  ["base layout", [resolve(ROOT, "scripts/generate.mjs"), spec, out]],
-  ["semantic composition", [resolve(ROOT, "scripts/auto-compose.mjs"), spec, out]],
-  ["composed-deck audit", [resolve(ROOT, "scripts/audit-deck-spec.mjs"), spec, resolve(out, "auto-composition-spec.json")]],
-];
-
-for (const [name, args] of stages) {
-  const result = spawnSync(node, [...args, ...(debug ? ["--debug"] : [])], { stdio: "inherit" });
-  if (result.error) {
+  if (!existsSync(specPath)) {
     throw new CliError({
       command: "build-deck",
-      stage: name,
-      reason: "stage could not run",
-      recovery: "Check the stage dependencies and rerun the build with --debug for details.",
-      cause: result.error,
+      stage: "preflight",
+      input: specPath,
+      reason: "deck spec file does not exist",
+      recovery: "Pass an existing deck-spec.json path.",
     });
   }
-  if (result.status !== 0) {
+
+  // Preflight deliberately happens before staging or setup: malformed input
+  // must not launch Chromium or create residue beside a previous success.
+  const spec = await readJsonInput(specPath, { label: "deck spec" });
+  const preflight = await preflightDeck({ specPath, spec, mode: "automatic" });
+  if (!preflight.ok) {
     throw new CliError({
       command: "build-deck",
-      stage: name,
-      reason: `stage exited with status ${result.status ?? 1}`,
-      recovery: "Fix the stage failure reported above and rerun the build.",
+      stage: "preflight",
+      input: specPath,
+      reason: preflight.failures.map((failure) => `${failure.field}: ${failure.reason}`).join("; "),
+      recovery: "Fix the deck spec and rerun the build.",
     });
   }
-}
 
-console.error(`BUILD DECK OK — ${out}`);
-return 0;
+  const runChild = (stage, args) => {
+    const result = spawnSync(node, args, { cwd: root, encoding: "utf8" });
+    const output = `${result.stdout ?? ""}${result.stderr ?? ""}`.trim();
+    if (result.error || result.status !== 0) {
+      const reason = result.error ? "stage could not run" : `stage exited with status ${result.status ?? 1}`;
+      const failure = new CliError({
+        command: "build-deck",
+        stage,
+        input: specPath,
+        reason: output ? `${reason}: ${output}` : reason,
+        recovery: "Fix the stage failure reported above and rerun the build.",
+        cause: result.error,
+      });
+      // Preserve the child diagnostic only for --debug. runCli strips stack
+      // frames from the reason in normal mode; this stack gives debug users the
+      // exact child location without making ordinary failures noisy.
+      if (debug && output) failure.stack = output;
+      throw failure;
+    }
+  };
+
+  const assertCompleteArtifacts = async (stageDir, frameCount) => {
+    const required = ["deck.excalidraw", "scene.png", "diagnostics.json", "composition-manifest.json", "outline.md"];
+    for (const name of required) {
+      const info = await lstat(resolve(stageDir, name)).catch(() => null);
+      if (!info?.isFile()) throw new CliError({ command: "build-deck", stage: "finalize", input: stageDir, reason: `required artifact ${name} is missing`, recovery: "Rerun the build after restoring the missing stage output." });
+    }
+    const names = (await readdir(stageDir)).filter((name) => /^band-\d+\.png$/.test(name));
+    const expected = new Set(Array.from({ length: frameCount }, (_, index) => `band-${String(index + 1).padStart(2, "0")}.png`));
+    if (names.length !== frameCount || names.some((name) => !expected.has(name))) {
+      throw new CliError({ command: "build-deck", stage: "finalize", input: stageDir, reason: `band PNG count ${names.length} does not match frame count ${frameCount}`, recovery: "Rerun the build and ensure every frame render is emitted." });
+    }
+  };
+
+  const built = await withStagedOutput(outDir, async (stageDir) => {
+    const started = Date.now();
+    runChild("setup", [resolve(root, "scripts/setup.mjs"), ...(debug ? ["--debug"] : [])]);
+    runChild("presentation audit", [resolve(root, "scripts/audit-deck-spec.mjs"), specPath, ...(debug ? ["--debug"] : [])]);
+    runChild("base layout", [resolve(root, "scripts/generate.mjs"), specPath, stageDir, ...(debug ? ["--debug"] : [])]);
+    runChild("semantic composition", [resolve(root, "scripts/auto-compose.mjs"), specPath, stageDir, ...(debug ? ["--debug"] : [])]);
+    runChild("composed-deck audit", [
+      resolve(root, "scripts/audit-deck-spec.mjs"),
+      specPath,
+      resolve(stageDir, "auto-composition-spec.json"),
+      ...(debug ? ["--debug"] : []),
+    ]);
+
+    const compositionPath = resolve(stageDir, "composition-manifest.json");
+    let compositionManifest;
+    if (existsSync(compositionPath)) {
+      compositionManifest = JSON.parse(await readFile(compositionPath, "utf8"));
+    } else {
+      compositionManifest = { version: 1, bands: [], images: [] };
+      await writeFile(compositionPath, JSON.stringify(compositionManifest, null, 2) + "\n");
+    }
+
+    const deck = JSON.parse(await readFile(resolve(stageDir, "deck.excalidraw"), "utf8"));
+    const frameNames = deck.elements.filter((element) => element.type === "frame").map((frame) => frame.name);
+    await writeFile(
+      resolve(stageDir, "outline.md"),
+      buildOutline(spec, { frameNames, compositionManifest }),
+    );
+
+    const diagnosticsPath = resolve(stageDir, "diagnostics.json");
+    const diagnostics = JSON.parse(await readFile(diagnosticsPath, "utf8"));
+    const elapsedMs = Date.now() - started;
+    diagnostics.stage = "done";
+    diagnostics.passed = true;
+    diagnostics.build = {
+      elapsedMs,
+      frameCount: frameNames.length,
+      deliverables: {
+        required: ["deck.excalidraw", "scene.png", "diagnostics.json", "composition-manifest.json", "outline.md"],
+        bands: { category: "band-png", pattern: "band-NN.png", count: frameNames.length },
+      },
+    };
+    await writeFile(diagnosticsPath, JSON.stringify(diagnostics, null, 2) + "\n");
+
+    if (process.env.BEAUTIDRAW_TEST_OMIT_FINAL_ARTIFACT === "scene.png") {
+      await rm(resolve(stageDir, "scene.png"), { force: true });
+    }
+    await assertCompleteArtifacts(stageDir, frameNames.length);
+
+    return collectBuildReceipt(stageDir, { elapsedMs, publishedOutDir: outDir });
+  });
+
+  console.error(`BUILD DECK OK — ${outDir}`);
+  console.error(formatBuildReceipt(built.result));
+  if (built.cleanupWarning) {
+    console.error(
+      `cleanup warning: previous output backup remains at ${built.cleanupWarning.path} after ${built.cleanupWarning.attempts} attempts (${built.cleanupWarning.reason})`,
+    );
+  }
+  return 0;
 }, { argv: process.argv.slice(2), usage, positional: ["specArg", "outArg"] });
 
 process.exitCode = status;

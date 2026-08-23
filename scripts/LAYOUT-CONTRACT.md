@@ -20,6 +20,8 @@ are what the spike proved.
 | Children emitted before their frame. | convention (contiguity is not correctness — spike F6.4) |
 | Frame `name` is navigation metadata, not typography. Zero-padded numeric prefix. | frame names drive viewer navigation order |
 | Frame bounds are re-pinned to `[PAGE_X, PAGE_X + PAGE_WIDTH]` **after** conversion. | `convertToExcalidrawElements` refits a frame to its children's bounding box and discards the skeleton's `x`/`width`. Left unpinned, frame origin becomes content-derived and the page edge jitters between bands as you pan. |
+| The opening overview is unframed, measured, and stable. Its map stays inside `[PAGE_X + MARGIN, PAGE_X + PAGE_WIDTH - MARGIN]` and precedes frame 01. | Small screens use the ordered `outline.md`; overview ids are `deck-overview-map`, `deck-overview-navigation`, and `deck-overview-small-screen`. |
+| Text bounds come from `convertToExcalidrawElements` for the exact role/font/text tuple. | Approximate character-count widths are prohibited; a width estimate can hide a real wrap or overflow. |
 
 ## Constants
 
@@ -33,8 +35,8 @@ export const GUTTER_COL = 56;        // between columns
 export const BAND_GAP = 96;          // vertical gap between bands
 export const BOUND_TEXT_PADDING = 5; // per side, Excalidraw's own
 export const RAMP = { title: 48, heading: 38, hero: 30, label: 23, note: 18 };
-export const FONT = { prose: 6, mono: 3 };   // Nunito, Cascadia — spike F3
-export const FONT_NAME = { prose: "Nunito", mono: "Cascadia" };
+export const FONT = { prose: 6, mono: 3, handwritten: 5 }; // Nunito, Cascadia, Excalifont
+export const FONT_NAME = { prose: "Nunito", mono: "Cascadia", handwritten: "Excalifont" };
 
 // z_actual / z_scene machinery — legibility gate + diagnostics
 export const USABLE_W = 1600;
@@ -80,7 +82,14 @@ formula itself. Chrome (heading, deck line) uses `MARGIN`, not `BODY_INSET`.
 | free label | 23 | prose | no |
 | annotation | 18 | prose | no |
 | footer | 18 | prose | no |
-| any code / formula / literal | inherit | **mono** | as above |
+| paragraph / mechanism | 18 | **prose** | as above |
+| command / path / formula / literal | inherit | **mono** | as above |
+| short annotation | 18 | **handwritten** | no |
+
+`fontForRole(role)` normalizes unknown roles to prose and returns both the numeric
+Excalidraw family id and the family name. Roles survive font requirements,
+converter skeletons, composition descriptors, and diagnostics. Handwriting is
+reserved for short annotations; it is not a paragraph face.
 
 ## `deck-spec.json` schema
 
@@ -206,6 +215,12 @@ above. The pairs above are chosen to clear it; assert rather than assume.
    - every bound role resolved to a real text element
    - `boundElements` is an array on every element
    - every text/fill pair clears its contrast floor (4.5:1 below 24 effective px, 3:1 above)
+   - the three unframed overview ids are present, measured, within the page margins, and legible at fit-frame zoom
+
+The supported fit-frame is **1280x800** as well as 1600x900. Legibility uses
+the measured converted bounds at `min(viewportWidth / PAGE_WIDTH,
+viewportHeight / BAND_HEIGHT_CAP)`; it does not use fit-all scene zoom for a
+tall deck.
 
 **Edge-coverage exemptions.** `EDGE_COVERAGE_EXEMPT_PATTERNS = { "flow", "canvas" }`. A centred
 `flow` column cannot clear `ε` by construction, and widening it back out would reintroduce the

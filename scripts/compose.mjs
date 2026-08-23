@@ -10,7 +10,7 @@
 
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { dirname, isAbsolute, normalize, resolve } from "node:path";
 import { BODY_INSET, DECK_BODY_GAP, FRAME_PAD_BOTTOM, PAGE_WIDTH, USABLE_H, USABLE_W } from "./layout.mjs";
 import { runCli } from "./cli.mjs";
 import { readJsonInput } from "./preflight.mjs";
@@ -41,7 +41,7 @@ const canvasBands = new Set(
 );
 const requestedBands = new Set();
 const imageModes = new Set(["scene", "side", "focal", "background"]);
-const elementTypes = new Set(["text", "rectangle", "ellipse", "diamond", "line", "arrow"]);
+const elementTypes = new Set(["text", "rectangle", "ellipse", "diamond", "triangle", "line", "arrow"]);
 const existingIds = new Set(
   deck.elements
     .filter((element) => element.customData?.beautidrawComposition !== true)
@@ -82,6 +82,23 @@ const bodyForBand = (band) => {
 const files = { ...(deck.files ?? {}) };
 const manifest = [];
 const prepared = [];
+const portablePath = (value, where) => {
+  if (
+    typeof value !== "string" ||
+    value.trim() === "" ||
+    isAbsolute(value) ||
+    value.startsWith("/") ||
+    /^[A-Za-z]:[\\/]/.test(value) ||
+    value.split(/[\\/]/).includes("..")
+  ) {
+    throw new Error(`${where} must be a deck-relative path`);
+  }
+  const normalized = normalize(value);
+  if (normalized === ".." || normalized.startsWith("../") || normalized.startsWith("..\\")) {
+    throw new Error(`${where} must stay inside the deck directory`);
+  }
+  return normalized;
+};
 
 for (const entry of spec.bands) {
   if (!Number.isInteger(entry.band) || entry.band < 0) {
@@ -120,7 +137,8 @@ for (const entry of spec.bands) {
 
   if (entry.image) {
     const image = entry.image;
-    const imagePath = resolve(compositionDir, image.file);
+    const imageFile = portablePath(image.file, `band ${entry.band} image file`);
+    const imagePath = resolve(compositionDir, imageFile);
     const bytes = await readFile(imagePath);
     const pngSignature = bytes.subarray(0, 8).toString("hex");
     if (pngSignature !== "89504e470d0a1a0a") throw new Error(`${image.file}: only PNG assets are supported`);
@@ -178,9 +196,10 @@ for (const entry of spec.bands) {
       id: digest,
       mimeType: "image/png",
       dataURL: `data:image/png;base64,${bytes.toString("base64")}`,
+      created: Date.now(),
     };
     manifest.push({
-      file: image.file,
+      path: portablePath(image.path ?? image.file, `band ${entry.band} image path`),
       sha1: digest,
       band: entry.band,
       mode: image.mode,
@@ -188,6 +207,7 @@ for (const entry of spec.bands) {
       description: image.description,
       pixelWidth,
       pixelHeight,
+      dimensions: { width: pixelWidth, height: pixelHeight },
       targetWidth,
       targetHeight,
     });
@@ -217,6 +237,17 @@ for (const entry of spec.bands) {
       x: body.x + body.width * x,
       y: body.y + body.height * y,
     };
+    if (skeleton.customData?.semanticLabelId || skeleton.customData?.semanticLabelFor) {
+      skeleton.customData = {
+        ...skeleton.customData,
+        ...(skeleton.customData.semanticLabelId
+          ? { semanticLabelId: `b${entry.band}-${skeleton.customData.semanticLabelId}` }
+          : {}),
+        ...(skeleton.customData.semanticLabelFor
+          ? { semanticLabelFor: `b${entry.band}-${skeleton.customData.semanticLabelFor}` }
+          : {}),
+      };
+    }
     if (element.width != null) {
       const width = normalized(element.width, `band ${entry.band} ${element.id}.width`, { positive: true });
       if (x + width > 1) throw new Error(`band ${entry.band} ${element.id} exceeds body width`);
@@ -297,15 +328,43 @@ const result = await withHarness(async ({ page }) =>
         }
       }
 
-      const restored = api.restoreElements(output, null).map((element) => ({
-        ...element,
-        boundElements: element.boundElements ?? [],
-      }));
+      const roleById = new Map(
+        prepared.flatMap((item) => item.skeletons)
+          .filter((element) => element.role || element.customData?.beautidrawRole)
+          .map((element) => [element.id, element.role ?? element.customData.beautidrawRole]),
+      );
+      const roleFontFamily = { prose: 6, mono: 3, handwritten: 5 };
+      const restored = api.restoreElements(output, null).map((element) => {
+        const role = element.role ?? element.customData?.beautidrawRole ?? roleById.get(element.id) ?? roleById.get(element.containerId);
+        if (!role) return { ...element, boundElements: element.boundElements ?? [] };
+        return {
+          ...element,
+          role,
+          fontFamily: element.fontFamily ?? roleFontFamily[role] ?? roleFontFamily.prose,
+          customData: { ...(element.customData ?? {}), beautidrawRole: role },
+          boundElements: element.boundElements ?? [],
+        };
+      });
       const frames = restored.filter((element) => element.type === "frame");
       const frameById = new Map(frames.map((frame) => [frame.id, frame]));
       const elementById = new Map(restored.map((element) => [element.id, element]));
       const preparedByFrame = new Map(prepared.map((item) => [item.body.frameId, item]));
       const failures = [];
+      const semanticKinds = new Set(["example", "boundary", "inspect", "warning"]);
+      for (const icon of restored.filter((element) => element.customData?.semanticKind !== undefined)) {
+        const kind = icon.customData.semanticKind;
+        if (!semanticKinds.has(kind)) failures.push(`${icon.id}: unsupported semantic icon kind "${kind}"`);
+        if (!icon.frameId) failures.push(`${icon.id}: semantic icon must belong to a frame`);
+        const labelId = icon.customData.semanticLabelId;
+        const label = (labelId ? elementById.get(labelId) : null) ?? restored.find(
+          (element) => element.type === "text" && (
+            element.containerId === icon.id || element.customData?.semanticLabelFor === icon.id
+          ),
+        );
+        if (!label || label.type !== "text" || typeof label.text !== "string" || label.text.trim() === "") {
+          failures.push(`${icon.id}: semantic icon must have a visible label`);
+        }
+      }
 
       const channel = (hex) => {
         const value = Number.parseInt(hex, 16) / 255;
@@ -455,7 +514,12 @@ for (let i = 0; i < result.bandPngs.length; i++) {
 await writeFile(resolve(outDir, "scene.png"), Buffer.from(result.scenePng.split(",")[1], "base64"));
 await writeFile(
   resolve(outDir, "composition-manifest.json"),
-  JSON.stringify({ assets: manifest, bands: spec.bands.map(({ band, lane }) => ({ band, lane })) }, null, 2) + "\n",
+  JSON.stringify({
+    version: 1,
+    assets: manifest,
+    images: manifest,
+    bands: spec.bands.map(({ band, lane }) => ({ band, lane })),
+  }, null, 2) + "\n",
 );
 console.error(`OK: composed ${prepared.length} canvas bands in ${resolve(outDir, "deck.excalidraw")}`);
 return 0;

@@ -11,6 +11,7 @@
 import { dirname, resolve } from "node:path";
 import { CONTENT_BUDGETS, collectDeckPreflightFailures, readJsonInput } from "./preflight.mjs";
 import { CliError, runCli } from "./cli.mjs";
+import { validateSemanticVisuals } from "./outline.mjs";
 
 const usage = "usage: node scripts/audit-deck-spec.mjs <deck-spec.json> [composition-spec.json]\n       presentation-quality gate: composition budget, band depth, family variety.";
 
@@ -197,6 +198,11 @@ for (const [index, band] of bands.entries()) {
     failures.push(`canvas band ${index + 1}: visual.family must be one of ${[...visualFamilies].join(", ")}`);
   }
   if (visual) {
+    try {
+      validateSemanticVisuals(visual);
+    } catch (error) {
+      failures.push(`canvas band ${index + 1}: ${error.message}`);
+    }
     // The composer wraps the explanation at six lines (~105 characters each,
     // ~945 characters total) and ellipsizes past that; a rendered deck that
     // silently drops its own mechanism is worse than one that fails here.

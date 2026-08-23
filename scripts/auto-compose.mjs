@@ -5,12 +5,12 @@
 // Usage:
 //   node scripts/auto-compose.mjs <deck-spec.json> <outdir>
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { BODY_INSET, PAGE_WIDTH } from "./layout.mjs";
+import { BODY_INSET, FONT, PAGE_WIDTH, fontForRole } from "./layout.mjs";
 import { CliError, runCli } from "./cli.mjs";
 import { preflightDeck, readJsonInput } from "./preflight.mjs";
 
@@ -45,6 +45,7 @@ const lightSurface = "#f8fafc";
 const darkSurface = "#0f172a";
 const lightText = "#1e293b";
 const darkText = "#f8fafc";
+const SEMANTIC_KINDS = new Set(["example", "boundary", "inspect", "warning"]);
 
 const palette = {
   blue: { stroke: "#1e3a5f", fill: "#dbeafe", dark: "#1e3a5f" },
@@ -111,8 +112,19 @@ function colorFor(meta, index, dark = false) {
   return { ...chosen, text: dark ? darkText : lightText };
 }
 
-function text(id, x, y, value, fontSize, strokeColor) {
-  return { id, type: "text", x, y, text: value, fontSize, strokeColor };
+function text(id, x, y, value, fontSize, strokeColor, role = "prose", customData = {}) {
+  return {
+    id,
+    type: "text",
+    x,
+    y,
+    text: value,
+    fontSize,
+    fontFamily: fontForRole(role).family,
+    role,
+    strokeColor,
+    customData: { ...customData, beautidrawRole: role },
+  };
 }
 
 // Wrap width derived from the shape's OWN box: normalized width × body
@@ -126,7 +138,8 @@ function fitChars(width, fontSize) {
   return Math.max(12, Math.floor((width * BODY_W) / (fontSize * 0.5)) - 6);
 }
 
-function shape(id, type, x, y, width, height, value, colors, fontSize = 23) {
+function shape(id, type, x, y, width, height, value, colors, fontSize = 23, customData = {}) {
+  const role = "prose";
   return {
     id,
     type,
@@ -136,7 +149,11 @@ function shape(id, type, x, y, width, height, value, colors, fontSize = 23) {
     height,
     strokeColor: colors.stroke,
     backgroundColor: colors.fill,
-    label: { text: wrapText(value, fitChars(width, fontSize)), fontSize, strokeColor: colors.text },
+    strokeWidth: customData.semanticKind ? 3 : undefined,
+    role,
+    customData: { beautidrawRole: role, ...customData },
+    ...(type === "line" || type === "arrow" ? { points: [[0, 0.5], [1, 0.5]] } : {}),
+    label: { text: wrapText(value, fitChars(width, fontSize)), fontSize, fontFamily: FONT.prose, role, strokeColor: colors.text },
   };
 }
 
@@ -193,11 +210,14 @@ function metaForBand(band, index) {
     focus: clean(visual.focus, band.heading),
     caption: clean(visual.caption, band.deck),
     explanation: clean(visual.explanation, band.deck),
-    callouts: (Array.isArray(visual.callouts) ? visual.callouts : []).map((callout, calloutIndex) =>
-      typeof callout === "string"
-        ? { label: `Callout ${calloutIndex + 1}`, note: callout }
-        : { label: clean(callout?.label, `Callout ${calloutIndex + 1}`), note: clean(callout?.note ?? callout?.text, "") },
-    ),
+    callouts: (Array.isArray(visual.callouts) ? visual.callouts : []).map((callout, calloutIndex) => {
+      const kind = clean(callout?.kind, "example");
+      if (!SEMANTIC_KINDS.has(kind)) throw new Error(`band ${index} callout ${calloutIndex + 1}: unsupported semantic icon kind "${kind}"`);
+      if (typeof callout === "string") return { kind: "example", label: `Callout ${calloutIndex + 1}`, note: callout };
+      const label = clean(callout?.label, "");
+      if (!label) throw new Error(`band ${index} callout ${calloutIndex + 1}: label is required`);
+      return { kind, label, note: clean(callout?.note ?? callout?.text, "") };
+    }),
     evidence: (visual.evidence ?? []).map((item) => clean(item, "")).filter(Boolean),
     tradeoff: clean(visual.tradeoff, ""),
     example: clean(visual.example, ""),
@@ -212,6 +232,71 @@ function metaForBand(band, index) {
     axisX: clean(visual.axisX, "specificity →"),
     axisY: clean(visual.axisY, "blast radius ↑"),
   };
+}
+
+function semanticIcon(kind, { id, x, y, size, label, strokeColor = "#475569", labelColor = strokeColor }) {
+  if (!SEMANTIC_KINDS.has(kind)) throw new Error(`unsupported semantic icon kind "${kind}"`);
+  const type = { example: "ellipse", boundary: "diamond", inspect: "line", warning: "triangle" }[kind];
+  const iconId = `${id}-icon`;
+  const labelId = `${id}-label`;
+  const icon = {
+    id: iconId,
+    type,
+    x,
+    y,
+    width: size,
+    height: type === "line" ? 0.01 : size,
+    strokeColor,
+    strokeWidth: 3,
+    roughness: 0,
+    customData: { semanticKind: kind, semanticLabelId: labelId },
+  };
+  if (type === "line") icon.points = [[0, 0.5], [1, 0.5]];
+  const labelText = kind[0].toUpperCase() + kind.slice(1);
+  const labelElement = text(
+    labelId,
+    x + size + 0.012,
+    y,
+    `${labelText}: ${label}`,
+    18,
+    labelColor,
+    "prose",
+    { semanticLabelFor: iconId },
+  );
+  return [icon, labelElement];
+}
+
+function semanticType(kind, fallback) {
+  return { example: "ellipse", boundary: "diamond", inspect: "line", warning: "triangle" }[kind] ?? fallback;
+}
+
+function semanticCalloutShape(id, callout, x, y, width, height, colors, fontSize, fallbackType) {
+  const type = semanticType(callout.kind, fallbackType);
+  const icon = shape(
+    id,
+    type,
+    x,
+    y,
+    width,
+    height,
+    `${callout.label}\n${callout.note}`,
+    colors,
+    fontSize,
+    {
+      semanticKind: callout.kind,
+      ...(type === "line" ? { semanticLabelId: `${id}-label` } : {}),
+    },
+  );
+  if (type !== "line") return [icon];
+  return semanticIcon(callout.kind, {
+    id,
+    x,
+    y,
+    size: width,
+    label: `${callout.label}${callout.note ? `: ${callout.note}` : ""}`,
+    strokeColor: colors.stroke,
+    labelColor: colors.text,
+  });
 }
 
 function finish(meta, elements, extra = {}) {
@@ -229,8 +314,8 @@ function finish(meta, elements, extra = {}) {
   // are laid out around, and the capacity the audit's 560-character footer
   // gate is tuned to. Truncation past this is blocked at the gate, so an
   // ellipsis here means the spec was never audited.
-  elements.push(text("explanation", 0.05, 0.73, wrapText(depthParts.join("  •  "), 105, 6), 18, textColor));
-  if (meta.inspect) elements.push(text("inspect", 0.58, 0.93, wrapText(`Inspect: ${meta.inspect}`, 50, 2), 18, textColor));
+  elements.push(text("explanation", 0.05, 0.73, wrapText(depthParts.join("  •  "), 105, 6), 18, textColor, "prose"));
+  if (meta.inspect) elements.push(text("inspect", 0.58, 0.91, wrapText(`Inspect: ${meta.inspect}`, 50, 2), 18, textColor, "mono"));
   return {
     lane: sequentialFamilies.has(meta.family) || meta.family === "matrix" ? "hybrid" : "composed",
     surfaceColor: meta.dark ? darkSurface : lightSurface,
@@ -288,16 +373,26 @@ function spotlight(meta) {
   // its callouts on either surface.
   const focusColors = { ...colorFor(meta, 0, meta.dark), fill: "#dbeafe", text: lightText };
   elements.push(shape("spotlight", "ellipse", 0.36, 0.28, 0.28, 0.27, meta.focus, focusColors, 29));
-  // Bottom callout row rides at 0.53, not 0.58: a three-line bound label
-  // expands its container downward past the declared box, and 0.58 + growth
+  // Bottom callout row rides at 0.46, not 0.53: a three-line bound label
+  // expands its container downward past the declared box, and 0.53 + growth
   // grazed the 0.73 footer line on this band height.
-  const positions = [[0.06, 0.16], [0.68, 0.16], [0.06, 0.53], [0.68, 0.53]];
+  const positions = [[0.06, 0.16], [0.68, 0.16], [0.06, 0.46], [0.68, 0.46]];
   const callouts = meta.callouts.length ? meta.callouts : meta.nodes.slice(0, 4).map((node) => ({ label: node.label, note: node.note }));
   positions.forEach(([x, y], index) => {
     const callout = callouts[index % callouts.length];
     const colors = colorFor(meta, index + 1, meta.dark);
     if (meta.dark) colors.fill = colors.dark;
-    elements.push(shape(`callout-${index + 1}`, index % 2 ? "rectangle" : "ellipse", x, y, 0.24, 0.14, `${callout.label}\n${callout.note}`, colors, 20));
+    elements.push(...semanticCalloutShape(
+      `callout-${index + 1}`,
+      callout,
+      x,
+      y,
+      0.24,
+      0.14,
+      colors,
+      20,
+      index % 2 ? "rectangle" : "ellipse",
+    ));
   });
   return finish(meta, elements);
 }
@@ -362,7 +457,7 @@ function threshold(meta) {
 
 async function illustration(meta) {
   if (!meta.image?.file) throw new Error("illustration family requires visual.image.file");
-  const imagePath = resolve(specDir, meta.image.file);
+  const imagePath = resolve(outDir, meta.image.file);
   const bytes = await readFile(imagePath);
   if (bytes.subarray(0, 8).toString("hex") !== "89504e470d0a1a0a") {
     throw new Error(`${meta.image.file}: illustration assets must be PNG`);
@@ -385,12 +480,22 @@ async function illustration(meta) {
   const textColor = meta.dark ? darkText : lightText;
   const mutedText = meta.dark ? "#cbd5e1" : "#475569";
   const elements = [
-    text("thesis", textX, 0.08, wrapText(meta.focus, 42, 3), 29, textColor),
+    text("thesis", textX, 0.08, wrapText(meta.focus, 42, 3), 29, textColor, "prose"),
   ];
   callouts.slice(0, 2).forEach((callout, index) => {
     const colors = colorFor(meta, index + 1, meta.dark);
     if (meta.dark) colors.fill = colors.dark;
-    elements.push(shape(`callout-${index + 1}`, index % 2 ? "ellipse" : "rectangle", textX, 0.25 + index * 0.19, 0.39, 0.14, `${callout.label}\n${callout.note}`, colors, 20));
+    elements.push(...semanticCalloutShape(
+      `callout-${index + 1}`,
+      callout,
+      textX,
+      0.22 + index * 0.18,
+      0.39,
+      0.14,
+      colors,
+      20,
+      index % 2 ? "ellipse" : "rectangle",
+    ));
   });
   const depthParts = [
     meta.explanation,
@@ -401,13 +506,14 @@ async function illustration(meta) {
   // Ten lines is the illustration family's own proven footprint (the image
   // occupies the left half, so the text column has room no other family has).
   // The audit's ~90-word cap keeps this under the truncation line.
-  elements.push(text("explanation", textX, 0.60, wrapText(depthParts.join("  •  "), 60, 10), 18, mutedText));
-  if (meta.inspect) elements.push(text("inspect", textX, 0.91, wrapText(`Inspect: ${meta.inspect}`, 60, 2), 18, mutedText));
+  elements.push(text("explanation", textX, 0.64, wrapText(depthParts.join("  •  "), 60, 10), 18, mutedText, "prose"));
+  if (meta.inspect) elements.push(text("inspect", textX, 0.56, wrapText(`Inspect: ${meta.inspect}`, 60, 2), 18, mutedText, "mono"));
   return {
     lane: "composed",
     surfaceColor: meta.dark ? darkSurface : lightSurface,
     image: {
-      file: imagePath,
+      file: meta.image.file,
+      path: meta.image.path,
       mode: "side",
       use: clean(meta.image.use, meta.caption),
       description: clean(meta.image.description, ""),
@@ -524,6 +630,14 @@ function matrix(meta) {
 
 async function buildComposition(band, index) {
   const meta = metaForBand(band, index);
+  if (meta.family === "illustration") {
+    const source = resolve(specDir, meta.image.file);
+    const stagedRelative = `__build-assets/band-${index}-${basename(meta.image.file)}`;
+    const staged = resolve(outDir, stagedRelative);
+    await mkdir(dirname(staged), { recursive: true });
+    await copyFile(source, staged);
+    meta.image = { ...meta.image, file: stagedRelative, path: meta.image.file };
+  }
   const builders = { illustration, orbit, field, spotlight, constellation, evidence, matrix, threshold, map, pipeline, journey, tension };
   const composition = await builders[meta.family](meta);
   return { band: index, ...composition };
@@ -535,14 +649,18 @@ await mkdir(outDir, { recursive: true });
 const compositionPath = resolve(outDir, "auto-composition-spec.json");
 await writeFile(compositionPath, JSON.stringify(composition, null, 2) + "\n");
 
-if (canvasBands.length) {
-  await exec(process.execPath, [
-    resolve(ROOT, "scripts/compose.mjs"),
-    resolve(outDir, "deck.excalidraw"),
-    compositionPath,
-    outDir,
-    ...(debug ? ["--debug"] : []),
-  ], { stdio: "inherit" });
+try {
+  if (canvasBands.length) {
+    await exec(process.execPath, [
+      resolve(ROOT, "scripts/compose.mjs"),
+      resolve(outDir, "deck.excalidraw"),
+      compositionPath,
+      outDir,
+      ...(debug ? ["--debug"] : []),
+    ], { stdio: "inherit" });
+  }
+} finally {
+  await rm(resolve(outDir, "__build-assets"), { recursive: true, force: true });
 }
 
 console.error(`AUTO-COMPOSE OK — ${canvasBands.length} semantic canvas bands rendered via ${[...new Set(composition.bands.map((band) => band.elements.find((element) => element.id === "thesis")?.text ?? ""))].length} visual plans`);

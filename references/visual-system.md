@@ -46,11 +46,12 @@ Two consequences. Content cannot push text below the floor — a band that would
 failed the height cap. And the ramp cannot be lowered: 17pt would land at 11.93px and fail
 everywhere at once.
 
-`prose` (Nunito) is the default. `mono` (Cascadia) is a **declared but unwired** role — code,
-formulas, CLI, file paths, literal identifiers. `layout.mjs` defines it in `FONT` and routes no
-text through it yet, so in practice every element in a generated deck is Nunito. Write formulas
-as prose ("voluntary leavers over average headcount", not `leavers / headcount`) until the role
-is wired.
+`prose` (Nunito) is the default paragraph face. `mono` (Cascadia) is used for
+commands, formulas, CLI strings, file paths, and literal identifiers. Short
+annotations may use `handwritten` (Excalifont); it is not a paragraph face.
+`fontForRole()` carries the role through measured font requirements and the
+converter, so wrapping is based on the declared face rather than an
+approximate character-count width.
 
 ## Contrast
 

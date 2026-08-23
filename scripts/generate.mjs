@@ -183,20 +183,50 @@ function checkNoOverlap(elements) {
   return failures;
 }
 
-function checkLegibility(elements) {
+function checkLegibility(elements, diagnostics) {
   const failures = [];
   const frames = new Map(elements.filter((e) => e.type === "frame").map((f) => [f.id, f]));
   for (const el of elements) {
-    if (el.type !== "text" || !el.frameId) continue;
-    const frame = frames.get(el.frameId);
-    if (!frame) continue;
-    const zActual = Math.min(USABLE_W / frame.width, USABLE_H / frame.height);
+    if (el.type !== "text") continue;
+    const frame = el.frameId ? frames.get(el.frameId) : null;
+    const zActual = frame
+      ? Math.min(USABLE_W / frame.width, USABLE_H / frame.height)
+      // Unframed chrome is read at the same fit-frame scale as the opening
+      // frame; fit-all is intentionally not the supported reading mode for a
+      // tall deck (the overview explicitly directs readers to frame navigation).
+      : Math.min(USABLE_W / PAGE_WIDTH, USABLE_H / BAND_HEIGHT_CAP);
     const effective = el.fontSize * zActual;
     if (effective < 12) {
       failures.push(
-        `text "${el.id}" in frame "${frame.name}": fontSize ${el.fontSize} × z_actual ${zActual.toFixed(4)} ` +
+        `text "${el.id}"${frame ? ` in frame "${frame.name}"` : " in unframed overview"}: fontSize ${el.fontSize} × z_actual ${zActual.toFixed(4)} ` +
           `= ${effective.toFixed(2)}px effective, below the 12px gate`,
       );
+    }
+  }
+  return failures;
+}
+
+function checkOverview(elements, diagnostics) {
+  const failures = [];
+  const ids = diagnostics?.overview?.ids ?? [
+    "deck-overview-map",
+    "deck-overview-navigation",
+    "deck-overview-small-screen",
+  ];
+  const byId = new Map(elements.map((element) => [element.id, element]));
+  const firstFrameY = Math.min(...elements.filter((element) => element.type === "frame").map((frame) => frame.y));
+  for (const id of ids) {
+    const element = byId.get(id);
+    if (!element) {
+      failures.push(`overview element "${id}" is missing`);
+      continue;
+    }
+    if (element.frameId) failures.push(`overview element "${id}" must remain unframed`);
+    if (element.x < PAGE_X + 80 || element.x + element.width > PAGE_X + PAGE_WIDTH - 80) {
+      failures.push(`overview element "${id}" exceeds the page margin bounds`);
+    }
+    if (element.y + element.height >= firstFrameY) {
+      failures.push(`overview element "${id}" overlaps or follows the first frame`);
     }
   }
   return failures;
@@ -284,7 +314,8 @@ function runValidations(elements, diagnostics) {
     ...checkFrameHeightCap(elements),
     ...checkEdgeCoverage(elements, diagnostics),
     ...checkNoOverlap(elements),
-    ...checkLegibility(elements),
+    ...checkLegibility(elements, diagnostics),
+    ...checkOverview(elements, diagnostics),
     ...checkBoundRolesResolved(elements),
     ...checkBoundElementsIsArray(elements),
     ...checkContrast(elements),
@@ -386,7 +417,7 @@ const pageResult = await withHarness(async ({ page, origin }) => {
           bandPngs,
           sceneDataUrl,
           excalidrawJson,
-          fontReport: { loaded: fontReq.map(({ family, size }) => `${family}@${size}`) },
+          fontReport: { loaded: fontReq.map(({ role, family, size }) => `${role}:${family}@${size}`), requirements: fontReq },
         };
       } catch (e) {
         return { error: String((e && e.stack) || e) };

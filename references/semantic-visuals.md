@@ -19,8 +19,8 @@ automatic composer computes coordinates. Do not write normalized positions in or
     "evidence": ["a concrete example or source-backed observation"],
     "tradeoff": "the boundary or decision this creates",
     "inspect": "the command or file that verifies the claim",
-    "callouts": [{ "label": "short label", "note": "why it matters" }],
-    "image": { "file": "assets/topic-scene.png", "side": "left", "use": "what the scene explains" },
+    "callouts": [{ "kind": "example", "label": "short label", "note": "why it matters" }],
+    "image": { "file": "assets/topic-scene.png", "side": "left", "use": "what the scene explains", "description": "what the raster scene shows" },
     "caption": "one sentence that explains the relationship",
     "surface": "light"
   }
@@ -41,6 +41,16 @@ The composer renders these fields inside fixed footprints and ellipsizes past th
   command is worse than none.
 - Shape labels wrap to their own box width; keep `label`s scannable and put depth in the fields
   above.
+
+Callout `kind` is one of exactly `example`, `boundary`, `inspect`, or `warning`.
+Every semantic icon carries that kind in `customData.semanticKind` and keeps a
+visible label; the native icon primitives are ellipse, diamond, line, and
+triangle respectively. The icon is not wrapped in a new card.
+
+Migration compatibility is temporary: an omitted `kind` on an object, or a
+legacy string callout, is normalized to `example` so existing exemplars remain
+buildable. An explicit unsupported kind is rejected; arbitrary values are
+never silently accepted.
 
 ## Families
 
