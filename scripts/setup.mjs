@@ -24,6 +24,15 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const MANIFEST_SCHEMA = "beautidraw.bundle-manifest/3";
 const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
 
+const [, , arg] = process.argv;
+if (arg === "--help" || arg === "-h") {
+  console.log("usage: node scripts/setup.mjs");
+  console.log("       idempotently provisions node_modules (pinned deps), Chromium,");
+  console.log("       and the vendored Excalidraw bundle; prints 'already provisioned,'");
+  console.log("       and does nothing when everything verifies.");
+  process.exit(0);
+}
+
 function run(cmd, args) {
   // cwd is pinned to ROOT so this works when invoked from any directory —
   // pnpm and playwright both resolve config relative to cwd, not to argv[1].

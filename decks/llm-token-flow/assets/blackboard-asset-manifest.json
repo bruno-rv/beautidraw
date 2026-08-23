@@ -1,0 +1,81 @@
+{
+  "style": "colored-blackboard",
+  "generator": "image_gen",
+  "generatedOn": "2026-08-06",
+  "placement": "background",
+  "opacity": 22,
+  "assets": [
+    {
+      "suggestedBand": 1,
+      "frameId": "b0-frame",
+      "file": "backgrounds/background-01-whole-pipeline.png",
+      "sha1": "62c23f48ef953e16274de6472779213dcc365701",
+      "width": 2280,
+      "height": 819,
+      "use": "Prompt marks flow through token tiles, a lookup grid, layered blocks, and one selected spark."
+    },
+    {
+      "suggestedBand": 2,
+      "frameId": "b1-frame",
+      "file": "backgrounds/background-02-tokenizers.png",
+      "sha1": "8c0a4df5a320b17ea91fd044a555cc6256a284c6",
+      "width": 2280,
+      "height": 319,
+      "use": "Abstract token pieces split and recombine along a shallow amber path."
+    },
+    {
+      "suggestedBand": 3,
+      "frameId": "b2-frame",
+      "file": "backgrounds/background-03-embedding-vector.png",
+      "sha1": "4c455221e8c2fff0741892fca69a62a434b2aefc",
+      "width": 2280,
+      "height": 694,
+      "use": "A token marker enters a lookup grid and becomes a positioned constellation of vectors."
+    },
+    {
+      "suggestedBand": 4,
+      "frameId": "b3-frame",
+      "file": "backgrounds/background-04-transformer-block.png",
+      "sha1": "f032e313996d44d18fc646d264ff31e0d72f9825",
+      "width": 2280,
+      "height": 470,
+      "use": "Separate attention arcs, feed-forward funnel, and residual loop explain one block."
+    },
+    {
+      "suggestedBand": 5,
+      "frameId": "b4-frame",
+      "file": "backgrounds/background-05-next-token.png",
+      "sha1": "083d88dcd120ff08f726f642e11c6f59afa0e8ba",
+      "width": 2280,
+      "height": 819,
+      "use": "A final vector becomes a probability landscape and converges on one next-token spark."
+    },
+    {
+      "suggestedBand": 6,
+      "frameId": "b5-frame",
+      "file": "backgrounds/background-06-sampling-controls.png",
+      "sha1": "355b3360c2595c172ab858a9e4e80bb98bd37627",
+      "width": 2280,
+      "height": 388,
+      "use": "Three shallow chalk motifs show sharpening, trimming, and fixed top-ranked selection."
+    },
+    {
+      "suggestedBand": 7,
+      "frameId": "b6-frame",
+      "file": "backgrounds/background-07-generation-loop.png",
+      "sha1": "aedbcf9460f3d790b722d4e49b3829a16b8eb2e7",
+      "width": 2280,
+      "height": 319,
+      "use": "A chosen token joins the sequence, reuses the cache, passes forward, and stops."
+    },
+    {
+      "suggestedBand": 8,
+      "frameId": "b7-frame",
+      "file": "backgrounds/background-08-mental-model.png",
+      "sha1": "c3a4a83743fd4b90edbf46f6b026746b69eb9c42",
+      "width": 2280,
+      "height": 371,
+      "use": "Six visual corrections pair common mental-model slips with a clearer mechanism."
+    }
+  ]
+}

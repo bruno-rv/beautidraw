@@ -12,18 +12,45 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const [, , specArg, compositionArg] = process.argv;
-if (!specArg) {
+if (!specArg || specArg === "--help" || specArg === "-h") {
   console.error("usage: node scripts/audit-deck-spec.mjs <deck-spec.json> [composition-spec.json]");
-  process.exit(1);
+  console.error("       presentation-quality gate: composition budget, band depth, family variety.");
+  process.exit(specArg === "--help" || specArg === "-h" ? 0 : 1);
 }
 
-const spec = JSON.parse(await readFile(resolve(specArg), "utf8"));
-const composition = compositionArg
-  ? JSON.parse(await readFile(resolve(compositionArg), "utf8"))
-  : null;
+async function readJsonOrExit(path, what) {
+  try {
+    return JSON.parse(await readFile(resolve(path), "utf8"));
+  } catch (e) {
+    if (e.code === "ENOENT") {
+      console.error(`AUDIT ABORTED — ${what} not found: ${resolve(path)}`);
+    } else {
+      console.error(`AUDIT ABORTED — ${what} is not valid JSON (${resolve(path)}): ${e.message}`);
+    }
+    process.exit(1);
+  }
+}
+
+const spec = await readJsonOrExit(specArg, "deck spec");
+if (!spec || typeof spec !== "object" || Array.isArray(spec)) {
+  console.error("AUDIT ABORTED — deck spec must be a JSON object");
+  process.exit(1);
+}
+const composition = compositionArg ? await readJsonOrExit(compositionArg, "composition spec") : null;
 
 const failures = [];
-const bands = Array.isArray(spec.bands) ? spec.bands : [];
+const rawBands = Array.isArray(spec.bands) ? spec.bands : [];
+rawBands.forEach((band, index) => {
+  if (!band || typeof band !== "object" || Array.isArray(band)) {
+    failures.push(`band ${index + 1} must be an object`);
+  }
+});
+if (failures.length) {
+  console.error("PRESENTATION AUDIT FAILED");
+  for (const failure of failures) console.error(`- ${failure}`);
+  process.exit(1);
+}
+const bands = rawBands;
 const structured = bands.filter((band) => band.pattern !== "canvas");
 const canvas = bands.filter((band) => band.pattern === "canvas");
 const words = (value) => String(value ?? "").trim().split(/\s+/).filter(Boolean).length;
@@ -72,6 +99,61 @@ if (bands.length >= 8) {
   if (sequentialVisualCount > 2) {
     failures.push(`${sequentialVisualCount}/${bands.length} canvas visuals are sequential; use spatial or field families for the rest`);
   }
+
+  // Family variety, mirroring the structured rule: colour changes do not count
+  // as variation (SKILL.md's own rejection criteria), so neither does repeating
+  // the same composed family with different content. Raster illustrations are
+  // exempt — SKILL.md requires at least two of them in a 10+ band deck.
+  const composedFamilies = new Map();
+  for (const band of bands) {
+    const family = band.visual?.family;
+    if (family && family !== "illustration") {
+      composedFamilies.set(family, (composedFamilies.get(family) ?? 0) + 1);
+    }
+  }
+  for (const [family, count] of composedFamilies) {
+    if (count > 2) {
+      failures.push(`composed visual "${family}" appears ${count} times; use it at most twice in a substantial deck`);
+    }
+  }
+
+  // Capacity gates for the composer's fixed text footprints, measured in
+  // characters because that is what wraps: every canvas family renders
+  // explanation + "Example:" + "Boundary:" inside its footer column — six
+  // ~100-character lines for most families, ten ~57-character lines in the
+  // illustration family's text column — the thesis renders as one
+  // ~120-character line, and the inspect command renders inside two
+  // ~46-character lines after its "Inspect: " prefix (~84 characters of
+  // command). The renderer ellipsizes past those budgets; a deck that
+  // silently drops its own mechanism, boundary, or ships an untypeable
+  // command is worse than one that fails here.
+  const CAPS = { footer: 560, thesis: 120, inspect: 84 };
+  for (const [index, band] of bands.entries()) {
+    const visual = band.visual;
+    if (!visual) continue;
+    const chars = (value) => String(value ?? "").trim().length;
+    if (chars(visual.thesis) > CAPS.thesis) {
+      failures.push(
+        `canvas band ${index + 1}: visual.thesis is ${chars(visual.thesis)} characters; it renders as ONE line of at most ${CAPS.thesis}`,
+      );
+    }
+    const footerChars =
+      chars(visual.explanation) +
+      (visual.example ? chars(visual.example) + 9 : 0) +
+      (visual.tradeoff ? chars(visual.tradeoff) + 11 : 0) +
+      Math.min((visual.evidence ?? []).length, 1) * ((visual.evidence ?? [])[0] ? chars(visual.evidence[0]) + 10 : 0);
+    if (footerChars > CAPS.footer) {
+      failures.push(
+        `canvas band ${index + 1}: explanation + example + boundary total ${footerChars} characters; the rendered column holds ~${CAPS.footer} — split the mechanism across bands instead`,
+      );
+    }
+    const inspectChars = chars(visual.inspect);
+    if (inspectChars > CAPS.inspect) {
+      failures.push(
+        `canvas band ${index + 1}: visual.inspect is ${inspectChars} characters; keep it to ${CAPS.inspect} so the rendered "Inspect:" command stays typeable`,
+      );
+    }
+  }
   if (bands.length >= 10) {
     const illustrationCount = bands.filter((band) => band.visual?.family === "illustration").length;
     if (illustrationCount < 2) failures.push(`substantial decks need at least 2 raster illustration frames; found ${illustrationCount}`);
@@ -94,6 +176,15 @@ for (const [index, band] of bands.entries()) {
     failures.push(`canvas band ${index + 1}: visual.family must be one of ${[...visualFamilies].join(", ")}`);
   }
   if (visual) {
+    // The composer wraps the explanation at six lines (~105 characters each,
+    // ~945 characters total) and ellipsizes past that; a rendered deck that
+    // silently drops its own mechanism is worse than one that fails here. 140
+    // words ≈ the composer's capacity with margin.
+    if (words(visual.explanation) > 140) {
+      failures.push(
+        `canvas band ${index + 1}: visual.explanation is ${words(visual.explanation)} words; the renderer truncates past ~130 — split the mechanism across bands instead`,
+      );
+    }
     const depthWords = words(visual.explanation) + words(visual.tradeoff) + words(visual.example) + words(visual.inspect) + (visual.evidence ?? []).reduce((sum, item) => sum + words(item), 0) + (visual.callouts ?? []).reduce((sum, item) => sum + words(item.label) + words(item.note ?? item.text), 0);
     if (depthWords < 35) failures.push(`canvas band ${index + 1} needs at least 35 words of mechanism, example, evidence, boundary, and inspection support`);
     if (words(visual.explanation) < 10) failures.push(`canvas band ${index + 1} needs a mechanism-level explanation`);
@@ -118,7 +209,7 @@ for (const [index, band] of bands.entries()) {
   }
 }
 
-const density = bands.map((band) => {
+const density = bands.map((band, bandIndex) => {
   let count = words(band.heading) + words(band.deck);
   for (const node of band.nodes ?? []) {
     count += words(node.label) + words(node.note);
@@ -126,7 +217,7 @@ const density = bands.map((band) => {
     for (const child of node.children ?? []) count += words(child.label);
   }
   if (band.pattern === "canvas") {
-    const entry = compositionByBand.get(bands.indexOf(band));
+    const entry = compositionByBand.get(bandIndex);
     for (const element of entry?.elements ?? []) {
       count += words(element.text) + words(element.label?.text);
     }

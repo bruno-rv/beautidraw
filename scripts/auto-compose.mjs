@@ -16,9 +16,11 @@ const exec = promisify(execFile);
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const [, , specArg, outArg] = process.argv;
 
-if (!specArg || !outArg) {
+if (!specArg || !outArg || specArg === "--help" || specArg === "-h") {
   console.error("usage: node scripts/auto-compose.mjs <deck-spec.json> <outdir>");
-  process.exit(1);
+  console.error("       turns semantic `visual` declarations into composed canvas frames");
+  console.error("       (writes auto-composition-spec.json, then runs compose.mjs).");
+  process.exit(specArg === "--help" || specArg === "-h" ? 0 : 1);
 }
 
 const spec = JSON.parse(await readFile(resolve(specArg), "utf8"));
@@ -48,32 +50,36 @@ function clean(value, fallback) {
 }
 
 function wrapText(value, maxChars = 28, maxLines = 3) {
-  const words = clean(value, "").split(/\s+/).filter(Boolean);
+  // Authorial newlines are structure — a node's label and its note are two
+  // thoughts, not one phrase. Wrap each authored line independently, then
+  // apply maxLines across the combined result.
+  const segments = clean(value, "").split("\n");
   const lines = [];
-  let current = "";
-  for (const word of words) {
-    if (word.includes("\n")) {
-      const pieces = word.split("\n");
-      for (const piece of pieces) {
-        if (current) lines.push(current);
-        current = piece;
+  for (const segment of segments) {
+    const words = segment.split(/\s+/).filter(Boolean);
+    let current = "";
+    for (const word of words) {
+      const next = current ? `${current} ${word}` : word;
+      if (next.length > maxChars && current) {
+        lines.push(current);
+        current = word;
+      } else {
+        current = next;
       }
-      continue;
     }
-    const next = current ? `${current} ${word}` : word;
-    if (next.length > maxChars && current) {
-      lines.push(current);
-      current = word;
-    } else {
-      current = next;
-    }
+    if (current) lines.push(current);
   }
-  if (current) lines.push(current);
   if (lines.length <= maxLines) return lines.join("\n");
   const kept = lines.slice(0, maxLines);
   kept[maxLines - 1] = `${kept[maxLines - 1].replace(/[.,;:]?$/, "")}…`;
   return kept.join("\n");
 }
+
+// Same greedy wrap, never ellipsizes. Reserved: inspection commands must
+// survive rendering typeable, and the audit enforces that at the gate by
+// capping visual.inspect to what the composer's two rendered lines hold
+// (~14 words). Keeping the two-line cap here is deliberate — an unbounded
+// command block overflows the frame bottom on shorter canvas bands.
 
 function normalizeNode(node, index) {
   if (typeof node === "string") return { label: node, note: "" };
@@ -97,6 +103,17 @@ function text(id, x, y, value, fontSize, strokeColor) {
   return { id, type: "text", x, y, text: value, fontSize, strokeColor };
 }
 
+// Wrap width derived from the shape's OWN box: normalized width × body
+// width ÷ ~0.5×fontSize px-per-character (the prose face's measured average),
+// minus slack for Excalidraw's bound-text padding. The old fixed 28-character
+// default both fused label+note lines and ellipsized callout notes that
+// visibly fit their boxes.
+const BODY_W = PAGE_WIDTH - 2 * BODY_INSET;
+
+function fitChars(width, fontSize) {
+  return Math.max(12, Math.floor((width * BODY_W) / (fontSize * 0.5)) - 6);
+}
+
 function shape(id, type, x, y, width, height, value, colors, fontSize = 23) {
   return {
     id,
@@ -107,7 +124,7 @@ function shape(id, type, x, y, width, height, value, colors, fontSize = 23) {
     height,
     strokeColor: colors.stroke,
     backgroundColor: colors.fill,
-    label: { text: wrapText(value), fontSize, strokeColor: colors.text },
+    label: { text: wrapText(value, fitChars(width, fontSize)), fontSize, strokeColor: colors.text },
   };
 }
 
@@ -133,6 +150,22 @@ function line(id, x, y, width, height, points, strokeColor = "#94a3b8") {
   return { id, type: "line", x, y, width, height, points, strokeColor, strokeWidth: 3 };
 }
 
+// The model may write `visual.thesis`: a one-line statement of what the
+// audience should see. The composer renders it as the frame's opening line;
+// without one it skips the line entirely rather than filling the space with
+// boilerplate that carries zero information about THIS deck's content.
+// One rendered line, hard cap: every family places its first shapes at or
+// below y≈0.16 on the left half, and a wrapped second line would collide
+// with them (field's y-axis label sits near that line). 120 characters is
+// the largest single line the body width carries at fontSize 23 with margin;
+// the audit holds visual.thesis to ≤18 words (~120 characters) so the two
+// caps agree and neither ever ellipsizes.
+function thesisLine(meta) {
+  return meta.thesis
+    ? [text("thesis", 0.05, 0.04, wrapText(meta.thesis, 120, 1), 23, meta.dark ? darkText : lightText)]
+    : [];
+}
+
 function metaForBand(band, index) {
   const visual = band.visual ?? {};
   const rawNodes = visual.nodes ?? band.nodes ?? [];
@@ -144,6 +177,7 @@ function metaForBand(band, index) {
   return {
     family,
     dark,
+    thesis: clean(visual.thesis, ""),
     focus: clean(visual.focus, band.heading),
     caption: clean(visual.caption, band.deck),
     explanation: clean(visual.explanation, band.deck),
@@ -170,12 +204,19 @@ function metaForBand(band, index) {
 
 function finish(meta, elements, extra = {}) {
   const textColor = meta.dark ? darkText : "#475569";
+  // One evidence item, not two: the footer is a summary, and the second
+  // citation was the line that pushed most bands past the six-line budget
+  // into ellipsis. The spec keeps both; the frame shows the strongest.
   const depthParts = [
     meta.explanation,
     meta.example ? `Example: ${meta.example}` : "",
     meta.tradeoff ? `Boundary: ${meta.tradeoff}` : "",
-    ...meta.evidence.slice(0, 2).map((item) => `Evidence: ${item}`),
+    ...meta.evidence.slice(0, 1).map((item) => `Evidence: ${item}`),
   ].filter(Boolean);
+  // Six lines × ~105 characters — the footprint every family's shape zones
+  // are laid out around, and the capacity the audit's 560-character footer
+  // gate is tuned to. Truncation past this is blocked at the gate, so an
+  // ellipsis here means the spec was never audited.
   elements.push(text("explanation", 0.05, 0.73, wrapText(depthParts.join("  •  "), 105, 6), 18, textColor));
   if (meta.inspect) elements.push(text("inspect", 0.58, 0.93, wrapText(`Inspect: ${meta.inspect}`, 50, 2), 18, textColor));
   return {
@@ -187,12 +228,18 @@ function finish(meta, elements, extra = {}) {
 }
 
 function orbit(meta) {
-  const elements = [text("thesis", 0.05, 0.04, "The session is the intersection of these levers.", 23, meta.dark ? darkText : lightText)];
-  const focusColors = { ...colorFor(meta, 0, meta.dark), fill: meta.dark ? "#dbeafe" : "#dbeafe", text: lightText };
-  elements.push(shape("focus", "ellipse", 0.39, 0.36, 0.22, 0.22, meta.focus, focusColors, 26));
+  const elements = thesisLine(meta);
+  // The focal ellipse stays light-filled in both surfaces: it is the one
+  // element the satellites' arrows imply, and #dbeafe with dark text keeps
+  // its contrast where a dark fill would flatten it.
+  const focusColors = { ...colorFor(meta, 0, meta.dark), fill: "#dbeafe", text: lightText };
+  elements.push(shape("focus", "ellipse", 0.39, 0.31, 0.22, 0.22, meta.focus, focusColors, 26));
+  // Ring top clears the thesis strip (y∈[0.03,0.16] on the left half) and
+  // the ring bottom stays at y≤0.72 above the footer — same rules every
+  // family obeys.
   const positions = [
-    [0.41, 0.08], [0.73, 0.27], [0.73, 0.64],
-    [0.41, 0.76], [0.08, 0.64], [0.08, 0.27],
+    [0.41, 0.16], [0.72, 0.26], [0.72, 0.48],
+    [0.41, 0.58], [0.09, 0.48], [0.09, 0.26],
   ];
   const shapes = ["ellipse", "rectangle", "ellipse", "rectangle", "ellipse", "rectangle"];
   positions.forEach(([x, y], index) => {
@@ -207,7 +254,7 @@ function orbit(meta) {
 function field(meta) {
   const textColor = meta.dark ? darkText : lightText;
   const axisColor = meta.dark ? "#94a3b8" : "#64748b";
-  const elements = [text("thesis", 0.05, 0.04, "The field shows where options sit, not a sequence they must follow.", 23, textColor)];
+  const elements = thesisLine(meta);
   elements.push(line("field-x", 0.08, 0.50, 0.84, 0.01, [[0, 0.5], [1, 0.5]], axisColor));
   elements.push(line("field-y", 0.50, 0.15, 0.01, 0.70, [[0.5, 0], [0.5, 1]], axisColor));
   elements.push(text("field-x-label", 0.72, 0.83, meta.axisX, 18, textColor));
@@ -224,25 +271,33 @@ function field(meta) {
 }
 
 function spotlight(meta) {
-  const elements = [text("thesis", 0.05, 0.04, "One focal idea, surrounded by the reasons it matters.", 23, lightText)];
-  const focusColors = colorFor(meta, 0);
-  focusColors.fill = "#dbeafe";
+  const elements = thesisLine(meta);
+  // Same light focal treatment as orbit: the spotlighted idea must out-read
+  // its callouts on either surface.
+  const focusColors = { ...colorFor(meta, 0, meta.dark), fill: "#dbeafe", text: lightText };
   elements.push(shape("spotlight", "ellipse", 0.36, 0.28, 0.28, 0.27, meta.focus, focusColors, 29));
-  const positions = [[0.06, 0.16], [0.68, 0.16], [0.06, 0.58], [0.68, 0.58]];
+  // Bottom callout row rides at 0.53, not 0.58: a three-line bound label
+  // expands its container downward past the declared box, and 0.58 + growth
+  // grazed the 0.73 footer line on this band height.
+  const positions = [[0.06, 0.16], [0.68, 0.16], [0.06, 0.53], [0.68, 0.53]];
   const callouts = meta.callouts.length ? meta.callouts : meta.nodes.slice(0, 4).map((node) => ({ label: node.label, note: node.note }));
   positions.forEach(([x, y], index) => {
     const callout = callouts[index % callouts.length];
-    const colors = colorFor(meta, index + 1);
+    const colors = colorFor(meta, index + 1, meta.dark);
+    if (meta.dark) colors.fill = colors.dark;
     elements.push(shape(`callout-${index + 1}`, index % 2 ? "rectangle" : "ellipse", x, y, 0.24, 0.14, `${callout.label}\n${callout.note}`, colors, 20));
   });
   return finish(meta, elements);
 }
 
 function constellation(meta) {
-  const elements = [text("thesis", 0.05, 0.04, "These ideas belong to one neighborhood; proximity carries the meaning.", 23, lightText)];
-  const positions = [[0.10, 0.18], [0.36, 0.12], [0.68, 0.18], [0.22, 0.50], [0.52, 0.46], [0.76, 0.52]];
+  const elements = thesisLine(meta);
+  // star-2 sits below the thesis strip: at y=0.12 it grazed the one-line
+  // thesis's worst-case rendered height on short bands.
+  const positions = [[0.10, 0.18], [0.38, 0.16], [0.68, 0.18], [0.22, 0.50], [0.52, 0.46], [0.76, 0.52]];
   positions.slice(0, Math.min(meta.nodes.length, positions.length)).forEach(([x, y], index) => {
-    const colors = colorFor(meta, index);
+    const colors = colorFor(meta, index, meta.dark);
+    if (meta.dark) colors.fill = colors.dark;
     const shapeType = index === 0 ? "ellipse" : index % 2 ? "diamond" : "rectangle";
     const size = index === 0 ? [0.24, 0.18] : [0.18, 0.14];
     elements.push(shape(`star-${index + 1}`, shapeType, x, y, size[0], size[1], nodeText(meta.nodes[index]), colors, index === 0 ? 23 : 19));
@@ -251,27 +306,36 @@ function constellation(meta) {
 }
 
 function evidence(meta) {
-  const elements = [text("thesis", 0.05, 0.04, "A claim becomes trustworthy when several pieces of evidence surround it.", 23, lightText)];
-  const claimColors = colorFor(meta, 0);
-  claimColors.fill = "#d1fae5";
+  // The claim sits centred at (0.50, 0.42); the source columns' centroids
+  // sit at (0.28, 0.42) and (0.72, 0.42). Arrows run from each column's
+  // centroid toward the claim — two connectors, within the non-sequential
+  // cap of three, and every arrow starts at a shape instead of floating
+  // disconnected between the columns.
+  const elements = thesisLine(meta);
+  const claimColors = { ...colorFor(meta, 0, meta.dark), fill: "#d1fae5", text: lightText };
   elements.push(shape("claim", "diamond", 0.38, 0.31, 0.24, 0.22, meta.focus, claimColors, 26));
-  const positions = [[0.05, 0.16], [0.71, 0.16], [0.05, 0.58], [0.71, 0.58]];
+  // Bottom source row at 0.56 for the same bound-label-growth clearance as
+  // spotlight: the left column sits inside the footer's x-range.
+  const positions = [[0.05, 0.16], [0.71, 0.16], [0.05, 0.56], [0.71, 0.56]];
   const sources = meta.nodes.slice(0, 4);
   positions.forEach(([x, y], index) => {
-    const colors = colorFor(meta, index + 1);
+    const colors = colorFor(meta, index + 1, meta.dark);
+    if (meta.dark) colors.fill = colors.dark;
     elements.push(shape(`evidence-${index + 1}`, index % 2 ? "ellipse" : "rectangle", x, y, 0.23, 0.14, nodeText(sources[index]), colors, 20));
   });
   if (sources.length >= 2) {
-    elements.push(line("evidence-line-left", 0.28, 0.34, 0.10, 0.03, [[0, 0.5], [1, 0.5]], "#64748b"));
-    elements.push(line("evidence-line-right", 0.62, 0.34, 0.10, 0.03, [[0, 0.5], [1, 0.5]], "#64748b"));
+    // From the left column's centroid (between its top and bottom sources)
+    // toward the claim's upper-left corner region.
+    elements.push(arrowBetween("evidence-arrow-left", 0.29, 0.26, 0.395, 0.37, meta.dark ? "#94a3b8" : "#64748b"));
+    // Mirror image, from the right column toward the claim's upper-right.
+    elements.push(arrowBetween("evidence-arrow-right", 0.71, 0.26, 0.605, 0.37, meta.dark ? "#94a3b8" : "#64748b"));
   }
   return finish(meta, elements);
 }
 
 function threshold(meta) {
   const dark = meta.dark;
-  const textColor = dark ? darkText : lightText;
-  const elements = [text("thesis", 0.05, 0.04, "The important distinction is a boundary, not a path.", 23, textColor)];
+  const elements = thesisLine(meta);
   const stroke = dark ? "#94a3b8" : "#64748b";
   elements.push(line("threshold-axis", 0.10, 0.53, 0.80, 0.01, [[0, 0.5], [1, 0.5]], stroke));
   const leftColors = colorFor(meta, 0, dark); const rightColors = colorFor(meta, 2, dark); const centerColors = colorFor(meta, 1, dark);
@@ -322,6 +386,9 @@ async function illustration(meta) {
     meta.tradeoff ? `Boundary: ${meta.tradeoff}` : "",
     meta.evidence[0] ? `Evidence: ${meta.evidence[0]}` : "",
   ].filter(Boolean);
+  // Ten lines is the illustration family's own proven footprint (the image
+  // occupies the left half, so the text column has room no other family has).
+  // The audit's ~90-word cap keeps this under the truncation line.
   elements.push(text("explanation", textX, 0.60, wrapText(depthParts.join("  •  "), 60, 10), 18, mutedText));
   if (meta.inspect) elements.push(text("inspect", textX, 0.91, wrapText(`Inspect: ${meta.inspect}`, 60, 2), 18, mutedText));
   return {
@@ -342,26 +409,33 @@ async function illustration(meta) {
 }
 
 function pipeline(meta) {
-  const elements = [text("thesis", 0.05, 0.04, "Read left to right: each stage changes the state of the work.", 23, lightText)];
+  const elements = thesisLine(meta);
   const nodes = meta.nodes.slice(0, 6);
   const stepWidth = 0.13;
   nodes.forEach((node, index) => {
     const x = 0.03 + index * 0.16;
-    const colors = colorFor(meta, index);
+    const colors = colorFor(meta, index, meta.dark);
+    if (meta.dark) colors.fill = colors.dark;
     const type = ["rectangle", "ellipse", "diamond"][index % 3];
     elements.push(shape(`stage-${index + 1}`, type, x, 0.36, stepWidth, 0.20, nodeText(node), colors));
-    if (index < nodes.length - 1) elements.push(arrowBetween(`stage-arrow-${index + 1}`, x + stepWidth, 0.46, x + 0.16, 0.46));
+    if (index < nodes.length - 1) elements.push(arrowBetween(`stage-arrow-${index + 1}`, x + stepWidth, 0.46, x + 0.16, 0.46, meta.dark ? "#94a3b8" : "#64748b"));
   });
   return finish(meta, elements);
 }
 
 function map(meta) {
-  const elements = [text("thesis", 0.05, 0.04, "The focal idea is a hub; the surrounding nodes explain its reach.", 23, meta.dark ? darkText : lightText)];
-  const centerColors = colorFor(meta, 0, meta.dark);
-  centerColors.fill = meta.dark ? "#d1fae5" : "#d1fae5";
-  centerColors.text = lightText;
-  elements.push(shape("hub", "diamond", 0.40, 0.36, 0.20, 0.20, meta.focus, centerColors, 26));
-  const positions = [[0.08, 0.16], [0.70, 0.16], [0.05, 0.62], [0.73, 0.62], [0.39, 0.08], [0.39, 0.75]];
+  const elements = thesisLine(meta);
+  // Light focal fill on either surface, matching orbit/spotlight: the hub
+  // must out-read its satellites.
+  const centerColors = { ...colorFor(meta, 0, meta.dark), fill: "#d1fae5", text: lightText };
+  elements.push(shape("hub", "diamond", 0.40, 0.34, 0.20, 0.20, meta.focus, centerColors, 26));
+  // Two reserved strips every family honours: the thesis line owns
+  // y∈[0.03, 0.16] on the left half (its rendered height varies with band
+  // height, so nothing may enter that band at x<0.60), and the footer owns
+  // everything below y=0.73 on the left half. Satellites thread between
+  // them: side columns, a centre node under the thesis strip, a centre
+  // node above the footer.
+  const positions = [[0.08, 0.16], [0.70, 0.14], [0.05, 0.44], [0.73, 0.42], [0.42, 0.18], [0.67, 0.57]];
   positions.forEach(([x, y], index) => {
     const node = meta.nodes[index % meta.nodes.length];
     const colors = colorFor(meta, index + 1, meta.dark);
@@ -373,17 +447,21 @@ function map(meta) {
 }
 
 function journey(meta) {
-  const elements = [text("thesis", 0.05, 0.04, "The relationship changes as the work moves through the journey.", 23, lightText)];
-  elements.push(line("journey-axis", 0.07, 0.52, 0.86, 0.01, [[0, 0.5], [1, 0.5]], "#64748b"));
+  const elements = thesisLine(meta);
+  const axisColor = meta.dark ? "#94a3b8" : "#64748b";
+  elements.push(line("journey-axis", 0.07, 0.52, 0.86, 0.01, [[0, 0.5], [1, 0.5]], axisColor));
   const nodes = meta.nodes.slice(0, 6);
   nodes.forEach((node, index) => {
     const x = 0.07 + index * (0.86 / Math.max(nodes.length - 1, 1));
-    const y = index % 2 ? 0.60 : 0.30;
-    const colors = colorFor(meta, index);
+    // Even moments ride at 0.56, not 0.60: the first moment sits in the
+    // explanation's x-range, and 0.60 + 0.14 height crosses the 0.73 footer.
+    const y = index % 2 ? 0.56 : 0.30;
+    const colors = colorFor(meta, index, meta.dark);
+    if (meta.dark) colors.fill = colors.dark;
     elements.push(shape(`moment-${index + 1}`, "ellipse", Math.max(0, x - 0.07), y, 0.14, 0.14, nodeText(node), colors, 20));
     if (index < nodes.length - 1) {
       const nextX = 0.07 + (index + 1) * (0.86 / Math.max(nodes.length - 1, 1));
-      elements.push(arrowBetween(`journey-arrow-${index + 1}`, x + 0.07, 0.52, nextX - 0.07, 0.52, "#64748b"));
+      elements.push(arrowBetween(`journey-arrow-${index + 1}`, x + 0.07, 0.52, nextX - 0.07, 0.52, axisColor));
     }
   });
   return finish(meta, elements);
@@ -391,7 +469,7 @@ function journey(meta) {
 
 function tension(meta) {
   const dark = meta.dark;
-  const elements = [text("thesis", 0.05, 0.04, "The decision sits between two forces, then produces an action.", 23, dark ? darkText : lightText)];
+  const elements = thesisLine(meta);
   const leftColors = colorFor(meta, 0, dark); const rightColors = colorFor(meta, 2, dark);
   if (dark) {
     leftColors.fill = leftColors.dark;
@@ -399,26 +477,32 @@ function tension(meta) {
   }
   const decisionColors = colorFor(meta, 1, dark); decisionColors.fill = dark ? decisionColors.dark : decisionColors.fill;
   const bottomColors = colorFor(meta, 3, dark); bottomColors.fill = dark ? bottomColors.dark : bottomColors.fill;
-  elements.push(shape("left", "ellipse", 0.07, 0.34, 0.22, 0.19, meta.left, leftColors));
-  elements.push(shape("decision", "diamond", 0.39, 0.31, 0.22, 0.24, meta.middle, decisionColors, 26));
-  elements.push(shape("right", "ellipse", 0.71, 0.34, 0.22, 0.19, meta.right, rightColors));
-  elements.push(shape("outcome", "rectangle", 0.36, 0.73, 0.28, 0.12, meta.decision, bottomColors));
-  elements.push(arrowBetween("left-arrow", 0.29, 0.44, 0.39, 0.44));
-  elements.push(arrowBetween("right-arrow", 0.61, 0.44, 0.71, 0.44));
-  elements.push(arrowBetween("outcome-arrow", 0.50, 0.55, 0.50, 0.73));
+  elements.push(shape("left", "ellipse", 0.07, 0.30, 0.22, 0.19, meta.left, leftColors));
+  elements.push(shape("decision", "diamond", 0.39, 0.27, 0.22, 0.24, meta.middle, decisionColors, 26));
+  elements.push(shape("right", "ellipse", 0.71, 0.30, 0.22, 0.19, meta.right, rightColors));
+  // The outcome rides at 0.58 (ends ≤0.72), not 0.73 — the footer starts
+  // exactly there and the outcome box spans the explanation's x-range.
+  elements.push(shape("outcome", "rectangle", 0.40, 0.58, 0.20, 0.11, meta.decision, bottomColors));
+  elements.push(arrowBetween("left-arrow", 0.29, 0.41, 0.39, 0.40));
+  elements.push(arrowBetween("right-arrow", 0.61, 0.41, 0.71, 0.40));
+  elements.push(arrowBetween("outcome-arrow", 0.50, 0.52, 0.50, 0.57));
   return finish(meta, elements);
 }
 
 function matrix(meta) {
-  const elements = [text("thesis", 0.05, 0.04, "Place the options by the two dimensions that actually matter.", 23, lightText)];
-  elements.push(line("x-axis", 0.06, 0.49, 0.88, 0.01, [[0, 0.5], [1, 0.5]], "#64748b"));
-  elements.push(line("y-axis", 0.50, 0.15, 0.01, 0.70, [[0.5, 0], [0.5, 1]], "#64748b"));
-  elements.push(text("axis-x-label", 0.72, 0.83, meta.axisX, 18, "#475569"));
-  elements.push(text("axis-y-label", 0.04, 0.15, meta.axisY, 18, "#475569"));
+  const elements = thesisLine(meta);
+  const axisColor = meta.dark ? "#94a3b8" : "#64748b";
+  const labelColor = meta.dark ? darkText : "#475569";
+  elements.push(line("x-axis", 0.06, 0.49, 0.88, 0.01, [[0, 0.5], [1, 0.5]], axisColor));
+  elements.push(line("y-axis", 0.50, 0.15, 0.01, 0.70, [[0.5, 0], [0.5, 1]], axisColor));
+  elements.push(text("axis-x-label", 0.72, 0.83, meta.axisX, 18, labelColor));
+  elements.push(text("axis-y-label", 0.04, 0.15, meta.axisY, 18, labelColor));
   const nodes = meta.nodes.slice(0, 4);
   const positions = [[0.08, 0.18], [0.58, 0.18], [0.08, 0.51], [0.58, 0.51]];
   nodes.forEach((node, index) => {
-    elements.push(shape(`quadrant-${index + 1}`, "rectangle", positions[index][0], positions[index][1], 0.34, 0.18, nodeText(node), colorFor(meta, index)));
+    const colors = colorFor(meta, index, meta.dark);
+    if (meta.dark) colors.fill = colors.dark;
+    elements.push(shape(`quadrant-${index + 1}`, "rectangle", positions[index][0], positions[index][1], 0.34, 0.18, nodeText(node), colors));
   });
   const focusColors = colorFor(meta, 4); focusColors.fill = "#d1fae5"; focusColors.text = lightText;
   elements.push(shape("marker", "ellipse", 0.44, 0.42, 0.12, 0.12, meta.focus, focusColors, 18));

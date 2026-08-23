@@ -1,0 +1,150 @@
+{
+  "title": "From words to tokens",
+  "subtitle": "How a language model turns a prompt into the next piece of text",
+  "footer": "Read top to bottom. The loop near the end is what turns one token into prose.",
+  "bands": [
+    {
+      "heading": "The whole pipeline",
+      "deck": "A prompt goes in as text and comes back one piece at a time",
+      "pattern": "flow",
+      "accent": "blue",
+      "nodes": [
+        { "label": "Text in", "note": "A prompt is a string of characters, nothing more" },
+        { "label": "Tokenizer", "note": "Cuts the string into known pieces, one integer each" },
+        { "label": "Embedding table", "note": "Each integer is swapped for a learned vector" },
+        { "label": "Stack of blocks", "note": "Every layer rewrites every vector using the others" },
+        { "label": "Next token out", "note": "The last vector scores the vocabulary and one piece is picked" }
+      ]
+    },
+    {
+      "heading": "Tokenizers split rare words",
+      "deck": "Four words in, five pieces out",
+      "pattern": "row-of-stages",
+      "accent": "amber",
+      "nodes": [
+        { "label": "Token", "note": "Common stem, kept whole" },
+        { "label": "izers", "note": "The suffix earns its own piece" },
+        { "label": "split", "note": "Frequent word, one piece" },
+        { "label": "rare", "note": "Frequent enough to stay whole" },
+        { "label": "words", "note": "The leading space belongs to the token" }
+      ]
+    },
+    {
+      "heading": "One integer becomes a vector",
+      "deck": "The lookup is a row read, not a computation",
+      "pattern": "flow",
+      "accent": "violet",
+      "nodes": [
+        { "label": "Token identifier", "note": "A row number into the embedding table" },
+        { "label": "Embedding table", "note": "One learned row per vocabulary entry, a few thousand numbers wide" },
+        { "label": "Position added", "note": "A position vector is added to the piece vector before the first block" },
+        { "label": "Block input", "note": "One vector per token, the whole sequence handed over at once" }
+      ]
+    },
+    {
+      "heading": "Inside one block",
+      "deck": "Two operations per layer, over a stream that is never overwritten",
+      "pattern": "tree",
+      "accent": "slate",
+      "nodes": [
+        {
+          "label": "Self-attention",
+          "children": [
+            { "label": "Score every pair of tokens" },
+            { "label": "Hide everything to the right" },
+            { "label": "Blend the values that scored high" }
+          ]
+        },
+        {
+          "label": "Feed-forward",
+          "children": [
+            { "label": "Widen each vector" },
+            { "label": "Gate it through a nonlinearity" },
+            { "label": "Project it back down" }
+          ]
+        },
+        {
+          "label": "Residual stream",
+          "children": [
+            { "label": "Normalize before each part" },
+            { "label": "Add the result back, never replace" }
+          ]
+        }
+      ]
+    },
+    {
+      "heading": "From last vector to next token",
+      "deck": "Only the final position matters for the piece being generated",
+      "pattern": "flow",
+      "accent": "green",
+      "nodes": [
+        { "label": "Final vector", "note": "The last token's row after the last block" },
+        { "label": "Unembedding", "note": "Compared against every entry in the vocabulary" },
+        { "label": "Raw scores", "note": "One unbounded number per vocabulary entry" },
+        { "label": "Softmax", "note": "Scores become a probability over the whole vocabulary" },
+        { "label": "One token picked", "note": "Sampled from that spread, not always the highest" }
+      ]
+    },
+    {
+      "heading": "How the pick is narrowed",
+      "deck": "Three knobs on the same distribution, doing different jobs",
+      "pattern": "comparison",
+      "accent": "slate",
+      "nodes": [
+        {
+          "label": "Temperature",
+          "tone": "amber",
+          "items": [
+            "Flattens or sharpens every probability",
+            "Near zero, always the top token",
+            "Above one, rare tokens get a chance"
+          ]
+        },
+        {
+          "label": "Top-p",
+          "tone": "green",
+          "items": [
+            "Keeps the smallest set that sums past p",
+            "How many tokens survive changes per step",
+            "Cuts the long tail, keeps real choices"
+          ]
+        },
+        {
+          "label": "Top-k",
+          "tone": "blue",
+          "items": [
+            "Keeps a fixed count of best tokens",
+            "How many tokens survive never changes",
+            "Blunt when the model is already sure"
+          ]
+        }
+      ]
+    },
+    {
+      "heading": "The loop",
+      "deck": "Generation is one forward pass per token, repeated",
+      "pattern": "row-of-stages",
+      "accent": "violet",
+      "nodes": [
+        { "label": "Append", "note": "The chosen token joins the sequence" },
+        { "label": "Reuse the cache", "note": "Earlier keys and values are kept, not recomputed" },
+        { "label": "One more pass", "note": "Only the new token is pushed through the stack" },
+        { "label": "Stop", "note": "An end token, a stop string, or a length limit" }
+      ]
+    },
+    {
+      "heading": "What the mental model usually gets wrong",
+      "deck": "Six places the picture slips, and what is actually happening",
+      "pattern": "checklist",
+      "accent": "blue",
+      "nodes": [
+        { "label": "Tokens are not words", "note": "Rare words break into several pieces" },
+        { "label": "Embeddings are learned", "note": "Trained with the model, not bolted on after" },
+        { "label": "Position is not free", "note": "Encode order or the model reads a bag of tokens" },
+        { "label": "Every token is rewritten", "note": "Not only the last one, and once per layer" },
+        { "label": "The output is a spread", "note": "The model scores; the sampler is what picks" },
+        { "label": "One pass per token", "note": "Cost grows with everything you generate" }
+      ]
+    }
+  ]
+}

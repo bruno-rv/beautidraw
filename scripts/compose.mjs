@@ -9,15 +9,16 @@
 // embeds PNG assets, preserves frame ordering, and rerenders the final deck.
 
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { withHarness } from "./harness-runner.mjs";
 import { BODY_INSET, DECK_BODY_GAP, FRAME_PAD_BOTTOM, PAGE_WIDTH, USABLE_H, USABLE_W } from "./layout.mjs";
 
 const [, , deckArg, compositionArg, outArg] = process.argv;
-if (!deckArg || !compositionArg || !outArg) {
+if (!deckArg || !compositionArg || !outArg || deckArg === "--help" || deckArg === "-h") {
   console.error("usage: node scripts/compose.mjs <deck.excalidraw> <composition-spec.json> <outdir>");
-  process.exit(1);
+  console.error("       embeds composed canvas frames into a generated deck and rerenders it.");
+  process.exit(deckArg === "--help" || deckArg === "-h" ? 0 : 1);
 }
 
 const deckPath = resolve(deckArg);
@@ -427,6 +428,14 @@ const result = await withHarness(async ({ page }) =>
 );
 
 await mkdir(outDir, { recursive: true });
+// Same orphan rule as generate.mjs: a composition with fewer bands than the
+// previous render must not leave stale band-NN.png files beside it.
+const staleBand = (name) => /^band-\d{2}\.png$/.exec(name);
+for (const name of await readdir(outDir)) {
+  if (staleBand(name) && Number(staleBand(name)[1]) > result.bandPngs.length) {
+    await rm(resolve(outDir, name));
+  }
+}
 await writeFile(resolve(outDir, "deck.excalidraw"), JSON.stringify(result.deck, null, 2) + "\n");
 for (let i = 0; i < result.bandPngs.length; i++) {
   await writeFile(

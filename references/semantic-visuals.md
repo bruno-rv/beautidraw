@@ -9,6 +9,7 @@ automatic composer computes coordinates. Do not write normalized positions in or
   "height": 720,
   "visual": {
     "family": "illustration",
+    "thesis": "one line stating what the audience should SEE — optional; without it the frame opens on its shapes, never boilerplate",
     "focus": "the central idea or system",
     "nodes": [
       { "label": "short label", "note": "why this node matters" }
@@ -25,6 +26,21 @@ automatic composer computes coordinates. Do not write normalized positions in or
   }
 }
 ```
+
+## Rendered capacity (audited)
+
+The composer renders these fields inside fixed footprints and ellipsizes past them, so
+`audit-deck-spec.mjs` enforces the budgets before a build:
+
+- `thesis` — one rendered line, at most **120 characters**. Without a thesis the frame simply
+  opens on its shapes; the composer never invents one.
+- `explanation` + `example` + `tradeoff` (+ the strongest single `evidence` item) — the footer
+  column holds about **560 characters** total in every family. Split the mechanism across bands
+  instead of writing past the column.
+- `inspect` — at most **84 characters**. The command must survive rendering typeable: a cut-off
+  command is worse than none.
+- Shape labels wrap to their own box width; keep `label`s scannable and put depth in the fields
+  above.
 
 ## Families
 
@@ -66,3 +82,10 @@ one-off element that the semantic families cannot express.
 For a 10+ band deck, use at least two `illustration` frames with different visual metaphors. The
 automatic composer reads each PNG's dimensions and fits a side zone without hand-authored geometry.
 Keep the asset text-free and review it before building the deck.
+
+Every other composed family may appear at most **twice** in a substantial (8+ band) deck — the audit
+enforces this the same way it caps structured patterns, because repeating one composition with new
+content is the "same boxes, different colours" failure SKILL.md rejects. Raster illustrations are
+exempt: SKILL.md requires them. Every family also honours two reserved strips: the thesis line owns
+the top-left of the body, and the footer owns everything below ~73% of the body height; shape zones
+are laid out around both.

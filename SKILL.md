@@ -34,7 +34,8 @@ with 8 or more bands must satisfy all of these constraints:
   frames. Generate them after the visual thesis is known, review them, save them under the deck's
   `assets/` directory, and reference them through the `illustration` family.
 - No structured pattern may appear more than twice, and structured bands may not run for more than
-  two consecutive bands.
+  two consecutive bands. The same cap applies to composed visual families (`field`, `spotlight`,
+  `evidence`, …): at most twice per substantial deck. Raster `illustration` frames are exempt.
 - Every canvas band must contain a visual relationship—such as a spatial map, transformation,
   tension, evidence collage, or network—with at least two non-text primitives (arrows, lines,
   ellipses, diamonds, or a scene image). A surface plus labels is still a box layout.

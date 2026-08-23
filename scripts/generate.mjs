@@ -10,7 +10,7 @@
 // never writes deck.excalidraw — a blocked run that explains nothing is
 // useless, but a blocked run that ships a file anyway is worse.
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { withHarness } from "./harness-runner.mjs";
 import {
@@ -25,9 +25,11 @@ import {
 
 const EPSILON = 0.08 * PAGE_WIDTH; // edge-coverage tolerance, LAYOUT-CONTRACT.md §Deliverables
 
-function usageAndExit() {
+function usageAndExit(code = 1) {
   console.error("usage: node scripts/generate.mjs <spec.json> <outdir>");
-  process.exit(1);
+  console.error("       runs the deterministic base layout in the harness and writes");
+  console.error("       deck.excalidraw, band PNGs, scene.png, and diagnostics.json.");
+  process.exit(code);
 }
 
 async function writeDiagnosticsAndExit(outDir, diagnostics, message) {
@@ -292,7 +294,7 @@ function runValidations(elements, diagnostics) {
 // ---------------------------------------------------------------------------
 
 const [, , specPath, outDirArg] = process.argv;
-if (!specPath || !outDirArg) usageAndExit();
+if (!specPath || !outDirArg) usageAndExit(specPath === "--help" || specPath === "-h" ? 0 : 1);
 const outDir = resolve(outDirArg);
 
 let spec;
@@ -408,6 +410,16 @@ if (failures.length) {
 
 // Everything passed — write the deliverables.
 await mkdir(outDir, { recursive: true });
+// A rebuild against a spec that shrank must not leave orphaned band renders
+// behind: a stale band-11.png beside ten current bands reads as part of the
+// deck. Remove only files matching our own naming pattern beyond the new
+// count — anything else in the directory is not ours to touch.
+const staleBand = (name) => /^band-\d{2}\.png$/.exec(name);
+for (const name of await readdir(outDir)) {
+  if (staleBand(name) && Number(staleBand(name)[1]) > bandPngs.length) {
+    await rm(resolve(outDir, name));
+  }
+}
 await writeFile(resolve(outDir, "deck.excalidraw"), excalidrawJson);
 for (let i = 0; i < bandPngs.length; i++) {
   const name = `band-${String(i + 1).padStart(2, "0")}.png`;
