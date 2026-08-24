@@ -1,10 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, readdir } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
+import { withHarness } from "../scripts/harness-runner.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const deckDir = resolve(root, "decks/claude-code-artifacts");
@@ -21,7 +22,7 @@ const portable = (value) => {
   assert.equal(value.split(/[\\/]/).includes(".."), false);
 };
 
-test("Claude Code exemplar satisfies its mixed-media contract", { timeout: 120_000 }, async () => {
+test("Claude Code exemplar satisfies its mixed-media contract", { timeout: 300_000 }, async () => {
   const spec = await readJson(specPath);
   const manifest = await readJson(manifestPath);
   const assets = manifest.assets ?? manifest.images;
@@ -30,6 +31,11 @@ test("Claude Code exemplar satisfies its mixed-media contract", { timeout: 120_0
   assert.equal(spec.bands.length, 14);
   assert.equal(imageBands.length, 4);
   assert.equal(assets.length, 4);
+  assert.deepEqual(
+    assets.map((asset) => asset.file ?? asset.path).sort(),
+    imageBands.map((band) => band.visual.image.file).sort(),
+    "manifest paths must exactly match visual image paths",
+  );
   for (const asset of assets) {
     portable(asset.file ?? asset.path);
     assert.ok(asset.use?.trim(), `${asset.file ?? asset.path} needs a use`);
@@ -46,6 +52,22 @@ test("Claude Code exemplar satisfies its mixed-media contract", { timeout: 120_0
   }
 
   const callouts = spec.bands.flatMap((band) => band.visual?.callouts ?? []);
+  const expectedCalloutKinds = new Map([
+    ["Enters context", "boundary"], ["Stays external", "boundary"],
+    ["Billing path", "inspect"], ["User-owned", "boundary"],
+    ["Project-owned", "boundary"], ["Private project state", "warning"],
+    ["Shared landscape", "boundary"], ["Focused district", "example"],
+    ["Normal order", "boundary"], ["Not one rule", "warning"],
+    ["Isolation", "boundary"], ["Return value", "example"],
+    ["Specialization", "example"], ["Lifecycle", "boundary"],
+    ["Guidance", "example"], ["Enforcement", "warning"],
+  ]);
+  assert.ok(callouts.length > 0);
+  for (const callout of callouts) {
+    assert.equal(typeof callout, "object");
+    assert.ok(["example", "boundary", "inspect", "warning"].includes(callout.kind), `${callout.label} must declare a semantic kind`);
+    assert.equal(callout.kind, expectedCalloutKinds.get(callout.label), `${callout.label} has the wrong semantic kind`);
+  }
   const inspectIcons = callouts.filter((callout) => callout?.kind === "inspect" && callout.label?.trim());
   assert.ok(inspectIcons.length, "the exemplar needs at least one labelled inspect icon");
 
@@ -54,12 +76,13 @@ test("Claude Code exemplar satisfies its mixed-media contract", { timeout: 120_0
   assert.ok(inspections.every((value) => /(?:\/[a-z][a-z0-9-]*|\b(?:claude|node|pnpm|git|cat|find)\b)/i.test(value)), "inspection text must contain a command or path token");
 
   const output = await mkdtemp(join(tmpdir(), "beautidraw-claude-contract-"));
-  const result = spawnSync(process.execPath, [resolve(root, "scripts/build-deck.mjs"), specPath, output], {
-    cwd: root,
-    encoding: "utf8",
-    timeout: 110_000,
-  });
-  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  try {
+    const result = spawnSync(process.execPath, [resolve(root, "scripts/build-deck.mjs"), specPath, output], {
+      cwd: root,
+      encoding: "utf8",
+      timeout: 240_000,
+    });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
 
   const deck = await readJson(join(output, "deck.excalidraw"));
   const compositionManifest = await readJson(join(output, "composition-manifest.json"));
@@ -86,11 +109,41 @@ test("Claude Code exemplar satisfies its mixed-media contract", { timeout: 120_0
   assert.match(overview.get("deck-overview-navigation").text, /frame navigation/i);
   for (const element of overview.values()) assert.ok(!element.frameId);
 
-  const monoInspections = elements.filter((element) => element.type === "text" && element.role === "mono" && /inspect/i.test(element.id));
+  const monoInspections = elements.filter((element) => element.type === "text" && element.role === "mono" && /^Inspect:/i.test(element.text ?? ""));
   assert.equal(monoInspections.length, inspections.length, "inspection commands must remain mono text in the built scene");
   const semanticInspect = elements.find((element) => element.customData?.semanticKind === "inspect");
   assert.ok(semanticInspect, "built scene must include an inspect semantic icon");
   const inspectLabelId = semanticInspect.customData.semanticLabelId;
   const inspectLabel = elements.find((element) => element.id === inspectLabelId || element.customData?.semanticLabelFor === semanticInspect.id);
   assert.ok(inspectLabel?.text?.trim(), "inspect icon must have a visible label");
+  const semanticElements = elements.filter((element) => element.customData?.semanticKind);
+  assert.equal(semanticElements.length, callouts.length, "every authored callout must survive composition as one semantic element");
+  for (const callout of callouts) {
+    const rendered = semanticElements.find((element) => {
+      const label = elements.find((candidate) => candidate.type === "text" && (
+        candidate.containerId === element.id || candidate.customData?.semanticLabelFor === element.id
+      ));
+      return (element.label?.text ?? element.text ?? label?.text ?? "").includes(callout.label);
+    });
+    assert.equal(rendered?.customData?.semanticKind, callout.kind, `${callout.label} kind must survive composition`);
+  }
+
+    for (const viewport of [{ width: 1600, height: 900 }, { width: 1280, height: 800 }]) {
+      await withHarness(async ({ page }) => {
+        const fidelity = await page.evaluate((scene) => window.__bdLoadScene(scene), deck);
+        assert.equal(fidelity.state, "ready", `${viewport.width}x${viewport.height}: generated deck must reach Ready`);
+        assert.equal(fidelity.frames.length, 14);
+        assert.equal(fidelity.imageRegions.length, 4);
+        for (const frame of fidelity.frames) {
+          assert.ok(frame.minimumEffectiveTextPx >= 12, `${frame.frameId}: note text must remain legible`);
+          assert.deepEqual(frame.clippedElementIds, []);
+          assert.deepEqual(frame.overlapElementIds, []);
+          assert.deepEqual(frame.obscuredByChromeElementIds, []);
+          assert.deepEqual(frame.geometryElementIds, []);
+        }
+      }, { viewport });
+    }
+  } finally {
+    await rm(output, { recursive: true, force: true });
+  }
 });

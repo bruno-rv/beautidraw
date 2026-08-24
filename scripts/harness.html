@@ -359,7 +359,23 @@
           canvasOffsets: model.offsets,
         });
         await twoFrames();
-        return window.__bdEditor.getAppState();
+        let appState = window.__bdEditor.getAppState();
+        const topLeft = window.__bdApi.sceneCoordsToViewportCoords({ sceneX: target.x, sceneY: target.y }, appState);
+        const bottomRight = window.__bdApi.sceneCoordsToViewportCoords({ sceneX: target.x + target.width, sceneY: target.y + target.height }, appState);
+        const frameBounds = {
+          y: Math.min(topLeft.y, bottomRight.y),
+          height: Math.abs(bottomRight.y - topLeft.y),
+        };
+        const top = model.offsets.top + 8;
+        const bottom = innerHeight - model.offsets.bottom - 8;
+        const targetY = Math.max(top, Math.min(frameBounds.y, bottom - frameBounds.height));
+        const deltaY = targetY - frameBounds.y;
+        if (Math.abs(deltaY) > 0.5) {
+          window.__bdEditor.updateScene({ appState: { ...appState, scrollY: appState.scrollY + deltaY } });
+          await twoFrames();
+          appState = window.__bdEditor.getAppState();
+        }
+        return appState;
       }
 
       function editorCanvas() {
@@ -547,10 +563,9 @@
       const intersects = (a, b) => Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x) > 0 &&
         Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y) > 0;
 
-      window.__bdReportFidelity = (elements, viewport) => {
+      window.__bdReportFidelity = async (elements, viewport) => {
         const frames = elements.filter((element) => element.type === "frame");
         const reports = [];
-        const chrome = chromeModel(viewport);
         const elementById = new Map(elements.map((element) => [element.id, element]));
         const roleFontFamily = (role) => role === "mono" ? 3 : role === "handwritten" ? 5 : 6;
         const geometryTolerance = (metric) => Math.max(
@@ -572,9 +587,17 @@
               role: element.role,
             };
             const duplicatedFields = ["text", "originalText", "fontSize", "fontFamily", "lineHeight", "textAlign", "verticalAlign", "role"];
+            const expectedLineHeights = element.role === "mono" ? [1.2] : element.role === "handwritten" ? [1.25] : [1.25, 1.35];
+            const lineHeightMismatch = Number.isFinite(element.lineHeight) && !expectedLineHeights.includes(element.lineHeight);
             const mismatchedIds = duplicatedFields.some((field) =>
               labelTuple[field] !== undefined && container.label[field] !== undefined && labelTuple[field] !== container.label[field],
-            ) ? [container.id, element.id] : [];
+            ) || element.originalText !== element.text || lineHeightMismatch ? [container.id, element.id] : [];
+            // Older bound-label fixtures serialize prose lineHeight=1.25 while
+            // the converter's default prose metric is 1.35. Preserve that
+            // compatibility case, while all other serialized tuple fields feed
+            // the fresh converter measurement below.
+            const legacyLineHeight = element.role === "prose" && element.lineHeight === 1.25 && container.label.lineHeight === undefined;
+            const converterTuple = legacyLineHeight ? { ...labelTuple, lineHeight: undefined, originalText: undefined } : labelTuple;
             const converted = window.__bdApi.convertToExcalidrawElements([{
               id: container.id,
               type: container.type,
@@ -586,12 +609,8 @@
               backgroundColor: container.backgroundColor,
               label: {
                 ...container.label,
-                text: labelTuple.text,
-                fontSize: labelTuple.fontSize,
-                fontFamily: labelTuple.fontFamily,
-                textAlign: labelTuple.textAlign,
-                verticalAlign: labelTuple.verticalAlign,
-                role: labelTuple.role,
+                ...converterTuple,
+                fontFamily: converterTuple.fontFamily,
               },
             }], { regenerateIds: false });
             const bounds = converted.find((candidate) => candidate.containerId === container.id && candidate.type === "text") ?? null;
@@ -639,9 +658,11 @@
             height: Math.abs(bottomRight.y - topLeft.y),
           };
         };
-        const appState = window.__bdEditor.getAppState();
-        const chromeBounds = chrome.rects.map((rect) => chromeSceneBounds(rect, appState));
         for (const frame of frames) {
+          await fitEditorToFrame(frame);
+          const chrome = chromeModel(viewport);
+          const appState = window.__bdEditor.getAppState();
+          const chromeBounds = chrome.rects.map((rect) => chromeSceneBounds(rect, appState));
           const fitZoom = Math.min(chrome.usableWidth / frame.width, chrome.usableHeight / frame.height);
           const members = elements.filter((element) => element.frameId === frame.id);
           const clipped = new Set();
@@ -794,7 +815,7 @@
           const imageReadiness = await window.__bdWaitForImages(scene.files || {}, imageElements, sceneId);
           await twoFrames();
           const imageRegions = await imageRegionOracle(elements, scene.files || {}, sceneId);
-          const frames = window.__bdReportFidelity(elements, { width: innerWidth, height: innerHeight });
+          const frames = await window.__bdReportFidelity(elements, { width: innerWidth, height: innerHeight });
           const failedFrames = frames.filter((frame) => frame.clippedElementIds.length || frame.overlapElementIds.length || frame.obscuredByChromeElementIds.length || frame.geometryElementIds.length || frame.minimumEffectiveTextPx < 12);
           if (failedFrames.length) {
             const frame = failedFrames[0];

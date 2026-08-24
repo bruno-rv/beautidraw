@@ -11,7 +11,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, normalize, resolve } from "node:path";
-import { BODY_INSET, BOUND_TEXT_PADDING, DECK_BODY_GAP, FRAME_PAD_BOTTOM, FONT, FONT_NAME, PAGE_WIDTH, USABLE_H, USABLE_W } from "./layout.mjs";
+import { BODY_INSET, BOUND_TEXT_PADDING, DECK_BODY_GAP, FRAME_PAD_BOTTOM, FONT, FONT_NAME, PAGE_WIDTH, RAMP, USABLE_H, USABLE_W } from "./layout.mjs";
 import { runCli } from "./cli.mjs";
 import { readJsonInput, resolveAssetWithinRoot } from "./preflight.mjs";
 
@@ -676,6 +676,9 @@ const result = await withHarness(async ({ page }) =>
             failures.push(`${element.id}: bound-text container ${element.containerId} is missing`);
           }
           if (element.type === "text") {
+            if (["prose", "mono"].includes(element.role) && element.fontSize < validationConfig.noteFontSize) {
+              failures.push(`${element.id}: body text role "${element.role}" must use the shared note ramp ${validationConfig.noteFontSize}px`);
+            }
             const zoom = Math.min(
               validationConfig.usableWidth / validationConfig.pageWidth,
               validationConfig.usableHeight / frame.height,
@@ -773,6 +776,7 @@ const result = await withHarness(async ({ page }) =>
         usableWidth: USABLE_W,
         usableHeight: USABLE_H,
         boundTextPadding: BOUND_TEXT_PADDING,
+        noteFontSize: RAMP.note,
         fontFamily: { prose: FONT.prose, mono: FONT.mono, handwritten: FONT.handwritten },
       },
     },

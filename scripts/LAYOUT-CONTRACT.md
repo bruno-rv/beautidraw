@@ -34,7 +34,7 @@ export const G = 48;                 // base gutter
 export const GUTTER_COL = 56;        // between columns
 export const BAND_GAP = 96;          // vertical gap between bands
 export const BOUND_TEXT_PADDING = 5; // per side, Excalidraw's own
-export const RAMP = { title: 48, heading: 38, hero: 30, label: 23, note: 18 };
+export const RAMP = { title: 48, heading: 38, hero: 30, label: 23, note: 23 };
 export const FONT = { prose: 6, mono: 3, handwritten: 5 }; // Nunito, Cascadia, Excalifont
 export const FONT_NAME = { prose: "Nunito", mono: "Cascadia", handwritten: "Excalifont" };
 
@@ -78,11 +78,11 @@ formula itself. Chrome (heading, deck line) uses `MARGIN`, not `BODY_INSET`.
 | deck line | 23 | prose | no (framed) |
 | hero node | 30 | prose | **rectangle** |
 | node label | 23 | prose | **rectangle** |
-| note / evidence | 18 | prose | **rectangle** |
+| note / evidence | 23 | prose | **rectangle** |
 | free label | 23 | prose | no |
 | annotation | 18 | prose | no |
-| footer | 18 | prose | no |
-| paragraph / mechanism | 18 | **prose** | as above |
+| footer | 23 | prose | no |
+| paragraph / mechanism | 23 | **prose** | as above |
 | command / path / formula / literal | inherit | **mono** | as above |
 | short annotation | 18 | **handwritten** | no |
 
@@ -145,7 +145,7 @@ bars, so it is not a free parameter:
 | `CARD_GAP` (12) | `comparison`, `tree`, `checklist` | Separate rows — a bullet list, child nodes, or successive questions |
 
 Merging a label/note pair into a **single** bound text is not an option: Excalidraw bound text is
-single-style (one `fontSize` per container), so it would collapse the 23/18 ramp. The shared
+single-style (one `fontSize` per container), so it would collapse the 23/23 body ramp. The shared
 stroke is what buys the card gestalt while keeping two sizes.
 
 Two AABBs that share an edge exactly are **not** an overlap. `checkNoOverlap` uses strict `>` on
@@ -258,7 +258,9 @@ overlapElementIds, obscuredByChromeElementIds, geometryElementIds }`.
 top menu/bottom controls plus the harness status and frame-navigation regions.
 Those same rectangles are transformed through
 `viewportCoordsToSceneCoords` before obscuration checks; no synthetic toolbar
-strip is used. Text and bound-label/container metrics are re-measured through
+strip is used. Each frame is fitted against those measured offsets before its
+content and heading/deck chrome are checked, so an off-screen frame cannot be
+mistaken for a navigation overlap. Text and bound-label/container metrics are re-measured through
 `convertToExcalidrawElements` for the exact role/font/text tuple. Serialized
 converter bounds, when emitted by composition, are compared on x/y/width/height
 using an absolute tolerance derived from the converted metric, both against the

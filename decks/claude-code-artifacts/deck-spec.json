@@ -36,12 +36,14 @@
         ],
         "callouts": [
           {
-            "label": "What enters context",
-            "note": "instructions, files, summaries, and returned tool output"
+            "kind": "boundary",
+            "label": "Enters context",
+            "note": "instructions, files, summaries, tool output"
           },
           {
-            "label": "What stays external",
-            "note": "hooks run as code unless they return context"
+            "kind": "boundary",
+            "label": "Stays external",
+            "note": "hooks run as code"
           }
         ],
         "image": {
@@ -50,10 +52,10 @@
           "use": "Show a developer operating inside a repository-shaped environment surrounded by context, tools, controls, and state.",
           "description": "Paper-cut developer control room showing context, tools, trust, state, and extension sources around one working session."
         },
-        "explanation": "Claude Code starts with built-in tools for reading, editing, searching, executing. The extension layer changes the loop at different points: some artifacts enter the prompt, some add tools, some isolate work, some run around tool calls.",
-        "example": "Invoking a review skill adds its instructions to context; a subagent keeps the file reads separate and returns only a summary.",
+        "explanation": "Built-in tools run the loop; extensions enter context, add tools, isolate work, or enforce events.",
+        "example": "A review skill adds instructions; a subagent returns a summary.",
         "evidence": [],
-        "tradeoff": "Every extension adds context, tools, trust, or maintenance cost; bigger is not automatically better.",
+        "tradeoff": "Every extension adds context, trust, or maintenance cost.",
         "inspect": "Run /context; inspect ~/.claude/ and repo/.claude/.",
         "caption": "Choose an artifact by where it enters the loop, not by its filename.",
         "surface": "light"
@@ -96,10 +98,10 @@
         ],
         "axisX": "loads later →",
         "axisY": "main-context cost ↑",
-        "explanation": "Claude's context holds the system prompt, persistent instructions, conversation, file contents, and tool results. They do not cost the same: descriptions and tool names are light; full files and invoked skill bodies are large.",
-        "example": "A research subagent reads dozens of files in its own window and returns a short summary instead of flooding the main conversation.",
+        "explanation": "Context includes the system prompt, instructions, conversation, files, and tool output; descriptions are light, full files are large.",
+        "example": "A research subagent reads many files in its own window and returns a short summary.",
         "evidence": [],
-        "tradeoff": "After compaction only root instructions re-inject; always-on context costs every request, on-demand mechanisms need the right trigger.",
+        "tradeoff": "Always-on context costs every request; on-demand mechanisms need the right trigger.",
         "inspect": "Run /context; use /compact between phases.",
         "caption": "Context is a managed working set, not an unlimited knowledge base.",
         "surface": "light"
@@ -178,22 +180,25 @@
             "note": "Read billing path rules"
           },
           {
+            "kind": "boundary",
             "label": "User-owned",
             "note": "CLAUDE.md, settings, skills, agents, and rules under ~/.claude/"
           },
           {
+            "kind": "boundary",
             "label": "Project-owned",
-            "note": "CLAUDE.md, .claude/, and root .mcp.json can be reviewed in git"
+            "note": "shared CLAUDE.md, .claude/, and .mcp.json"
           },
           {
+            "kind": "warning",
             "label": "Private project state",
             "note": "CLAUDE.local.md and settings.local.json stay out of version control"
           }
         ],
-        "explanation": "The filesystem tells you ownership and discovery, not one precedence ladder. User artifacts live under ~/.claude; project instructions at repo/CLAUDE.md or repo/.claude/; shared rules and settings under repo/.claude; MCP servers in .mcp.json. Nested directories activate near matching files.",
-        "example": "A billing task combines ~/.claude/CLAUDE.md, repo/CLAUDE.md, .claude/settings.json, and packages/billing/CLAUDE.md without any replacing the others.",
+        "explanation": "The filesystem shows ownership and discovery, not one precedence ladder. Nested paths activate near matching files.",
+        "example": "A billing task combines user, repo, and package context.",
         "evidence": [],
-        "tradeoff": "One override ladder fails for additive instructions, merged hooks, named skills, and MCP servers.",
+        "tradeoff": "One ladder misleads for additive rules, skills, and MCP.",
         "inspect": "Read packages/billing/invoice.ts; run /context; compare repo/.claude/.",
         "caption": "Map the files first; apply each artifact's own loading rule second.",
         "surface": "light",
@@ -228,10 +233,10 @@
             "note": "enforce when guidance is insufficient"
           }
         ],
-        "explanation": "CLAUDE.md carries facts every session needs: build commands, conventions, stable guidance. Auto memory records corrections Claude cannot derive from the repository. Both are prompt context, still interpreted, never enforced.",
-        "example": "Put 'run pnpm test before committing' in project CLAUDE.md; block an unsafe command with a PreToolUse hook rather than prose.",
+        "explanation": "CLAUDE.md carries stable guidance; auto memory records corrections. Both are prompt context, not enforcement.",
+        "example": "Keep test commands in CLAUDE.md; block unsafe commands with PreToolUse.",
         "evidence": [],
-        "tradeoff": "Long always-on instructions reduce adherence; procedures belong in skills. Memory loads capped at 200 lines.",
+        "tradeoff": "Always-on prose costs context; procedures belong in skills.",
         "inspect": "Run /memory and /context; review .claude/settings.json.",
         "caption": "Write what every session must know; enforce what every session must obey.",
         "surface": "light"
@@ -266,10 +271,12 @@
         ],
         "callouts": [
           {
+            "kind": "boundary",
             "label": "Shared landscape",
             "note": "root instructions remain visible"
           },
           {
+            "kind": "example",
             "label": "Focused district",
             "note": "billing context activates near billing files"
           }
@@ -364,6 +371,7 @@
             "note": "managed, CLI, local, project, user"
           },
           {
+            "kind": "warning",
             "label": "Not one rule",
             "note": "merge behavior depends on the setting's type"
           }
@@ -418,10 +426,10 @@
             "note": "directory-qualified variant remains available"
           }
         ],
-        "explanation": "Skills package knowledge or workflows in SKILL.md; descriptions load at startup, full bodies only when invoked. Name conflicts resolve by source: enterprise over personal, personal over project, skill over command; plugin skills are namespaced.",
-        "example": "A root /deploy skill coexists with apps/web/.claude/skills/deploy, which appears as apps/web:deploy near that package.",
+        "explanation": "Skills load descriptions at startup and full bodies on invocation. Location sets ownership; name conflicts have source precedence.",
+        "example": "A root /deploy can coexist with apps/web/.claude/skills/deploy, shown as apps/web:deploy.",
         "evidence": [],
-        "tradeoff": "Broad personal skills can unexpectedly override project behavior; project skills are reviewable but repo-bound.",
+        "tradeoff": "Personal skills reuse broadly but can override project behavior.",
         "inspect": "Open .claude/skills/deploy/SKILL.md; invoke /deploy; verify apps/web:deploy.",
         "caption": "Skills are a loading and ownership system, not just saved prompts.",
         "surface": "light",
@@ -478,10 +486,10 @@
             "note": "foreground, background, resume, and hooks"
           }
         ],
-        "explanation": "A subagent runs its own loop with separate context, system prompt, tools, and permissions — useful when a side task would flood the main conversation or needs a specialized worker repeatedly. The parent receives a summary, not the trace.",
-        "example": "Send a codebase-wide search to a read-only research subagent; the main conversation receives only relevant symbols, risks, and paths.",
+        "explanation": "Subagents run separate loops with their own context, tools, and permissions; the parent receives a summary.",
+        "example": "Delegate a codebase search to a read-only worker; return symbols, risks, and paths.",
         "evidence": [],
-        "tradeoff": "Isolation hides intermediate reasoning. Parent permission mode and managed policy still constrain the subagent.",
+        "tradeoff": "Isolation hides traces; parent policy still constrains the worker.",
         "inspect": "Use /tasks; open .claude/agents/research.md transcript.",
         "caption": "Delegate when the intermediate work is expensive but the result is small.",
         "surface": "light"
@@ -521,6 +529,7 @@
             "note": "CLAUDE.md and skills can influence judgment"
           },
           {
+            "kind": "warning",
             "label": "Enforcement",
             "note": "permissions and hooks can deny unsafe action"
           }
@@ -531,10 +540,10 @@
           "use": "Contrast a soft cloud of guidance with a physical enforcement checkpoint and a human decision between them.",
           "description": "Handcrafted scene contrasting soft guidance with a lockable enforcement gate and a deliberate human decision."
         },
-        "explanation": "Hooks are event-driven automation: a lifecycle event, a matcher, one or more handlers. PreToolUse runs after tool parameters exist but before the call processes, so it can allow, deny, ask, or defer. Permissions are the other deterministic layer.",
-        "example": "A PreToolUse hook rejects destructive shell commands and returns the reason; a PostToolUse hook lints an edit and feeds the result back.",
+        "explanation": "Hooks run on lifecycle events; PreToolUse sees parameters before execution and can allow, deny, ask, or defer.",
+        "example": "PreToolUse can reject destructive shell commands; PostToolUse can lint edits.",
         "evidence": [],
-        "tradeoff": "@ file references do not fire Read hooks; block the path itself with a Read deny rule instead.",
+        "tradeoff": "Use prose for judgment; use hooks and permissions for guarantees.",
         "inspect": "Run /hooks; review .claude/settings.json.",
         "caption": "Use prose for judgment and runtime controls for guarantees.",
         "surface": "dark"
@@ -578,10 +587,10 @@
         ],
         "axisX": "more external capability →",
         "axisY": "more reusable packaging ↑",
-        "explanation": "MCP connects external services and actions. A skill teaches how and when to use them. A plugin packages skills, hooks, subagents, and servers for distribution. Duplicate server names resolve local before project before user; no field merging.",
-        "example": "Commit a project-scoped server to .mcp.json so the team shares the connection; add a skill documenting safe query patterns.",
+        "explanation": "MCP connects services; skills teach workflows; plugins package skills, hooks, agents, and servers.",
+        "example": "Share a project server in .mcp.json; document safe query patterns in a skill.",
         "evidence": [],
-        "tradeoff": "External tools enlarge the trust surface; environment expansion adds flexibility, secrets and approvals need review.",
+        "tradeoff": "External tools expand the trust surface; review secrets and approvals.",
         "inspect": "Run claude mcp list and claude mcp get <name>; inspect .mcp.json.",
         "caption": "Connect the system, teach the workflow, package the setup.",
         "surface": "light"
@@ -615,10 +624,10 @@
             "note": "subagent summary returns without its full reads"
           }
         ],
-        "explanation": "Before the prompt Claude holds root instructions, auto memory, skill descriptions, and tool names. Reading invoice.ts activates billing CLAUDE.md and path rules; invoking a skill adds its body; an MCP call loads its schema; hooks run at events.",
-        "example": "A billing review reads invoice.ts, activates packages/billing/CLAUDE.md, invokes /review-invoice, queries an accounting MCP tool, runs a post-edit hook.",
+        "explanation": "An edit activates artifacts at startup, file access, invocation, MCP use, and hook events.",
+        "example": "A billing review reads invoice.ts, invokes /review-invoice, queries MCP, then runs a hook.",
         "evidence": [],
-        "tradeoff": "Each layer aids specialization but adds a debug surface; existing on disk does not prove a file loaded or won precedence.",
+        "tradeoff": "Each layer specializes work but adds a debug surface.",
         "inspect": "Check /context, /memory, /tasks, /hooks; edit packages/billing/invoice.ts.",
         "caption": "Debug the effective session, not the directory tree in isolation.",
         "surface": "light"
@@ -653,10 +662,10 @@
         ],
         "axisX": "more deterministic →",
         "axisY": "more main-context cost ↑",
-        "explanation": "Start from the trigger. Every session needs a fact: CLAUDE.md. Only matching files: a path rule. Occasional procedure: a skill. Expensive side work: a subagent. Must always happen or block: a hook or permission rule.",
-        "example": "Keep a 100-line deployment playbook as /deploy, branch protection in a hook or CI, and delegate environment research to a subagent.",
+        "explanation": "Choose by trigger: fact, matching file, procedure, side work, or guarantee.",
+        "example": "Use CLAUDE.md for deployment facts, /deploy for a playbook, and a hook for branch protection.",
         "evidence": [],
-        "tradeoff": "The narrowest mechanism reduces noise, but too much fragmentation makes the setup hard to discover. Keep ownership and inspection commands visible.",
+        "tradeoff": "Narrow mechanisms reduce noise; fragmentation can hurt discoverability.",
         "inspect": "Run /context; inspect CLAUDE.md, .claude/rules/, and the selected hook.",
         "caption": "Design the effective agent loop, not a decorative .claude folder.",
         "surface": "light"

@@ -10,7 +10,7 @@ import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { BODY_INSET, PAGE_WIDTH, fontForRole } from "./layout.mjs";
+import { BODY_INSET, PAGE_WIDTH, RAMP, fontForRole } from "./layout.mjs";
 import { CliError, runCli } from "./cli.mjs";
 import { normalizeAnnotations } from "./outline.mjs";
 import { preflightDeck, readJsonInput, resolveAssetWithinRoot } from "./preflight.mjs";
@@ -160,11 +160,15 @@ function metaForBand(band, index) {
     caption: clean(visual.caption, band.deck),
     explanation: clean(visual.explanation, band.deck),
     callouts: (Array.isArray(visual.callouts) ? visual.callouts : []).map((callout, calloutIndex) => {
-      const hasKind = callout && typeof callout === "object" && Object.prototype.hasOwnProperty.call(callout, "kind");
-      const kind = hasKind ? clean(callout.kind, "") : "example";
-      if (hasKind && !kind) throw new Error(`band ${index} callout ${calloutIndex + 1}: kind is required when provided`);
+      if (!callout || typeof callout !== "object" || Array.isArray(callout)) {
+        throw new Error(`band ${index} callout ${calloutIndex + 1}: callout must declare kind and label`);
+      }
+      if (!Object.prototype.hasOwnProperty.call(callout, "kind")) {
+        throw new Error(`band ${index} callout ${calloutIndex + 1}: kind is required`);
+      }
+      const kind = clean(callout.kind, "");
+      if (!kind) throw new Error(`band ${index} callout ${calloutIndex + 1}: kind is required`);
       if (!SEMANTIC_KINDS.has(kind)) throw new Error(`band ${index} callout ${calloutIndex + 1}: unsupported semantic icon kind "${kind}"`);
-      if (typeof callout === "string") return { kind: "example", label: `Callout ${calloutIndex + 1}`, note: callout };
       const label = clean(callout?.label, "");
       if (!label) throw new Error(`band ${index} callout ${calloutIndex + 1}: label is required`);
       return { kind, label, note: clean(callout?.note ?? callout?.text, "") };
@@ -236,7 +240,7 @@ function semanticIcon(kind, { id, x, y, size, label, strokeColor = "#475569", la
     x + size + 0.012,
     y,
     `${labelText}: ${label}`,
-    18,
+    RAMP.note,
     labelColor,
     "prose",
     { semanticLabelFor: iconId },
@@ -245,7 +249,10 @@ function semanticIcon(kind, { id, x, y, size, label, strokeColor = "#475569", la
 }
 
 function semanticType(kind, fallback) {
-  return { example: "ellipse", boundary: "diamond", inspect: "line", warning: "triangle" }[kind] ?? fallback;
+  // Excalidraw 0.18.1's triangle conversion does not survive restoreElements;
+  // keep warnings as a supported filled shape while preserving their semantic
+  // kind and warning palette in the serialized scene.
+  return { example: "ellipse", boundary: "diamond", inspect: "line", warning: "rectangle" }[kind] ?? fallback;
 }
 
 function semanticCalloutShape(id, callout, x, y, width, height, colors, fontSize, fallbackType) {
@@ -286,11 +293,11 @@ function finish(meta, elements, extra = {}) {
     ...meta.evidence.map((item) => `Evidence: ${item}`),
   ].filter(Boolean);
   elements.push(...annotationElements(meta));
-  elements.push(text("explanation", 0.05, 0.70, depthParts.join("  •  "), 18, textColor, "prose", { beautidrawMaxWidth: 0.60 }));
+  elements.push(text("explanation", 0.05, 0.80, depthParts.join("  •  "), RAMP.note, textColor, "prose", { beautidrawMaxWidth: 0.58 }));
   // Exact-font loading can wrap long commands to two lines; keep the command
   // above the body's bottom edge so converter-derived height, not fallback
   // metrics, decides whether it fits.
-  if (meta.inspect) elements.push(text("inspect", 0.05, 0.88, `Inspect: ${meta.inspect}`, 18, textColor, "mono"));
+  if (meta.inspect) elements.push(text("inspect", 0.66, 0.80, `Inspect: ${meta.inspect}`, RAMP.note, textColor, "mono", { beautidrawMaxWidth: 0.29 }));
   return {
     lane: sequentialFamilies.has(meta.family) || meta.family === "matrix" ? "hybrid" : "composed",
     surfaceColor: meta.dark ? darkSurface : lightSurface,
@@ -329,15 +336,15 @@ function field(meta) {
   const elements = thesisLine(meta);
   elements.push(line("field-x", 0.08, 0.50, 0.84, 0.01, [[0, 0.5], [1, 0.5]], axisColor));
   elements.push(line("field-y", 0.50, 0.15, 0.01, 0.70, [[0.5, 0], [0.5, 1]], axisColor));
-  elements.push(text("field-x-label", 0.72, 0.83, meta.axisX, 18, textColor));
-  elements.push(text("field-y-label", 0.04, 0.10, meta.axisY, 18, textColor));
-  const positions = [[0.10, 0.16], [0.60, 0.16], [0.16, 0.46], [0.60, 0.46], [0.36, 0.28], [0.36, 0.48]];
+  elements.push(text("field-x-label", 0.72, 0.04, meta.axisX, RAMP.note, textColor));
+  elements.push(text("field-y-label", 0.04, 0.10, meta.axisY, RAMP.note, textColor));
+  const positions = [[0.10, 0.16], [0.60, 0.16], [0.16, 0.40], [0.60, 0.40], [0.36, 0.26], [0.36, 0.40]];
   positions.slice(0, Math.min(meta.nodes.length, positions.length)).forEach(([x, y], index) => {
     const colors = colorFor(meta, index, meta.dark);
     if (meta.dark) colors.fill = colors.dark;
     const type = index % 3 === 0 ? "ellipse" : index % 3 === 1 ? "rectangle" : "diamond";
     const size = index < 2 ? [0.24, 0.16] : [0.18, 0.13];
-    elements.push(shape(`field-${index + 1}`, type, x, y, size[0], size[1], nodeText(meta.nodes[index]), colors, index < 2 ? 21 : 19));
+    elements.push(shape(`field-${index + 1}`, type, x, y, size[0], size[1], nodeText(meta.nodes[index]), colors, RAMP.note));
   });
   return finish(meta, elements);
 }
@@ -351,7 +358,7 @@ function spotlight(meta) {
   // Bottom callout row rides at 0.46, not 0.53: a three-line bound label
   // expands its container downward past the declared box, and 0.53 + growth
   // grazed the 0.73 footer line on this band height.
-  const positions = [[0.06, 0.16], [0.68, 0.16], [0.06, 0.46], [0.68, 0.46]];
+  const positions = [[0.06, 0.16], [0.68, 0.16], [0.06, 0.52], [0.68, 0.52]];
   const callouts = meta.callouts.length ? meta.callouts : meta.nodes.slice(0, 4).map((node) => ({ label: node.label, note: node.note }));
   positions.forEach(([x, y], index) => {
     const callout = callouts[index % callouts.length];
@@ -365,7 +372,7 @@ function spotlight(meta) {
       0.24,
       0.14,
       colors,
-      20,
+      RAMP.note,
       index % 2 ? "rectangle" : "ellipse",
     ));
   });
@@ -376,13 +383,13 @@ function constellation(meta) {
   const elements = thesisLine(meta);
   // star-2 sits below the thesis strip: at y=0.12 it grazed the one-line
   // thesis's worst-case rendered height on short bands.
-  const positions = [[0.10, 0.18], [0.38, 0.16], [0.68, 0.18], [0.22, 0.42], [0.52, 0.46], [0.76, 0.52]];
+  const positions = [[0.10, 0.18], [0.42, 0.14], [0.68, 0.18], [0.16, 0.46], [0.52, 0.44], [0.76, 0.46]];
   positions.slice(0, Math.min(meta.nodes.length, positions.length)).forEach(([x, y], index) => {
     const colors = colorFor(meta, index, meta.dark);
     if (meta.dark) colors.fill = colors.dark;
     const shapeType = index === 0 ? "ellipse" : index % 2 ? "diamond" : "rectangle";
     const size = index === 0 ? [0.24, 0.18] : [0.18, 0.14];
-    elements.push(shape(`star-${index + 1}`, shapeType, x, y, size[0], size[1], nodeText(meta.nodes[index]), colors, index === 0 ? 23 : 19));
+    elements.push(shape(`star-${index + 1}`, shapeType, x, y, size[0], size[1], nodeText(meta.nodes[index]), colors, RAMP.note));
   });
   return finish(meta, elements);
 }
@@ -398,12 +405,12 @@ function evidence(meta) {
   elements.push(shape("claim", "diamond", 0.38, 0.31, 0.24, 0.22, meta.focus, claimColors, 26));
   // Bottom source row at 0.56 for the same bound-label-growth clearance as
   // spotlight: the left column sits inside the footer's x-range.
-  const positions = [[0.05, 0.16], [0.71, 0.16], [0.05, 0.56], [0.71, 0.56]];
+  const positions = [[0.05, 0.16], [0.71, 0.16], [0.05, 0.48], [0.71, 0.48]];
   const sources = meta.nodes.slice(0, 4);
   positions.forEach(([x, y], index) => {
     const colors = colorFor(meta, index + 1, meta.dark);
     if (meta.dark) colors.fill = colors.dark;
-    elements.push(shape(`evidence-${index + 1}`, index % 2 ? "ellipse" : "rectangle", x, y, 0.23, 0.14, nodeText(sources[index]), colors, 20));
+    elements.push(shape(`evidence-${index + 1}`, index % 2 ? "ellipse" : "rectangle", x, y, 0.23, 0.14, nodeText(sources[index]), colors, RAMP.note));
   });
   if (sources.length >= 2) {
     // From the left column's centroid (between its top and bottom sources)
@@ -422,11 +429,11 @@ function threshold(meta) {
   elements.push(line("threshold-axis", 0.10, 0.53, 0.80, 0.01, [[0, 0.5], [1, 0.5]], stroke));
   const leftColors = colorFor(meta, 0, dark); const rightColors = colorFor(meta, 2, dark); const centerColors = colorFor(meta, 1, dark);
   if (dark) { leftColors.fill = leftColors.dark; rightColors.fill = rightColors.dark; centerColors.fill = centerColors.dark; }
-  elements.push(shape("left-zone", "ellipse", 0.08, 0.32, 0.22, 0.18, meta.left, leftColors, 21));
+  elements.push(shape("left-zone", "ellipse", 0.08, 0.32, 0.22, 0.18, meta.left, leftColors, RAMP.note));
   elements.push(shape("threshold", "diamond", 0.40, 0.39, 0.20, 0.22, meta.middle, centerColors, 24));
-  elements.push(shape("right-zone", "ellipse", 0.70, 0.32, 0.22, 0.18, meta.right, rightColors, 21));
-  elements.push(text("threshold-left", 0.08, 0.62, meta.nodes[0]?.note ?? "", 18, textColor));
-  elements.push(text("threshold-right", 0.70, 0.62, meta.nodes[2]?.note ?? "", 18, textColor));
+  elements.push(shape("right-zone", "ellipse", 0.70, 0.32, 0.22, 0.18, meta.right, rightColors, RAMP.note));
+  elements.push(text("threshold-left", 0.08, 0.62, meta.nodes[0]?.note ?? "", RAMP.note, textColor));
+  elements.push(text("threshold-right", 0.70, 0.62, meta.nodes[2]?.note ?? "", RAMP.note, textColor));
   return finish(meta, elements);
 }
 
@@ -452,12 +459,17 @@ async function illustration(meta) {
   const y = (1 - height) / 2;
   const textX = side === "left" ? Math.max(0.56, x + width + 0.05) : 0.05;
   const callouts = meta.callouts.length ? meta.callouts : meta.nodes.slice(0, 2).map((node) => ({ label: node.label, note: node.note }));
+  const hasLongCallout = callouts.some((callout) => callout.note.length > 80);
+  const calloutStart = 0.14;
+  const calloutStep = hasLongCallout ? 0.40 : 0.28;
+  const illustrationInspectY = hasLongCallout ? 0.74 : 0.62;
+  const illustrationExplanationY = hasLongCallout ? 0.84 : 0.72;
   const textColor = meta.dark ? darkText : lightText;
   const mutedText = meta.dark ? "#cbd5e1" : "#475569";
   const elements = [
-    text("thesis", textX, 0.08, meta.focus, 29, textColor, "prose", { beautidrawMaxWidth: 0.39 }),
+    text("thesis", textX, 0.08, meta.focus, 29, textColor, "prose", { beautidrawMaxWidth: 0.43 }),
   ];
-  elements.push(...annotationElements(meta, { x: textX, y: 0.55, maxWidth: 0.39 }));
+  elements.push(...annotationElements(meta, { x: textX, y: 0.55, maxWidth: 0.43 }));
   callouts.slice(0, 2).forEach((callout, index) => {
     const colors = colorFor(meta, index + 1, meta.dark);
     if (meta.dark) colors.fill = colors.dark;
@@ -465,11 +477,11 @@ async function illustration(meta) {
       `callout-${index + 1}`,
       callout,
       textX,
-      0.22 + index * 0.18,
-      0.39,
+      calloutStart + index * calloutStep,
+      0.43,
       0.14,
       colors,
-      20,
+      RAMP.note,
       index % 2 ? "ellipse" : "rectangle",
     ));
   });
@@ -479,8 +491,8 @@ async function illustration(meta) {
     meta.tradeoff ? `Boundary: ${meta.tradeoff}` : "",
     meta.evidence[0] ? `Evidence: ${meta.evidence[0]}` : "",
   ].filter(Boolean);
-  elements.push(text("explanation", textX, 0.78, depthParts.join("  •  "), 18, mutedText, "prose", { beautidrawMaxWidth: 0.39 }));
-  if (meta.inspect) elements.push(text("inspect", textX, 0.70, `Inspect: ${meta.inspect}`, 18, mutedText, "mono", { beautidrawMaxWidth: 0.39 }));
+  elements.push(text("explanation", textX, illustrationExplanationY, depthParts.join("  •  "), RAMP.note, mutedText, "prose", { beautidrawMaxWidth: 0.43 }));
+  if (meta.inspect) elements.push(text("inspect", textX, illustrationInspectY, `Inspect: ${meta.inspect}`, RAMP.note, mutedText, "mono", { beautidrawMaxWidth: 0.43 }));
   return {
     lane: "composed",
     surfaceColor: meta.dark ? darkSurface : lightSurface,
@@ -527,7 +539,7 @@ function map(meta) {
   // everything below y=0.73 on the left half. Satellites thread between
   // them: side columns, a centre node under the thesis strip, a centre
   // node above the footer.
-  const positions = [[0.08, 0.16], [0.70, 0.14], [0.05, 0.44], [0.73, 0.42], [0.42, 0.18], [0.67, 0.57]];
+  const positions = [[0.08, 0.16], [0.70, 0.14], [0.05, 0.44], [0.73, 0.34], [0.42, 0.18], [0.67, 0.56]];
   positions.forEach(([x, y], index) => {
     const node = meta.nodes[index % meta.nodes.length];
     const colors = colorFor(meta, index + 1, meta.dark);
@@ -550,7 +562,7 @@ function journey(meta) {
     const y = index % 2 ? 0.56 : 0.30;
     const colors = colorFor(meta, index, meta.dark);
     if (meta.dark) colors.fill = colors.dark;
-    elements.push(shape(`moment-${index + 1}`, "ellipse", Math.max(0, x - 0.07), y, 0.14, 0.14, nodeText(node), colors, 20));
+    elements.push(shape(`moment-${index + 1}`, "ellipse", Math.max(0, x - 0.07), y, 0.14, 0.14, nodeText(node), colors, RAMP.note));
     if (index < nodes.length - 1) {
       const nextX = 0.07 + (index + 1) * (0.86 / Math.max(nodes.length - 1, 1));
       elements.push(arrowBetween(`journey-arrow-${index + 1}`, x + 0.07, 0.52, nextX - 0.07, 0.52, axisColor));
@@ -587,8 +599,8 @@ function matrix(meta) {
   const labelColor = meta.dark ? darkText : "#475569";
   elements.push(line("x-axis", 0.06, 0.49, 0.88, 0.01, [[0, 0.5], [1, 0.5]], axisColor));
   elements.push(line("y-axis", 0.50, 0.15, 0.01, 0.70, [[0.5, 0], [0.5, 1]], axisColor));
-  elements.push(text("axis-x-label", 0.72, 0.83, meta.axisX, 18, labelColor));
-  elements.push(text("axis-y-label", 0.04, 0.15, meta.axisY, 18, labelColor));
+  elements.push(text("axis-x-label", 0.72, 0.04, meta.axisX, RAMP.note, labelColor));
+  elements.push(text("axis-y-label", 0.04, 0.04, meta.axisY, RAMP.note, labelColor));
   const nodes = meta.nodes.slice(0, 4);
   const positions = [[0.08, 0.18], [0.58, 0.18], [0.08, 0.51], [0.58, 0.51]];
   nodes.forEach((node, index) => {
@@ -597,7 +609,7 @@ function matrix(meta) {
     elements.push(shape(`quadrant-${index + 1}`, "rectangle", positions[index][0], positions[index][1], 0.34, 0.18, nodeText(node), colors));
   });
   const focusColors = colorFor(meta, 4); focusColors.fill = "#d1fae5"; focusColors.text = lightText;
-  elements.push(shape("marker", "ellipse", 0.44, 0.42, 0.12, 0.12, meta.focus, focusColors, 18));
+  elements.push(shape("marker", "ellipse", 0.44, 0.42, 0.12, 0.12, meta.focus, focusColors, RAMP.note));
   return finish(meta, elements);
 }
 

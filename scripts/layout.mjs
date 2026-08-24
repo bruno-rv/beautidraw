@@ -22,7 +22,7 @@ export const G = 48; // base gutter
 export const GUTTER_COL = 56; // between columns
 export const BAND_GAP = 96; // vertical gap between bands
 export const BOUND_TEXT_PADDING = 5; // per side, Excalidraw's own
-export const RAMP = { title: 48, heading: 38, hero: 30, label: 23, note: 18 };
+export const RAMP = { title: 48, heading: 38, hero: 30, label: 23, note: 23 };
 export const FONT = { prose: 6, mono: 3, handwritten: 5 }; // Nunito, Cascadia, Excalifont — spike F3
 export const FONT_NAME = { prose: "Nunito", mono: "Cascadia", handwritten: "Excalifont" };
 

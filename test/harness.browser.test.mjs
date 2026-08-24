@@ -321,21 +321,25 @@ test("fidelity rejects stale text, font, and measured-bound metadata with elemen
 
 test("fidelity rejects a bound label that disagrees with its container label", async () => {
   await withHarness(async ({ page }) => {
-    const changed = structuredClone(deck);
-    const boundLabel = changed.elements.find((element) => element.id === "fidelity-bound-label");
-    boundLabel.text += " stale bound text";
+    for (const mutate of [
+      (element) => { element.text += " stale bound text"; },
+      (element) => { element.originalText += " stale original text"; },
+      (element) => { element.lineHeight += 0.5; },
+    ]) {
+      const changed = structuredClone(deck);
+      mutate(changed.elements.find((element) => element.id === "fidelity-bound-label"));
+      const result = await page.evaluate((scene) => window.__bdLoadScene(scene), changed);
+      assert.equal(result.state, "error");
+      assert.match(result.error.reason, /fidelity-bound(?:-label)?/i);
 
-    const result = await page.evaluate((scene) => window.__bdLoadScene(scene), changed);
-    assert.equal(result.state, "error");
-    assert.match(result.error.reason, /fidelity-bound(?:-label)?/i);
-
-    const report = await page.evaluate(() => window.__bdReportFidelity(window.__bdEditor.getSceneElements(), {
-      width: innerWidth,
-      height: innerHeight,
-    }));
-    const geometryElementIds = report.find((frame) => frame.frameId === "fidelity-frame")?.geometryElementIds ?? [];
-    assert.deepEqual(geometryElementIds, ["fidelity-bound", "fidelity-bound-label"]);
-    assert.notEqual(await page.locator("#bd-state").getAttribute("data-state"), "ready");
+      const report = await page.evaluate(() => window.__bdReportFidelity(window.__bdEditor.getSceneElements(), {
+        width: innerWidth,
+        height: innerHeight,
+      }));
+      const geometryElementIds = report.find((frame) => frame.frameId === "fidelity-frame")?.geometryElementIds ?? [];
+      assert.deepEqual(geometryElementIds, ["fidelity-bound", "fidelity-bound-label"]);
+      assert.notEqual(await page.locator("#bd-state").getAttribute("data-state"), "ready");
+    }
   });
 });
 
