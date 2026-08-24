@@ -241,6 +241,12 @@ checks allow a bound text/container pair and ignore line/arrow strokes and the
 surface rectangle, matching composition validation. Every failure is reported
 by element ID; no screenshot OCR or fixed sleep is a fidelity oracle.
 
+Readiness failures retain their typed class and truthful recovery (`restore`,
+file load, image error/decode/deadline, placeholder/stability, and fidelity).
+The rendered-region oracle samples the loaded render, waits an animation frame,
+then samples again; the two hashes must differ from the placeholder hash and
+remain stable across those distinct frame samples.
+
 **Edge-coverage exemptions.** `EDGE_COVERAGE_EXEMPT_PATTERNS = { "flow", "canvas" }`. A centred
 `flow` column cannot clear `ε` by construction, and widening it back out would reintroduce the
 composition defect the narrowing exists to remove. A `canvas` is deliberately empty during base

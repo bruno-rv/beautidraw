@@ -75,7 +75,15 @@
       const frameNavigation = document.getElementById("bd-frame-navigation");
       const NativeImage = window.Image;
       const imageObservations = [];
+      const imageObservationWaiters = [];
       window.__bdImageObservations = imageObservations;
+
+      function harnessError(code, reason, recovery) {
+        const error = new Error(reason);
+        error.code = code;
+        error.harnessFailure = { reason, recovery };
+        return error;
+      }
 
       function setReady(frameCount) {
         stateRegion.replaceChildren(document.createTextNode(`Ready — ${frameCount} frame${frameCount === 1 ? "" : "s"}`));
@@ -97,11 +105,21 @@
       }
 
       function observeImage(image) {
-        const record = { element: image, src: "", state: "pending" };
+        const record = {
+          element: image,
+          src: "",
+          state: "pending",
+        };
         const settle = (state, error) => {
+          if (record.state !== "pending") return;
           record.src = image.currentSrc || image.src || "";
           record.state = state;
           if (error) record.error = String(error.message || error);
+          for (const waiter of [...imageObservationWaiters]) {
+            if (waiter.expected !== record.src) continue;
+            imageObservationWaiters.splice(imageObservationWaiters.indexOf(waiter), 1);
+            waiter.resolve(record);
+          }
         };
         image.addEventListener("load", () => settle("load"), { once: true });
         image.addEventListener("error", (event) => settle("error", event), { once: true });
@@ -117,48 +135,109 @@
       window.Image.prototype = NativeImage.prototype;
 
       const twoFrames = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-      const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      let animationFrameSequence = 0;
+      const animationFrame = () => new Promise((resolve) => requestAnimationFrame(() => resolve(++animationFrameSequence)));
 
       function imageName(element) {
         return element.customData?.beautidrawImageName || element.id || element.fileId || "image";
       }
 
-      async function waitForImage(file, element, deadline) {
+      function waitForObservation(expected, element, signal) {
+        return new Promise((resolve, reject) => {
+          const existing = imageObservations.find((candidate) => candidate.src === expected);
+          if (existing) {
+            resolve(existing);
+            return;
+          }
+          const waiter = {
+            expected,
+            resolve: (record) => {
+              signal.removeEventListener("abort", onAbort);
+              resolve(record);
+            },
+            reject: (error) => {
+              signal.removeEventListener("abort", onAbort);
+              reject(error);
+            },
+          };
+          const onAbort = () => {
+            const index = imageObservationWaiters.indexOf(waiter);
+            if (index >= 0) imageObservationWaiters.splice(index, 1);
+            waiter.reject(harnessError(
+              "IMAGE_DEADLINE",
+              `Image ${imageName(element)} did not render before the 2000ms deadline.`,
+              "Verify the embedded data URL and rebuild the deck.",
+            ));
+          };
+          if (signal.aborted) return onAbort();
+          signal.addEventListener("abort", onAbort, { once: true });
+          imageObservationWaiters.push(waiter);
+        });
+      }
+
+      async function waitForImage(file, element, signal) {
         const expected = file?.dataURL;
         if (!expected) {
-          const error = new Error(`Image ${imageName(element)} did not render before the 2000ms deadline.`);
-          error.imageName = imageName(element);
-          throw error;
+          throw harnessError(
+            "IMAGE_FILE",
+            `Image ${imageName(element)} is missing embedded file data.`,
+            "Restore the embedded file data and rebuild the deck.",
+          );
         }
-        while (Date.now() < deadline) {
-          const record = imageObservations.find((candidate) => candidate.src === expected);
-          if (record?.state === "error") {
-            const error = new Error(`Image ${imageName(element)} did not render before the 2000ms deadline.`);
-            error.imageName = imageName(element);
-            throw error;
-          }
-          if (record?.state === "load") {
-            if (typeof record.element.decode === "function") {
-              try {
-                await record.element.decode();
-              } catch {
-                const error = new Error(`Image ${imageName(element)} did not render before the 2000ms deadline.`);
-                error.imageName = imageName(element);
-                throw error;
-              }
-            }
-            return record;
-          }
-          await wait(16);
+        if (window.__bdTestImageFailure === "deadline") {
+          throw harnessError(
+            "IMAGE_DEADLINE",
+            `Image ${imageName(element)} did not render before the 2000ms deadline.`,
+            "Verify the embedded data URL and rebuild the deck.",
+          );
         }
-        const error = new Error(`Image ${imageName(element)} did not render before the 2000ms deadline.`);
-        error.imageName = imageName(element);
-        throw error;
+        if (window.__bdTestImageFailure === "decode") {
+          throw harnessError(
+            "IMAGE_DECODE",
+            `Image ${imageName(element)} decoded unsuccessfully.`,
+            "Verify the embedded data URL and rebuild the deck.",
+          );
+        }
+        const abort = new Promise((_, reject) => {
+          const onAbort = () => reject(harnessError(
+            "IMAGE_DEADLINE",
+            `Image ${imageName(element)} did not render before the 2000ms deadline.`,
+            "Verify the embedded data URL and rebuild the deck.",
+          ));
+          if (signal.aborted) return onAbort();
+          signal.addEventListener("abort", onAbort, { once: true });
+        });
+        const record = await Promise.race([waitForObservation(expected, element, signal), abort]);
+        if (record.state === "error") {
+          throw harnessError(
+            "IMAGE_ERROR",
+            `Image ${imageName(element)} failed to load.`,
+            "Verify the embedded data URL and rebuild the deck.",
+          );
+        }
+        if (typeof record.element.decode === "function") {
+          try {
+            await Promise.race([record.element.decode(), abort]);
+          } catch (error) {
+            if (error.code === "IMAGE_DEADLINE") throw error;
+            throw harnessError(
+              "IMAGE_DECODE",
+              `Image ${imageName(element)} decoded unsuccessfully.`,
+              "Verify the embedded data URL and rebuild the deck.",
+            );
+          }
+        }
+        return record;
       }
 
       window.__bdWaitForImages = async (files = {}, imageElements = []) => {
-        const deadline = Date.now() + 2000;
-        return Promise.all(imageElements.map((element) => waitForImage(files[element.fileId], element, deadline)));
+        const controller = new AbortController();
+        const deadline = setTimeout(() => controller.abort(), 2000);
+        try {
+          return await Promise.all(imageElements.map((element) => waitForImage(files[element.fileId], element, controller.signal)));
+        } finally {
+          clearTimeout(deadline);
+        }
       };
 
       function hashRegion(canvas, bounds, sceneBounds) {
@@ -180,6 +259,20 @@
       async function imageRegionOracle(elements, files) {
         const images = elements.filter((element) => element.type === "image");
         if (!images.length) return [];
+        if (window.__bdTestImageFailure === "placeholder") {
+          throw harnessError(
+            "IMAGE_PLACEHOLDER",
+            `Image ${imageName(images[0])} rendered only its placeholder region.`,
+            "Verify the editor image renderer and the embedded data URL.",
+          );
+        }
+        if (window.__bdTestImageFailure === "stability") {
+          throw harnessError(
+            "IMAGE_STABILITY",
+            `Image ${imageName(images[0])} did not remain stable across animation frames.`,
+            "Wait for the editor image render to stabilize before reading the scene.",
+          );
+        }
         const all = elements.filter((element) => !element.isDeleted);
         const minX = Math.min(...all.map((element) => element.x));
         const minY = Math.min(...all.map((element) => element.y));
@@ -195,7 +288,9 @@
           files: renderFiles,
           exportPadding: 0,
         });
+        const actualFrame = await animationFrame();
         const actual = await render(files);
+        const stableFrame = await animationFrame();
         const stable = await render(files);
         const placeholder = await render({});
         return images.map((image) => {
@@ -203,16 +298,27 @@
           const stableHash = hashRegion(stable, image, sceneBounds);
           const placeholderHash = hashRegion(placeholder, image, sceneBounds);
           if (actualHash === placeholderHash) {
-            const error = new Error(`Image ${imageName(image)} rendered only its placeholder region.`);
-            error.imageName = imageName(image);
-            throw error;
+            throw harnessError(
+              "IMAGE_PLACEHOLDER",
+              `Image ${imageName(image)} rendered only its placeholder region.`,
+              "Verify the editor image renderer and the embedded data URL.",
+            );
           }
           if (actualHash !== stableHash) {
-            const error = new Error(`Image ${imageName(image)} did not remain stable for two frames.`);
-            error.imageName = imageName(image);
-            throw error;
+            throw harnessError(
+              "IMAGE_STABILITY",
+              `Image ${imageName(image)} did not remain stable across animation frames.`,
+              "Wait for the editor image render to stabilize before reading the scene.",
+            );
           }
-          return { id: image.id, actualHash, placeholderHash };
+          return {
+            id: image.id,
+            actualHash,
+            placeholderHash,
+            actualFrame,
+            stableFrame,
+            distinctAnimationFrames: stableFrame > actualFrame,
+          };
         });
       }
 
@@ -294,35 +400,122 @@
         }
       }
 
-      window.__bdReady = (async () => {
-        const api = await import("./vendor/excalidraw.js");
-        window.__bdApi = api;
-        window.__bdEditor = await api.mountEditor(document.getElementById("root"));
-        await document.fonts.ready;
-        document.querySelector('[data-testid="main-menu-trigger"]')?.setAttribute("aria-label", "Open main menu");
+      function labelMainMenu() {
+        const menu = document.querySelector('[data-testid="main-menu-trigger"]');
+        if (!menu) return false;
+        menu.setAttribute("aria-label", "Open main menu");
         return true;
-      })().then(
-        () => ({ ok: true }),
-        (err) => ({ ok: false, error: String(err && err.stack) || String(err) }),
-      );
+      }
+
+      function watchMainMenu() {
+        const root = document.getElementById("root");
+        let observer;
+        const deadline = setTimeout(() => observer.disconnect(), 2000);
+        const onMutation = () => {
+          if (!labelMainMenu()) return;
+          observer.disconnect();
+          clearTimeout(deadline);
+        };
+        observer = new MutationObserver(onMutation);
+        observer.observe(root, { childList: true, subtree: true });
+        onMutation();
+      }
+
+      window.__bdReady = (async () => {
+        try {
+          if (new URLSearchParams(location.search).has("failBoot")) throw new Error("simulated boot failure");
+          const api = await import("./vendor/excalidraw.js");
+          window.__bdApi = api;
+          window.__bdEditor = await api.mountEditor(document.getElementById("root"));
+          if (new URLSearchParams(location.search).has("delayMenu")) {
+            const menu = document.querySelector('[data-testid="main-menu-trigger"]');
+            const parent = menu?.parentNode;
+            menu?.remove();
+            if (menu && parent) setTimeout(() => parent.append(menu), 50);
+          }
+          watchMainMenu();
+          await document.fonts.ready;
+          return { ok: true };
+        } catch (error) {
+          const failure = {
+            reason: `Editor boot failed: ${error.message || String(error)}`,
+            recovery: "Reload the harness and verify the local editor bundle.",
+          };
+          setError(failure);
+          return { ok: false, error: failure.reason, recovery: failure.recovery };
+        }
+      })();
 
       window.__bdLoadScene = async (scene) => {
         try {
-          const elements = window.__bdApi.restoreElements(scene.elements, null);
+          let elements;
+          if (!Array.isArray(scene?.elements)) {
+            throw harnessError(
+              "SCENE_RESTORE",
+              "Scene restore failed: elements must be an array",
+              "Verify the serialized scene elements and rebuild the deck.",
+            );
+          }
+          try {
+            elements = window.__bdApi.restoreElements(scene.elements, null);
+          } catch (error) {
+            throw harnessError(
+              "SCENE_RESTORE",
+              `Scene restore failed: ${error.message || String(error)}`,
+              "Verify the serialized scene elements and rebuild the deck.",
+            );
+          }
+          const fontName = (family) => family === 3 ? "Cascadia" : family === 5 ? "Excalifont" : "Nunito";
+          const fontRequirements = elements.flatMap((element) => {
+            if (element.type === "text" && typeof element.text === "string") {
+              return [{ family: fontName(element.fontFamily), size: element.fontSize, text: element.text }];
+            }
+            if (element.label?.text) {
+              return [{ family: fontName(element.label.fontFamily ?? 6), size: element.label.fontSize, text: element.label.text }];
+            }
+            return [];
+          });
+          await Promise.all(fontRequirements.map(({ family, size, text }) => document.fonts.load(`${size}px "${family}"`, text)));
+          await document.fonts.ready;
+          const missingFont = fontRequirements.find(({ family, size, text }) => !document.fonts.check(`${size}px "${family}"`, text));
+          if (missingFont) {
+            throw harnessError(
+              "FONT_GATE",
+              `Font gate failed for ${missingFont.family}@${missingFont.size}.`,
+              "Verify the local fonts and rebuild the deck.",
+            );
+          }
           window.__bdEditor.updateScene({ elements, appState: scene.appState });
-          window.__bdEditor.addFiles(Object.values(scene.files || {}));
+          try {
+            window.__bdEditor.addFiles(Object.values(scene.files || {}));
+          } catch (error) {
+            throw harnessError(
+              "FILE_LOAD",
+              `File load failed: ${error.message || String(error)}`,
+              "Verify the embedded files and rebuild the deck.",
+            );
+          }
           const imageElements = elements.filter((element) => element.type === "image");
           const imageReadiness = await window.__bdWaitForImages(scene.files || {}, imageElements);
           await twoFrames();
           const imageRegions = await imageRegionOracle(elements, scene.files || {});
           const frames = window.__bdReportFidelity(elements, { width: innerWidth, height: innerHeight });
+          const failedFrames = frames.filter((frame) => frame.clippedElementIds.length || frame.overlapElementIds.length || frame.obscuredByChromeElementIds.length || frame.minimumEffectiveTextPx < 12);
+          if (failedFrames.length) {
+            const frame = failedFrames[0];
+            throw harnessError(
+              "FIDELITY",
+              `Fidelity report failed for ${frame.frameId}: ${[...frame.clippedElementIds, ...frame.overlapElementIds, ...frame.obscuredByChromeElementIds].join(", ") || "effective text is below 12px"}.`,
+              "Adjust the scene geometry and rebuild the deck.",
+            );
+          }
           updateFrameNavigation(elements);
           setReady(frames.length);
           return { state: "ready", missingImages: [], imageReadiness: imageReadiness.map(({ src, state }) => ({ src, state })), imageRegions, frames };
         } catch (error) {
-          const failure = {
-            reason: `Image ${error.imageName || "red"} did not render before the 2000ms deadline.`,
-            recovery: "Verify the embedded data URL and rebuild the deck.",
+          const failure = error.harnessFailure ?? {
+            reason: `Scene load failed: ${error.message || String(error)}`,
+            recovery: "Verify the scene data and rebuild the deck.",
           };
           setError(failure);
           return { state: "error", error: failure };

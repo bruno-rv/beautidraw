@@ -19,6 +19,8 @@ for (const viewport of [
       assert.equal(result.state, "ready");
       assert.equal(result.missingImages.length, 0);
       assert.equal(result.imageReadiness[0].state, "load");
+      assert.equal(result.imageRegions[0].distinctAnimationFrames, true);
+      assert.ok(result.imageRegions[0].stableFrame > result.imageRegions[0].actualFrame);
       for (const frame of result.frames) {
         assert.ok(frame.fitZoom > 0);
         assert.ok(frame.minimumEffectiveTextPx >= 12);
@@ -29,10 +31,16 @@ for (const viewport of [
       assert.match(await page.locator("[role=status]").innerText(), /ready/i);
       assert.equal(await page.locator('[data-testid="main-menu-trigger"]').getAttribute("aria-label"), "Open main menu");
       assert.equal(await page.locator('[aria-label="Frame navigation"]').isVisible(), true);
-      await page.locator('[data-testid="main-menu-trigger"]').focus();
-      assert.equal(await page.evaluate(() => document.activeElement?.getAttribute("data-testid")), "main-menu-trigger");
+      await page.evaluate(() => document.activeElement?.blur());
       await page.keyboard.press("Tab");
-      assert.notEqual(await page.evaluate(() => document.activeElement?.tagName), "BODY");
+      assert.equal(await page.evaluate(() => document.activeElement?.getAttribute("data-testid")), null);
+      await page.keyboard.press("Tab");
+      assert.equal(await page.evaluate(() => document.activeElement?.tagName), "DIV");
+      await page.keyboard.press("Tab");
+      assert.equal(await page.evaluate(() => document.activeElement?.getAttribute("data-testid")), "main-menu-trigger");
+      assert.equal(await page.evaluate(() => document.activeElement?.matches(":focus-visible")), true);
+      await page.keyboard.press("Shift+Tab");
+      assert.equal(await page.evaluate(() => document.activeElement?.getAttribute("data-testid")), null);
     }, { viewport });
   });
 }
@@ -45,15 +53,72 @@ test("invalid image exposes a structured recovery state", async () => {
     assert.deepEqual(result, {
       state: "error",
       error: {
-        reason: "Image red did not render before the 2000ms deadline.",
+        reason: "Image red failed to load.",
         recovery: "Verify the embedded data URL and rebuild the deck.",
       },
     });
     const alert = page.locator('[role="alert"]');
     assert.equal(await alert.isVisible(), true);
-    assert.match(await alert.innerText(), /Image red did not render.*Verify the embedded data URL/s);
-    const recovery = page.getByRole("button", { name: "Recover editor" });
-    await recovery.focus();
+    assert.match(await alert.innerText(), /Image red failed to load.*Verify the embedded data URL/s);
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.keyboard.press("Tab");
     assert.equal(await page.evaluate(() => document.activeElement?.getAttribute("data-testid")), "harness-recovery");
+    assert.equal(await page.evaluate(() => document.activeElement?.matches(":focus-visible")), true);
   });
+});
+
+test("scene loading preserves restore, file, and fidelity failure classes", async () => {
+  await withHarness(async ({ page }) => {
+    const invalidRestore = structuredClone(deck);
+    invalidRestore.elements = null;
+    const restore = await page.evaluate((scene) => window.__bdLoadScene(scene), invalidRestore);
+    assert.deepEqual(restore, {
+      state: "error",
+      error: {
+        reason: "Scene restore failed: elements must be an array",
+        recovery: "Verify the serialized scene elements and rebuild the deck.",
+      },
+    });
+
+    await page.evaluate(() => { window.__bdEditor.addFiles = () => { throw new Error("simulated file store failure"); }; });
+    const file = await page.evaluate((scene) => window.__bdLoadScene(scene), deck);
+    assert.equal(file.state, "error");
+    assert.match(file.error.reason, /^File load failed: simulated file store failure$/);
+    assert.equal(file.error.recovery, "Verify the embedded files and rebuild the deck.");
+  });
+});
+
+test("scene loading exposes typed deadline, placeholder, stability, and fidelity failures", async () => {
+  await withHarness(async ({ page }) => {
+    for (const mode of ["deadline", "decode", "placeholder", "stability"]) {
+      await page.evaluate((failureMode) => { window.__bdTestImageFailure = failureMode; }, mode);
+      const result = await page.evaluate((scene) => window.__bdLoadScene(scene), deck);
+      assert.equal(result.state, "error");
+      assert.match(result.error.reason, mode === "stability" ? /stable/i : new RegExp(mode, "i"));
+      assert.match(result.error.recovery, /embedded data URL|rendered image|stabil/i);
+      await page.evaluate(() => { delete window.__bdTestImageFailure; });
+    }
+    const clipped = structuredClone(deck);
+    clipped.elements.find((element) => element.id === "fidelity-prose").x = 3000;
+    const fidelity = await page.evaluate((scene) => window.__bdLoadScene(scene), clipped);
+    assert.equal(fidelity.state, "error");
+    assert.match(fidelity.error.reason, /fidelity/i);
+    assert.match(fidelity.error.recovery, /geometry|bounds/i);
+  });
+});
+
+test("delayed main-menu rendering receives its accessible name", async () => {
+  await withHarness(async ({ page }) => {
+    await page.waitForFunction(() => document.querySelector('[data-testid="main-menu-trigger"]')?.getAttribute("aria-label") === "Open main menu");
+    assert.equal(await page.locator('[data-testid="main-menu-trigger"]').getAttribute("aria-label"), "Open main menu");
+  }, { delayMainMenu: true });
+});
+
+test("boot failure promotes loading state to a truthful recovery alert", async () => {
+  await withHarness(async ({ page, boot }) => {
+    assert.equal(boot.ok, false);
+    const alert = page.locator('[role="alert"]');
+    assert.equal(await alert.isVisible(), true);
+    assert.match(await alert.innerText(), /Editor boot failed.*Reload the harness/i);
+  }, { allowBootFailure: true, failBoot: true });
 });

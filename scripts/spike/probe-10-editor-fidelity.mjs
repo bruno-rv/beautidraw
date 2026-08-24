@@ -19,18 +19,62 @@ for (const viewport of viewports) {
   const report = await withHarness(async ({ page }) => {
     const result = await page.evaluate((scene) => window.__bdLoadScene(scene), fixture);
     if (result.state !== "ready") throw new Error(`editor fidelity did not reach ready at ${viewport.width}x${viewport.height}`);
+    const geometry = await page.evaluate((scene) => {
+      const api = window.__bdApi;
+      const expected = [];
+      const fontFamily = (role) => role === "mono" ? 3 : role === "handwritten" ? 5 : 6;
+      for (const source of scene.elements) {
+        if (source.type === "text" && !source.containerId) {
+          const [measured] = api.convertToExcalidrawElements([{
+            id: source.id,
+            type: "text",
+            x: source.x,
+            y: source.y,
+            text: source.text,
+            fontSize: source.fontSize,
+            fontFamily: source.fontFamily,
+            role: source.role,
+          }], { regenerateIds: false });
+          expected.push({ key: source.id, ...measured });
+        }
+        if (source.type === "rectangle" && source.label) {
+          const converted = api.convertToExcalidrawElements([{
+            id: source.id,
+            type: "rectangle",
+            x: source.x,
+            y: source.y,
+            width: source.width,
+            height: source.height,
+            strokeColor: source.strokeColor,
+            backgroundColor: source.backgroundColor,
+            label: { ...source.label, fontFamily: fontFamily(source.label.role) },
+          }], { regenerateIds: false });
+          const container = converted.find((element) => element.id === source.id);
+          const label = converted.find((element) => element.type === "text" && element.containerId === source.id);
+          expected.push({ key: source.id, ...container });
+          expected.push({ key: `${source.id}:label`, ...label });
+        }
+      }
+      return expected.map(({ key, id, type, containerId, text, x, y, width, height }) => ({ key, id, type, containerId, text, x, y, width, height }));
+    }, fixture);
     const serialized = await page.evaluate(() => window.__bdEditor.getSceneElements().map((element) => ({
       id: element.id,
       type: element.type,
+      containerId: element.containerId,
       text: element.type === "text" ? element.text : element.label?.text,
+      x: element.x,
+      y: element.y,
       width: element.width,
       height: element.height,
     })));
-    const expectedText = fixture.elements.filter((element) => element.type === "text");
-    for (const source of expectedText) {
-      const visible = serialized.find((element) => element.id === source.id);
-      if (!visible || visible.text !== source.text || visible.width + 0.5 < source.width || visible.height + 0.5 < source.height) {
-        throw new Error(`serialized text diverges from editor-visible bounds for ${source.id}`);
+    const tolerance = 0.75;
+    for (const expected of geometry) {
+      const visible = expected.key.endsWith(":label")
+        ? serialized.find((element) => element.containerId === expected.key.slice(0, -6) && element.text === expected.text)
+        : serialized.find((element) => element.id === expected.key);
+      if (!visible || visible.type !== expected.type || (expected.type === "text" && visible.text !== expected.text) ||
+        ["x", "y", "width", "height"].some((field) => Math.abs(visible[field] - expected[field]) > tolerance)) {
+        throw new Error(`editor-visible geometry diverges from converter metrics for ${expected.key}`);
       }
     }
     for (const frame of result.frames) {

@@ -55,7 +55,7 @@ export const LAUNCH_ARGS = ["--font-render-hinting=none", "--disable-lcd-text"];
 export const DEVICE_SCALE_FACTOR = 1;
 export const VIEWPORT = { width: 1600, height: 900 };
 
-export async function withHarness(fn, { viewport = VIEWPORT } = {}) {
+export async function withHarness(fn, { viewport = VIEWPORT, allowBootFailure = false, failBoot = false, delayMainMenu = false } = {}) {
   const server = await serve();
   const browser = await chromium.launch({ args: LAUNCH_ARGS });
   const context = await browser.newContext({
@@ -70,12 +70,16 @@ export async function withHarness(fn, { viewport = VIEWPORT } = {}) {
   page.on("pageerror", (e) => consoleErrors.push(`pageerror: ${e.message}`));
 
   try {
-    await page.goto(`${server.origin}/scripts/harness.html`, {
+    const query = new URLSearchParams();
+    if (failBoot) query.set("failBoot", "1");
+    if (delayMainMenu) query.set("delayMenu", "1");
+    const suffix = query.toString() ? `?${query}` : "";
+    await page.goto(`${server.origin}/scripts/harness.html${suffix}`, {
       waitUntil: "domcontentloaded",
     });
     const ready = await page.evaluate(() => window.__bdReady);
-    if (!ready.ok) throw new Error(`harness failed to boot: ${ready.error}`);
-    return await fn({ page, browser, consoleErrors, origin: server.origin });
+    if (!ready.ok && !allowBootFailure) throw new Error(`harness failed to boot: ${ready.error}`);
+    return await fn({ page, browser, consoleErrors, origin: server.origin, boot: ready });
   } finally {
     await browser.close();
     await server.close();
