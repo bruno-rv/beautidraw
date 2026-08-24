@@ -17,7 +17,7 @@
       "sha1": "b5981f18ae45856cbfb6e291b47545b06825a18f",
       "pixelWidth": 1672,
       "pixelHeight": 941,
-      "suggestedBand": 5,
+      "suggestedBand": 6,
       "use": "Monorepo as a paper-cut city with the billing district illuminated.",
       "description": "Top-down repository city whose illuminated billing district shows how path-scoped instructions narrow to one package.",
       "promptSummary": "Top-down blueprint-paper city map; distinct package districts; spotlighted billing area; no text or arrows."
@@ -27,7 +27,7 @@
       "sha1": "ef08cb8eb7ecd3b27e348cf4f58a093be1cab713",
       "pixelWidth": 1672,
       "pixelHeight": 941,
-      "suggestedBand": 7,
+      "suggestedBand": 8,
       "use": "Settings precedence as layered scalar resolution, with separate motifs for merged arrays and restrictive safety exceptions.",
       "description": "Translucent configuration layers resolving into one value beside separate merge strands and a restrictive safety clamp.",
       "promptSummary": "Translucent acrylic settings layers, a resolved dial, merged strands, and a restrictive clamp; no text, arrows, or flowchart boxes."
@@ -37,7 +37,7 @@
       "sha1": "488dd187034fd337f8e618304217045d03d99b38",
       "pixelWidth": 1672,
       "pixelHeight": 941,
-      "suggestedBand": 10,
+      "suggestedBand": 11,
       "use": "Soft guidance contrasted with a physical enforcement checkpoint and human decision.",
       "description": "Handcrafted scene contrasting soft guidance with a lockable enforcement gate and a deliberate human decision.",
       "promptSummary": "Cinematic handcrafted diorama; suggestion cloud versus lockable gate; no labels, arrows, logos, or UI."

@@ -349,7 +349,10 @@
 
       async function fitEditorToFrame(frame) {
         const model = chromeModel();
-        window.__bdEditor.scrollToContent([frame], {
+        const target = frame?.id
+          ? window.__bdEditor.getSceneElements().find((element) => element.id === frame.id) ?? frame
+          : frame;
+        window.__bdEditor.scrollToContent([target], {
           fitToViewport: true,
           viewportZoomFactor: 1,
           animate: false,
@@ -466,32 +469,35 @@
       async function imageRegionOracle(elements, files, sceneId) {
         const images = elements.filter((element) => element.type === "image");
         if (!images.length) return [];
-        const frame = elements.find((element) => element.type === "frame");
-        const loadedState = await fitEditorToFrame(frame);
-        const actualFrame = await animationFrame();
-        const loadedActual = await sampleImageRegions(images, loadedState);
-        await animationFrame();
-        const stableFrame = await animationFrame();
-        if (window.__bdTestImageSeam?.mode === "stability") perturbMountedImagePixels(images, loadedState);
-        const loadedStable = await sampleImageRegions(images, loadedState);
+        const reports = [];
+        for (const image of images) {
+          const frame = elements.find((element) => element.id === image.frameId) ?? elements.find((element) => element.type === "frame");
+          const loadedState = await fitEditorToFrame(frame);
+          const actualFrame = await animationFrame();
+          const [loadedActual] = await sampleImageRegions([image], loadedState);
+          await animationFrame();
+          const stableFrame = await animationFrame();
+          if (window.__bdTestImageSeam?.mode === "stability") perturbMountedImagePixels([image], loadedState);
+          const [loadedStable] = await sampleImageRegions([image], loadedState);
 
-        const placeholderState = await remountScene(elements, { appState: loadedState }, sceneId, false);
-        const placeholder = await sampleImageRegions(images, placeholderState);
-        const actual = window.__bdTestImageSeam?.mode === "placeholder" ? placeholder : loadedActual;
+          await remountScene(elements, { appState: loadedState }, sceneId, false);
+          const placeholderAppState = await fitEditorToFrame(frame);
+          const [placeholder] = await sampleImageRegions([image], placeholderAppState);
+          const actual = window.__bdTestImageSeam?.mode === "placeholder" ? placeholder : loadedActual;
 
-        const restoredState = await remountScene(elements, { appState: loadedState, files }, sceneId, true);
-        await window.__bdWaitForImages(files, images, sceneId);
-        await twoFrames();
-        const restoredActualFrame = await animationFrame();
-        if (window.__bdTestImageSeam?.restoredHashMismatch) perturbMountedImagePixels(images, restoredState);
-        const restored = await sampleImageRegions(images, restoredState);
-        await animationFrame();
-        const restoredStableFrame = await animationFrame();
-        const restoredStable = await sampleImageRegions(images, restoredState);
-        return images.map((image, index) => {
-          const actualHash = actual[index].hash;
-          const stableHash = loadedStable[index].hash;
-          const placeholderHash = placeholder[index].hash;
+          await remountScene(elements, { appState: loadedState, files }, sceneId, true);
+          const restoredAppState = await fitEditorToFrame(frame);
+          await window.__bdWaitForImages(files, [image], sceneId);
+          await twoFrames();
+          const restoredActualFrame = await animationFrame();
+          if (window.__bdTestImageSeam?.restoredHashMismatch) perturbMountedImagePixels([image], restoredAppState);
+          const [restored] = await sampleImageRegions([image], restoredAppState);
+          await animationFrame();
+          const restoredStableFrame = await animationFrame();
+          const [restoredStable] = await sampleImageRegions([image], restoredAppState);
+          const actualHash = actual.hash;
+          const stableHash = loadedStable.hash;
+          const placeholderHash = placeholder.hash;
           if (actualHash === placeholderHash) {
             throw harnessError(
               "IMAGE_PLACEHOLDER",
@@ -506,21 +512,21 @@
               "Wait for the editor image render to stabilize before reading the scene.",
             );
           }
-          if (restored[index].hash !== actualHash) {
+          if (restored.hash !== actualHash) {
             throw harnessError(
               "IMAGE_RESTORE",
               `Image ${imageName(image)} restored mounted hash did not match the loaded scene hash.`,
               "Verify the final restored scene render before publishing the scene.",
             );
           }
-          if (restored[index].hash !== restoredStable[index].hash) {
+          if (restored.hash !== restoredStable.hash) {
             throw harnessError(
               "IMAGE_STABILITY",
               `Image ${imageName(image)} did not remain stable across final restored animation frames.`,
               "Wait for the restored editor image render to stabilize before publishing the scene.",
             );
           }
-          return {
+          reports.push({
             id: image.id,
             sceneId,
             actualHash,
@@ -528,12 +534,13 @@
             actualFrame,
             stableFrame,
             distinctAnimationFrames: stableFrame > actualFrame,
-            restoredHash: restored[index].hash,
+            restoredHash: restored.hash,
             restoredActualFrame,
             restoredStableFrame,
             distinctRestoredAnimationFrames: restoredStableFrame > restoredActualFrame,
-          };
-        });
+          });
+        }
+        return reports;
       }
 
       const elementBounds = (element) => ({ x: element.x, y: element.y, width: element.width || 0, height: element.height || 0 });
@@ -554,6 +561,20 @@
           if (element.type === "text" && element.containerId) {
             const container = elementById.get(element.containerId);
             if (!container?.label) return null;
+            const labelTuple = {
+              text: element.text,
+              originalText: element.originalText,
+              fontSize: element.fontSize,
+              fontFamily: element.fontFamily ?? roleFontFamily(element.role ?? "prose"),
+              lineHeight: element.lineHeight,
+              textAlign: element.textAlign,
+              verticalAlign: element.verticalAlign,
+              role: element.role,
+            };
+            const duplicatedFields = ["text", "originalText", "fontSize", "fontFamily", "lineHeight", "textAlign", "verticalAlign", "role"];
+            const mismatchedIds = duplicatedFields.some((field) =>
+              labelTuple[field] !== undefined && container.label[field] !== undefined && labelTuple[field] !== container.label[field],
+            ) ? [container.id, element.id] : [];
             const converted = window.__bdApi.convertToExcalidrawElements([{
               id: container.id,
               type: container.type,
@@ -563,9 +584,18 @@
               height: container.height,
               strokeColor: container.strokeColor,
               backgroundColor: container.backgroundColor,
-              label: { ...container.label, fontFamily: container.label.fontFamily ?? roleFontFamily(container.label.role ?? container.role ?? "prose") },
+              label: {
+                ...container.label,
+                text: labelTuple.text,
+                fontSize: labelTuple.fontSize,
+                fontFamily: labelTuple.fontFamily,
+                textAlign: labelTuple.textAlign,
+                verticalAlign: labelTuple.verticalAlign,
+                role: labelTuple.role,
+              },
             }], { regenerateIds: false });
-            return converted.find((candidate) => candidate.containerId === container.id && candidate.type === "text") ?? null;
+            const bounds = converted.find((candidate) => candidate.containerId === container.id && candidate.type === "text") ?? null;
+            return bounds ? { bounds, mismatchedIds } : null;
           }
           if (element.type === "text") {
             const role = element.role === "mono" || element.role === "handwritten" ? element.role : "prose";
@@ -580,7 +610,7 @@
               role,
               textAlign: element.textAlign,
             }], { regenerateIds: false });
-            return measured;
+            return { bounds: measured, mismatchedIds: [] };
           }
           if (element.type === "rectangle" && element.label) {
             const converted = window.__bdApi.convertToExcalidrawElements([{
@@ -594,7 +624,8 @@
               backgroundColor: element.backgroundColor,
               label: { ...element.label, fontFamily: roleFontFamily(element.label.role ?? element.role ?? "prose") },
             }], { regenerateIds: false });
-            return converted.find((candidate) => candidate.id === element.id) ?? null;
+            const bounds = converted.find((candidate) => candidate.id === element.id) ?? null;
+            return bounds ? { bounds, mismatchedIds: [] } : null;
           }
           return null;
         };
@@ -625,8 +656,10 @@
               memberBounds.x + memberBounds.width > frameBounds.x + frameBounds.width + 0.5 ||
               memberBounds.y + memberBounds.height > frameBounds.y + frameBounds.height + 0.5) clipped.add(member.id);
             if (chromeBounds.some((bounds) => intersects(memberBounds, bounds))) obscured.add(member.id);
-            const measured = convertedBounds(member);
-            if (measured) {
+            const measurement = convertedBounds(member);
+            if (measurement) {
+              const measured = measurement.bounds;
+              for (const id of measurement.mismatchedIds) geometry.add(id);
               const tolerance = geometryTolerance(measured);
               const expected = member.customData?.beautidrawMeasuredBounds;
               const differs = (left, right) => ["x", "y", "width", "height"].some((field) => Math.abs(left[field] - right[field]) > tolerance);

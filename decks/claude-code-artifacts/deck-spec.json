@@ -1,6 +1,6 @@
 {
-  "title": "Claude Code artifacts",
-  "subtitle": "How context, configuration, extensions, and state combine in a working session",
+  "title": "Claude Code extension surfaces",
+  "subtitle": "How context, scope, tools, and controls shape a working session",
   "footer": "Sources: current Claude Code docs • context, memory, settings, skills, subagents, hooks, MCP • 2026-08-22",
   "bands": [
     {
@@ -54,7 +54,7 @@
         "example": "Invoking a review skill adds its instructions to context; a subagent keeps the file reads separate and returns only a summary.",
         "evidence": [],
         "tradeoff": "Every extension adds context, tools, trust, or maintenance cost; bigger is not automatically better.",
-        "inspect": "Run /context for the live breakdown; inspect project and user .claude directories.",
+        "inspect": "Run /context; inspect ~/.claude/ and repo/.claude/.",
         "caption": "Choose an artifact by where it enters the loop, not by its filename.",
         "surface": "light"
       }
@@ -100,7 +100,7 @@
         "example": "A research subagent reads dozens of files in its own window and returns a short summary instead of flooding the main conversation.",
         "evidence": [],
         "tradeoff": "After compaction only root instructions re-inject; always-on context costs every request, on-demand mechanisms need the right trigger.",
-        "inspect": "Use /context for a live category breakdown; /compact with a focus between phases.",
+        "inspect": "Run /context; use /compact between phases.",
         "caption": "Context is a managed working set, not an unlimited knowledge base.",
         "surface": "light"
       }
@@ -138,14 +138,14 @@
         "example": "A personal formatting preference lives in ~/.claude/CLAUDE.md; a team build command in the repository's CLAUDE.md; a sandbox URL in CLAUDE.local.md.",
         "evidence": [],
         "tradeoff": "Broad scope increases reuse and blast radius. Narrow scope improves relevance but is easier to overlook.",
-        "inspect": "Compare ~/.claude with the repo root and .claude; check /context for what loaded.",
+        "inspect": "Compare ~/.claude/ with repo/.claude/; run /context.",
         "caption": "Choose scope from ownership and sharing needs before choosing a filename.",
         "surface": "light",
         "thesis": "Every artifact lands somewhere on one plane: how late it loads sets what it costs the main window."
       }
     },
     {
-      "heading": "The `.claude` hierarchy is a filesystem map, not one precedence ladder",
+      "heading": "The `.claude` hierarchy maps scope; it is not one precedence ladder",
       "deck": "User, project, and nested paths decide ownership, sharing, and when context becomes visible",
       "pattern": "canvas",
       "accent": "blue",
@@ -173,6 +173,11 @@
         ],
         "callouts": [
           {
+            "kind": "inspect",
+            "label": "Billing path",
+            "note": "Read billing path rules"
+          },
+          {
             "label": "User-owned",
             "note": "CLAUDE.md, settings, skills, agents, and rules under ~/.claude/"
           },
@@ -183,17 +188,13 @@
           {
             "label": "Private project state",
             "note": "CLAUDE.local.md and settings.local.json stay out of version control"
-          },
-          {
-            "label": "Nested activation",
-            "note": "billing instructions and path rules join only near matching files"
           }
         ],
         "explanation": "The filesystem tells you ownership and discovery, not one precedence ladder. User artifacts live under ~/.claude; project instructions at repo/CLAUDE.md or repo/.claude/; shared rules and settings under repo/.claude; MCP servers in .mcp.json. Nested directories activate near matching files.",
         "example": "A billing task combines ~/.claude/CLAUDE.md, repo/CLAUDE.md, .claude/settings.json, and packages/billing/CLAUDE.md without any replacing the others.",
         "evidence": [],
         "tradeoff": "One override ladder fails for additive instructions, merged hooks, named skills, and MCP servers.",
-        "inspect": "Read invoice.ts, run /context, compare with ~/.claude and repo/.claude.",
+        "inspect": "Read packages/billing/invoice.ts; run /context; compare repo/.claude/.",
         "caption": "Map the files first; apply each artifact's own loading rule second.",
         "surface": "light",
         "thesis": "The four scopes sit on two axes, control versus specificity, not one ladder."
@@ -231,7 +232,7 @@
         "example": "Put 'run pnpm test before committing' in project CLAUDE.md; block an unsafe command with a PreToolUse hook rather than prose.",
         "evidence": [],
         "tradeoff": "Long always-on instructions reduce adherence; procedures belong in skills. Memory loads capped at 200 lines.",
-        "inspect": "Run /memory to view and edit memory files; run /context to confirm loading.",
+        "inspect": "Run /memory and /context; review .claude/settings.json.",
         "caption": "Write what every session must know; enforce what every session must obey.",
         "surface": "light"
       }
@@ -279,11 +280,11 @@
           "use": "Show a monorepo as a city whose shared root remains visible while the billing package gains local detail.",
           "description": "Top-down repository city whose illuminated billing district shows how path-scoped instructions narrow to one package."
         },
-        "explanation": "At launch Claude Code walks upward from the working directory and concatenates every CLAUDE.md and CLAUDE.local.md it finds, ordered root toward the working directory, local files appended after shared ones. Descendant files join later, when Claude reads into that subtree.",
-        "example": "Starting in repo/packages/billing loads repo and billing CLAUDE.md; starting at repo loads only the root until invoice.ts is read.",
+        "explanation": "Claude loads ancestor instructions at launch; nested instructions join when matching files are read.",
+        "example": "Start in billing to load root and billing files; start at repo, then read invoice.ts to activate billing.",
         "evidence": [],
-        "tradeoff": "Nested context keeps monorepos focused, but after compaction it must be triggered again by a matching read.",
-        "inspect": "Run /context before and after a package read; claudeMdExcludes hides ancestors.",
+        "tradeoff": "Nested context focuses a monorepo but must be re-triggered after compaction.",
+        "inspect": "Read packages/billing/invoice.ts; run /context; check claudeMdExcludes.",
         "caption": "Directory position controls when instruction context becomes active.",
         "surface": "light"
       }
@@ -358,6 +359,7 @@
         ],
         "callouts": [
           {
+            "kind": "boundary",
             "label": "Normal order",
             "note": "managed, CLI, local, project, user"
           },
@@ -372,11 +374,11 @@
           "use": "Show settings as translucent authoritative layers, with merged-array strands and a restrictive safety clamp as separate exception motifs.",
           "description": "Translucent configuration layers resolving into one value beside separate merge strands and a restrictive safety clamp."
         },
-        "explanation": "For a scalar key, managed settings are read first, then command-line, local project, shared project, and user settings; the higher source supplies the value. The model is not uniform: most arrays concatenate across scopes, and security-sensitive keys honor restrictive lower values.",
-        "example": "User settings enable spinner tips, project settings disable them: project wins. Several scopes adding permissions.allow combine rather than replace.",
+        "explanation": "Scalar settings choose a higher-precedence value; arrays merge; safety keys can honor restrictive lower values.",
+        "example": "A project disables spinner tips, overriding user settings; permissions.allow entries combine.",
         "evidence": [],
-        "tradeoff": "A simple precedence list misleads for arrays, hooks, managed-tier sources, and security exceptions.",
-        "inspect": "Compare user, project, and local settings.json files; run /status to surface errors.",
+        "tradeoff": "One precedence list misleads for arrays and security exceptions.",
+        "inspect": "Compare .claude/settings.json and settings.local.json; run /status.",
         "caption": "Model settings as layered resolution rules, not boxes causing one another.",
         "surface": "dark"
       }
@@ -420,7 +422,7 @@
         "example": "A root /deploy skill coexists with apps/web/.claude/skills/deploy, which appears as apps/web:deploy near that package.",
         "evidence": [],
         "tradeoff": "Broad personal skills can unexpectedly override project behavior; project skills are reviewable but repo-bound.",
-        "inspect": "Open the matching SKILL.md, invoke /name explicitly, verify qualified names.",
+        "inspect": "Open .claude/skills/deploy/SKILL.md; invoke /deploy; verify apps/web:deploy.",
         "caption": "Skills are a loading and ownership system, not just saved prompts.",
         "surface": "light",
         "thesis": "Skill discovery is a neighborhood: location sets ownership, description sets loading."
@@ -456,18 +458,22 @@
         ],
         "callouts": [
           {
+            "kind": "boundary",
             "label": "Isolation",
             "note": "large file reads stay outside the main conversation"
           },
           {
+            "kind": "example",
             "label": "Return value",
             "note": "only the summary and metadata come back"
           },
           {
+            "kind": "example",
             "label": "Specialization",
             "note": "preload relevant skills and restrict tools"
           },
           {
+            "kind": "boundary",
             "label": "Lifecycle",
             "note": "foreground, background, resume, and hooks"
           }
@@ -476,7 +482,7 @@
         "example": "Send a codebase-wide search to a read-only research subagent; the main conversation receives only relevant symbols, risks, and paths.",
         "evidence": [],
         "tradeoff": "Isolation hides intermediate reasoning. Parent permission mode and managed policy still constrain the subagent.",
-        "inspect": "Use /tasks to inspect a running subagent and open its transcript for evidence.",
+        "inspect": "Use /tasks; open .claude/agents/research.md transcript.",
         "caption": "Delegate when the intermediate work is expensive but the result is small.",
         "surface": "light"
       }
@@ -510,6 +516,7 @@
         ],
         "callouts": [
           {
+            "kind": "example",
             "label": "Guidance",
             "note": "CLAUDE.md and skills can influence judgment"
           },
@@ -528,7 +535,7 @@
         "example": "A PreToolUse hook rejects destructive shell commands and returns the reason; a PostToolUse hook lints an edit and feeds the result back.",
         "evidence": [],
         "tradeoff": "@ file references do not fire Read hooks; block the path itself with a Read deny rule instead.",
-        "inspect": "Use /hooks to review registered hooks; check settings.json for their sources.",
+        "inspect": "Run /hooks; review .claude/settings.json.",
         "caption": "Use prose for judgment and runtime controls for guarantees.",
         "surface": "dark"
       }
@@ -575,7 +582,7 @@
         "example": "Commit a project-scoped server to .mcp.json so the team shares the connection; add a skill documenting safe query patterns.",
         "evidence": [],
         "tradeoff": "External tools enlarge the trust surface; environment expansion adds flexibility, secrets and approvals need review.",
-        "inspect": "Run claude mcp list and claude mcp get <name>; review .mcp.json approval state.",
+        "inspect": "Run claude mcp list and claude mcp get <name>; inspect .mcp.json.",
         "caption": "Connect the system, teach the workflow, package the setup.",
         "surface": "light"
       }
@@ -612,7 +619,7 @@
         "example": "A billing review reads invoice.ts, activates packages/billing/CLAUDE.md, invokes /review-invoice, queries an accounting MCP tool, runs a post-edit hook.",
         "evidence": [],
         "tradeoff": "Each layer aids specialization but adds a debug surface; existing on disk does not prove a file loaded or won precedence.",
-        "inspect": "Check /context, /memory, /tasks, /hooks against what actually loaded.",
+        "inspect": "Check /context, /memory, /tasks, /hooks; edit packages/billing/invoice.ts.",
         "caption": "Debug the effective session, not the directory tree in isolation.",
         "surface": "light"
       }
@@ -650,7 +657,7 @@
         "example": "Keep a 100-line deployment playbook as /deploy, branch protection in a hook or CI, and delegate environment research to a subagent.",
         "evidence": [],
         "tradeoff": "The narrowest mechanism reduces noise, but too much fragmentation makes the setup hard to discover. Keep ownership and inspection commands visible.",
-        "inspect": "Use /context as the final audit of what loaded and what stayed external.",
+        "inspect": "Run /context; inspect CLAUDE.md, .claude/rules/, and the selected hook.",
         "caption": "Design the effective agent loop, not a decorative .claude folder.",
         "surface": "light"
       }
