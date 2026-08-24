@@ -1,0 +1,42 @@
+{
+  "tool": "built-in ImageGen",
+  "generatedAt": "2026-08-24",
+  "assets": [
+    {
+      "source": "assets/pipeline-mechanism.png",
+      "file": "assets/pipeline-mechanism.png",
+      "sha1": "e87d94e749b5269740ac54542727e90db3eb75c0",
+      "pixelWidth": 1672,
+      "pixelHeight": 941,
+      "dimensions": { "width": 1672, "height": 941 },
+      "suggestedBand": 1,
+      "use": "Show the complete path from written prompt through token pieces, transformer layers, and one selected continuation.",
+      "description": "Prompt text separates into token pieces, passes through layered transformer mechanisms, and emerges as one selected next token.",
+      "promptSummary": "A prompt entering as written language, separating into discrete token pieces, moving through a layered transformer mechanism, and emerging as one selected next token; wide composition, open center-right, no text or UI chrome."
+    },
+    {
+      "source": "assets/vector-lookup-space.png",
+      "file": "assets/vector-lookup-space.png",
+      "sha1": "1cbbd476edc560743a1c61eee7b4a7287180e25b",
+      "pixelWidth": 1672,
+      "pixelHeight": 941,
+      "dimensions": { "width": 1672, "height": 941 },
+      "suggestedBand": 3,
+      "use": "Show one token identifier selecting a row from an embedding table and entering a structured semantic space.",
+      "description": "A token identifier selects one row from a layered embedding table and becomes a point in a spatial field of learned vectors.",
+      "promptSummary": "A single token identifier selecting one row from a large embedding table and becoming a high-dimensional vector in a meaningful spatial field; wide composition, open right annotation zone, no text or matrix wallpaper."
+    },
+    {
+      "source": "assets/probability-selection.png",
+      "file": "assets/probability-selection.png",
+      "sha1": "adf68ca72b628d4f52d42c0ad7846796ad09a107",
+      "pixelWidth": 1672,
+      "pixelHeight": 941,
+      "dimensions": { "width": 1672, "height": 941 },
+      "suggestedBand": 5,
+      "use": "Show a final vector expanding into a varied candidate-token probability landscape with one selected outcome.",
+      "description": "A final contextual vector fans into a varied probability landscape where one candidate is selected while alternatives remain visible.",
+      "promptSummary": "A final vector producing a varied probability landscape over candidate tokens, with one candidate selected while the rest remain visible as alternatives; wide composition, open left annotation zone, no text or roulette metaphor."
+    }
+  ]
+}

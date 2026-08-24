@@ -1,93 +1,168 @@
 {
-  "title": "From words to tokens",
-  "subtitle": "How a language model turns a prompt into the next piece of text",
-  "footer": "Read top to bottom. The loop near the end is what turns one token into prose.",
+  "title": "From words to one next token",
+  "subtitle": "A learning-first map of tokenization, vectors, transformer blocks, and sampling",
+  "footer": "Use frame navigation to follow the mechanism. The outline.md file is the reading surface on smaller screens.",
   "bands": [
     {
       "heading": "The whole pipeline",
-      "deck": "A prompt goes in as text and comes back one piece at a time",
-      "pattern": "flow",
+      "deck": "A prompt becomes one next token through learned transformations",
+      "pattern": "canvas",
       "accent": "blue",
-      "nodes": [
-        { "label": "Text in", "note": "A prompt is a string of characters, nothing more" },
-        { "label": "Tokenizer", "note": "Cuts the string into known pieces, one integer each" },
-        { "label": "Embedding table", "note": "Each integer is swapped for a learned vector" },
-        { "label": "Stack of blocks", "note": "Every layer rewrites every vector using the others" },
-        { "label": "Next token out", "note": "The last vector scores the vocabulary and one piece is picked" }
-      ]
+      "relation": "causal",
+      "height": 780,
+      "visual": {
+        "family": "illustration",
+        "surface": "light",
+        "thesis": "The model does not jump from words to prose; it transforms a sequence before choosing one piece.",
+        "focus": "Prompt → tokens → vectors → blocks → next token",
+        "caption": "One forward pass turns context into a distribution over possible continuations.",
+        "explanation": "Characters are segmented into token IDs, looked up as vectors, repeatedly contextualized, then projected into vocabulary scores.",
+        "example": "The phrase `cats sleep` becomes several IDs before any attention layer sees it.",
+        "tradeoff": "Every later choice depends on the tokenizer and vocabulary selected during training.",
+        "inspect": "tokenizer.encode(prompt) then inspect ids",
+        "nodes": [
+          { "label": "Prompt text", "note": "characters and spaces arrive as a sequence" },
+          { "label": "Token IDs", "note": "known pieces become integer identifiers" },
+          { "label": "Vectors", "note": "each ID selects a learned embedding row" },
+          { "label": "Transformer blocks", "note": "layers mix context while preserving positions" },
+          { "label": "Next-token distribution", "note": "scores become probabilities over the vocabulary" }
+        ],
+        "callouts": [
+          { "kind": "boundary", "label": "Not a word stream", "note": "the model consumes IDs, not dictionary words" },
+          { "kind": "inspect", "label": "Trace the IDs", "note": "inspect the exact tokenizer output before inference" }
+        ],
+        "image": {
+          "file": "assets/pipeline-mechanism.png",
+          "side": "left",
+          "use": "Show the complete path from written prompt through token pieces, transformer layers, and one selected continuation.",
+          "description": "Prompt text separates into token pieces, passes through layered transformer mechanisms, and emerges as one selected next token."
+        }
+      }
     },
     {
-      "heading": "Tokenizers split rare words",
-      "deck": "Four words in, five pieces out",
-      "pattern": "row-of-stages",
+      "heading": "Tokenizer boundaries",
+      "deck": "Token pieces follow learned frequency boundaries, not human word boundaries",
+      "pattern": "canvas",
       "accent": "amber",
-      "nodes": [
-        { "label": "Token", "note": "Common stem, kept whole" },
-        { "label": "izers", "note": "The suffix earns its own piece" },
-        { "label": "split", "note": "Frequent word, one piece" },
-        { "label": "rare", "note": "Frequent enough to stay whole" },
-        { "label": "words", "note": "The leading space belongs to the token" }
-      ]
+      "height": 760,
+      "visual": {
+        "family": "threshold",
+        "surface": "light",
+        "thesis": "Tokenization preserves common pieces and splits unusual strings into reusable fragments.",
+        "focus": "Why a word becomes one token or several",
+        "caption": "The vocabulary makes a practical compromise between coverage and sequence length.",
+        "left": "common piece",
+        "middle": "rare word split",
+        "right": "reusable fragments",
+        "axisX": "familiar → unusual",
+        "axisY": "pieces per input string ↑",
+        "nodes": [
+          { "label": "play", "note": "frequent stem remains whole" },
+          { "label": "play + ##ful", "note": "a rare ending earns another ID" },
+          { "label": "recombine", "note": "pieces still decode into the original text" }
+        ],
+        "explanation": "A tokenizer searches its finite vocabulary for useful pieces, trading fewer steps against the ability to represent new strings.",
+        "example": "`unhappiness` may become `un`, `happi`, and `ness` rather than one unknown symbol.",
+        "tradeoff": "Smaller vocabularies create longer sequences; larger vocabularies consume more model memory.",
+        "inspect": "tokenizer.decode(ids) and compare pieces",
+        "callouts": []
+      }
     },
     {
       "heading": "One integer becomes a vector",
-      "deck": "The lookup is a row read, not a computation",
-      "pattern": "flow",
+      "deck": "An embedding lookup selects a learned row before position and attention are added",
+      "pattern": "canvas",
       "accent": "violet",
-      "nodes": [
-        { "label": "Token identifier", "note": "A row number into the embedding table" },
-        { "label": "Embedding table", "note": "One learned row per vocabulary entry, a few thousand numbers wide" },
-        { "label": "Position added", "note": "A position vector is added to the piece vector before the first block" },
-        { "label": "Block input", "note": "One vector per token, the whole sequence handed over at once" }
-      ]
-    },
-    {
-      "heading": "Inside one block",
-      "deck": "Two operations per layer, over a stream that is never overwritten",
-      "pattern": "tree",
-      "accent": "slate",
-      "nodes": [
-        {
-          "label": "Self-attention",
-          "children": [
-            { "label": "Score every pair of tokens" },
-            { "label": "Hide everything to the right" },
-            { "label": "Blend the values that scored high" }
-          ]
-        },
-        {
-          "label": "Feed-forward",
-          "children": [
-            { "label": "Widen each vector" },
-            { "label": "Gate it through a nonlinearity" },
-            { "label": "Project it back down" }
-          ]
-        },
-        {
-          "label": "Residual stream",
-          "children": [
-            { "label": "Normalize before each part" },
-            { "label": "Add the result back, never replace" }
-          ]
+      "height": 800,
+      "visual": {
+        "family": "illustration",
+        "surface": "light",
+        "thesis": "A token ID is an address into a learned table, not a miniature meaning definition.",
+        "focus": "Lookup turns one ID into a point in meaning space",
+        "caption": "The selected row is combined with position before the first transformer block.",
+        "explanation": "The embedding matrix stores one trainable vector per vocabulary entry, so lookup copies a row rather than computing language from scratch.",
+        "example": "ID 314 selects one row; adding its position vector makes the same token location-aware.",
+        "tradeoff": "Nearby vectors often share usage patterns, but geometry is learned and never a dictionary guarantee.",
+        "inspect": "embedding.weight[token_id] for the selected row",
+        "nodes": [
+          { "label": "Token ID", "note": "a stable integer address" },
+          { "label": "Embedding row", "note": "one learned vector from the table" },
+          { "label": "Position signal", "note": "order is added before attention" },
+          { "label": "Block input", "note": "the full sequence enters together" }
+        ],
+        "callouts": [
+          { "kind": "example", "label": "One row", "note": "314 selects one vector from the table" },
+          { "kind": "boundary", "label": "Learned geometry", "note": "distance is not a dictionary definition" }
+        ],
+        "image": {
+          "file": "assets/vector-lookup-space.png",
+          "side": "left",
+          "use": "Show one token identifier selecting a row from an embedding table and entering a structured semantic space.",
+          "description": "A token identifier selects one row from a layered embedding table and becomes a point in a spatial field of learned vectors."
         }
-      ]
+      }
     },
     {
-      "heading": "From last vector to next token",
-      "deck": "Only the final position matters for the piece being generated",
-      "pattern": "flow",
+      "heading": "Inside one transformer block",
+      "deck": "Attention mixes context, feed-forward layers transform features, and residuals preserve the stream",
+      "pattern": "canvas",
+      "accent": "slate",
+      "height": 800,
+      "visual": {
+        "family": "map",
+        "surface": "light",
+        "thesis": "Each block rewrites every token representation using context while a residual path keeps information available.",
+        "focus": "One block: mix → transform → add back",
+        "caption": "The final position is special only at readout; every position is updated inside the block.",
+        "explanation": "Self-attention mixes information across earlier positions, feed-forward layers apply a per-position transformation, and residual addition keeps the stream stable.",
+        "example": "A later token can use an earlier subject noun because its query attends to that position's key and value.",
+        "tradeoff": "Causal masking blocks future positions, so generation can never peek at the answer it is trying to produce.",
+        "inspect": "attention_mask[:, :, i, j] for future-token masking",
+        "nodes": [
+          { "label": "Queries / keys / values", "note": "compare token positions" },
+          { "label": "Causal attention", "note": "blend only visible context" },
+          { "label": "Feed-forward", "note": "expand, gate, and project each row" },
+          { "label": "Residual stream", "note": "add the update instead of replacing input" }
+        ]
+      }
+    },
+    {
+      "heading": "From scores to a sampled token",
+      "deck": "The final vector describes a distribution; sampling turns that spread into one continuation",
+      "pattern": "canvas",
       "accent": "green",
-      "nodes": [
-        { "label": "Final vector", "note": "The last token's row after the last block" },
-        { "label": "Unembedding", "note": "Compared against every entry in the vocabulary" },
-        { "label": "Raw scores", "note": "One unbounded number per vocabulary entry" },
-        { "label": "Softmax", "note": "Scores become a probability over the whole vocabulary" },
-        { "label": "One token picked", "note": "Sampled from that spread, not always the highest" }
-      ]
+      "height": 780,
+      "visual": {
+        "family": "illustration",
+        "surface": "dark",
+        "thesis": "The model scores every candidate, then a sampler narrows the probability landscape to one token.",
+        "focus": "Many plausible continuations → one sampled piece",
+        "caption": "A confident distribution is narrow; an uncertain one leaves more candidates alive.",
+        "explanation": "The last hidden vector is projected into vocabulary logits, softmax turns logits into probabilities, and decoding rules choose a candidate.",
+        "example": "After `The sky is`, blue may lead while gray and clear remain plausible alternatives.",
+        "tradeoff": "Greedy decoding is predictable; sampling can preserve variety but may select a lower-probability token.",
+        "inspect": "softmax(logits / temperature) before sampling",
+        "nodes": [
+          { "label": "Final hidden vector", "note": "one contextual row at the last position" },
+          { "label": "Vocabulary logits", "note": "an unbounded score per candidate token" },
+          { "label": "Probability field", "note": "softmax normalizes the full spread" },
+          { "label": "Selected token", "note": "one candidate is appended to context" }
+        ],
+        "callouts": [
+          { "kind": "example", "label": "Alternatives remain", "note": "the sampler sees a ranked spread, not one answer" },
+          { "kind": "boundary", "label": "Scores are not probabilities", "note": "softmax is the normalization step" }
+        ],
+        "image": {
+          "file": "assets/probability-selection.png",
+          "side": "right",
+          "use": "Show a final vector expanding into a varied candidate-token probability landscape with one selected outcome.",
+          "description": "A final contextual vector fans into a varied probability landscape where one candidate is selected while alternatives remain visible."
+        }
+      }
     },
     {
-      "heading": "How the pick is narrowed",
-      "deck": "Three knobs on the same distribution, doing different jobs",
+      "heading": "Sampling controls change the shortlist",
+      "deck": "Temperature reshapes probabilities; top-p and top-k limit which candidates survive",
       "pattern": "comparison",
       "accent": "slate",
       "nodes": [
@@ -95,55 +170,72 @@
           "label": "Temperature",
           "tone": "amber",
           "items": [
-            "Flattens or sharpens every probability",
-            "Near zero, always the top token",
-            "Above one, rare tokens get a chance"
+            "Divides logits before softmax",
+            "Below one sharpens the distribution",
+            "Above one flattens it and broadens variety",
+            "Changes the relative probability of every candidate"
           ]
         },
         {
           "label": "Top-p",
           "tone": "green",
           "items": [
-            "Keeps the smallest set that sums past p",
-            "How many tokens survive changes per step",
-            "Cuts the long tail, keeps real choices"
+            "Sorts candidates by probability",
+            "Keeps the smallest cumulative set past p",
+            "Survivor count changes with model confidence",
+            "Trims the long tail without a fixed count"
           ]
         },
         {
           "label": "Top-k",
           "tone": "blue",
           "items": [
-            "Keeps a fixed count of best tokens",
-            "How many tokens survive never changes",
-            "Blunt when the model is already sure"
+            "Sorts candidates by probability",
+            "Keeps exactly the best k candidates",
+            "Survivor count stays fixed every step",
+            "Can be blunt when confidence changes"
           ]
         }
       ]
     },
     {
-      "heading": "The loop",
-      "deck": "Generation is one forward pass per token, repeated",
-      "pattern": "row-of-stages",
+      "heading": "Generation is a loop",
+      "deck": "Append one token, reuse prior work, and run the model again",
+      "pattern": "canvas",
       "accent": "violet",
-      "nodes": [
-        { "label": "Append", "note": "The chosen token joins the sequence" },
-        { "label": "Reuse the cache", "note": "Earlier keys and values are kept, not recomputed" },
-        { "label": "One more pass", "note": "Only the new token is pushed through the stack" },
-        { "label": "Stop", "note": "An end token, a stop string, or a length limit" }
-      ]
+      "relation": "temporal",
+      "height": 780,
+      "visual": {
+        "family": "journey",
+        "surface": "light",
+        "thesis": "Autoregressive generation repeats the same forward-pass contract until a stopping condition arrives.",
+        "focus": "append → cache → forward pass → stop?",
+        "caption": "The sequence grows one sampled token at a time, while cached keys and values avoid needless recomputation.",
+        "explanation": "After a token is selected it joins the context, the cache supplies earlier attention state, and the next position runs through every block.",
+        "example": "`Hello` → `Hello world` → `Hello world !` repeats the loop with a longer context.",
+        "tradeoff": "Caching saves work for prior positions but memory grows with sequence length and layer count.",
+        "inspect": "past_key_values[layer] across generation",
+        "nodes": [
+          { "label": "Append token", "note": "add the sampled piece to context" },
+          { "label": "Read cache", "note": "reuse earlier keys and values" },
+          { "label": "Run new position", "note": "push only the latest token through blocks" },
+          { "label": "Sample again", "note": "turn new logits into another choice" },
+          { "label": "Check stop", "note": "end token, stop string, or length limit" }
+        ]
+      }
     },
     {
-      "heading": "What the mental model usually gets wrong",
-      "deck": "Six places the picture slips, and what is actually happening",
+      "heading": "The mental model to keep",
+      "deck": "Six corrections keep the token-flow picture technically honest",
       "pattern": "checklist",
       "accent": "blue",
       "nodes": [
-        { "label": "Tokens are not words", "note": "Rare words break into several pieces" },
-        { "label": "Embeddings are learned", "note": "Trained with the model, not bolted on after" },
-        { "label": "Position is not free", "note": "Encode order or the model reads a bag of tokens" },
-        { "label": "Every token is rewritten", "note": "Not only the last one, and once per layer" },
-        { "label": "The output is a spread", "note": "The model scores; the sampler is what picks" },
-        { "label": "One pass per token", "note": "Cost grows with everything you generate" }
+        { "label": "Tokens are not words", "note": "common words can be whole while rare strings split into several IDs" },
+        { "label": "Embeddings are learned", "note": "the table is trained with the model, not attached afterward" },
+        { "label": "Position matters", "note": "the same token at a new position enters with a different signal" },
+        { "label": "Every position is updated", "note": "attention and feed-forward layers rewrite the full stream" },
+        { "label": "The model emits a spread", "note": "logits become probabilities before a sampler picks one" },
+        { "label": "Generation repeats", "note": "one forward pass produces one next token until stopping" }
       ]
     }
   ]

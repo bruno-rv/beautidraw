@@ -420,6 +420,7 @@ function evidence(meta) {
 
 function threshold(meta) {
   const dark = meta.dark;
+  const textColor = dark ? darkText : lightText;
   const elements = thesisLine(meta);
   const stroke = dark ? "#94a3b8" : "#64748b";
   elements.push(line("threshold-axis", 0.10, 0.53, 0.80, 0.01, [[0, 0.5], [1, 0.5]], stroke));
@@ -469,12 +470,13 @@ async function illustration(meta) {
   callouts.slice(0, 2).forEach((callout, index) => {
     const colors = colorFor(meta, index + 1, meta.dark);
     if (meta.dark) colors.fill = colors.dark;
+    const calloutWidth = callout.kind === "inspect" ? 0.05 : 0.43;
     elements.push(...semanticCalloutShape(
       `callout-${index + 1}`,
       callout,
       textX,
       calloutStart + index * calloutStep,
-      0.43,
+      calloutWidth,
       0.14,
       colors,
       RAMP.note,
