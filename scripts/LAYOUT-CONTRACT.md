@@ -224,28 +224,41 @@ tall deck.
 
 ### Editor-fidelity harness contract
 
-The browser harness hydrates a scene by restoring elements and calling
-`updateScene` **before** `addFiles`. `__bdWaitForImages(files, imageElements)`
-observes the exact `Image` instances created by the editor, waits for `load`
-and successful decode, and fails at 2000ms with a named recovery. A loaded
-image must also differ from a placeholder-only render in its cropped scene
-region and remain stable for two animation frames.
+The browser harness hydrates a scene by remounting the real Excalidraw App for
+each serialized scene, restoring elements, and calling `updateScene` **before**
+`addFiles`. Remounting is part of the cache contract: a retry may reuse a file
+ID with corrected bytes, and an in-place update can otherwise retain the old
+image cache. Concurrent calls are serialized; each call enters visible
+`Loading` with `role=status` and `aria-live=polite`, while only the latest
+serialized scene may promote the mounted UI to `Ready` or `Error`.
+
+`__bdWaitForImages(files, imageElements)` observes the exact `Image` instances
+created by the editor, waits for `load` and successful decode, and fails at
+2000ms with a named recovery. A loaded image is sampled from the mounted
+`canvas.excalidraw__canvas.static` after fit-to-frame/scroll. Each image region
+uses a SHA-256 digest of the painted pixels, must differ from a placeholder-only
+mounted render, and must remain stable across two distinct animation frames.
+The oracle never calls `exportToCanvas`; failure regressions use event/decode
+seams that drive the real deadline, decode, placeholder, and pixel-stability
+paths.
 
 `__bdReportFidelity(elements, viewport)` returns one record per frame:
 `{ frameId, fitZoom, minimumEffectiveTextPx, clippedElementIds,
-overlapElementIds, obscuredByChromeElementIds }`. `fitZoom` uses the same
-usable vertical chrome inset as `USABLE_H` (viewport height minus 50px) and a
-usable width capped at `USABLE_W`; text metrics are re-measured through
-`convertToExcalidrawElements` for the emitted role/font/text tuple. Overlap
-checks allow a bound text/container pair and ignore line/arrow strokes and the
-surface rectangle, matching composition validation. Every failure is reported
-by element ID; no screenshot OCR or fixed sleep is a fidelity oracle.
+overlapElementIds, obscuredByChromeElementIds, geometryElementIds }`.
+`fitZoom` is derived from measured DOM rectangles for the actual Excalidraw
+top menu/bottom controls plus the harness status and frame-navigation regions.
+Those same rectangles are transformed through
+`viewportCoordsToSceneCoords` before obscuration checks; no synthetic toolbar
+strip is used. Text and bound-label/container metrics are re-measured through
+`convertToExcalidrawElements` for the exact role/font/text tuple. Serialized
+converter bounds, when emitted by composition, are compared on x/y/width/height
+using an absolute tolerance derived from the converted metric. Overlap checks
+allow a bound text/container pair and ignore line/arrow strokes and the surface
+rectangle, matching composition validation. Every failure is reported by
+element ID; no screenshot OCR or fixed sleep is a fidelity oracle.
 
 Readiness failures retain their typed class and truthful recovery (`restore`,
 file load, image error/decode/deadline, placeholder/stability, and fidelity).
-The rendered-region oracle samples the loaded render, waits an animation frame,
-then samples again; the two hashes must differ from the placeholder hash and
-remain stable across those distinct frame samples.
 
 **Edge-coverage exemptions.** `EDGE_COVERAGE_EXEMPT_PATTERNS = { "flow", "canvas" }`. A centred
 `flow` column cannot clear `ε` by construction, and widening it back out would reintroduce the

@@ -352,7 +352,17 @@ const result = await withHarness(async ({ page }) =>
               : Number.POSITIVE_INFINITY,
           );
           if (measured.width <= availableWidth + 0.5) {
-            return { ...skeleton, width: measured.width, height: measured.height, role, fontFamily };
+            return {
+              ...skeleton,
+              width: measured.width,
+              height: measured.height,
+              role,
+              fontFamily,
+              customData: {
+                ...(skeleton.customData ?? {}),
+                beautidrawMeasuredBounds: { x, y, width: measured.width, height: measured.height },
+              },
+            };
           }
           if (availableWidth <= 2 * validationConfig.boundTextPadding) {
             throw new Error(`${skeleton.id}: converter-derived text has no available body width; shorten or reposition the authored text`);
@@ -393,7 +403,11 @@ const result = await withHarness(async ({ page }) =>
             strokeWidth: 0,
             roughness: 0,
             role,
-            customData: { ...(skeleton.customData ?? {}), beautidrawTextContainer: true },
+            customData: {
+              ...(skeleton.customData ?? {}),
+              beautidrawTextContainer: true,
+              beautidrawMeasuredBounds: { x, y, width, height },
+            },
             label: {
               text: skeleton.text,
               fontSize: skeleton.fontSize,
@@ -452,6 +466,10 @@ const result = await withHarness(async ({ page }) =>
           role,
           fontFamily,
           label: { ...skeleton.label, role, fontFamily },
+          customData: {
+            ...(skeleton.customData ?? {}),
+            beautidrawMeasuredBounds: { x, y, width, height },
+          },
         };
       });
       const annotationCandidates = [

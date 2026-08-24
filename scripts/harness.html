@@ -73,13 +73,17 @@
 
       const stateRegion = document.getElementById("bd-state");
       const frameNavigation = document.getElementById("bd-frame-navigation");
+      const editorRoot = document.getElementById("root");
       const NativeImage = window.Image;
       const imageObservations = [];
       const imageObservationWaiters = [];
       const sceneStates = new Map();
       let nextSceneId = 0;
       let observationContext = null;
+      let latestLoadToken = 0;
+      let loadQueue = Promise.resolve();
       window.__bdImageObservations = imageObservations;
+      window.__bdMountedSceneId = null;
 
       function beginScene() {
         const sceneId = ++nextSceneId;
@@ -121,13 +125,24 @@
         return error;
       }
 
-      function setReady(frameCount) {
-        stateRegion.replaceChildren(document.createTextNode(`Ready — ${frameCount} frame${frameCount === 1 ? "" : "s"}`));
+      function setLoading() {
+        stateRegion.replaceChildren(document.createTextNode("Loading editor…"));
         stateRegion.setAttribute("role", "status");
-        stateRegion.dataset.state = "ready";
+        stateRegion.setAttribute("aria-live", "polite");
+        stateRegion.dataset.state = "loading";
       }
 
-      function setError(error) {
+      function setReady(frameCount, sceneId, token) {
+        if (token != null && token !== latestLoadToken) return;
+        stateRegion.replaceChildren(document.createTextNode(`Ready — ${frameCount} frame${frameCount === 1 ? "" : "s"}`));
+        stateRegion.setAttribute("role", "status");
+        stateRegion.setAttribute("aria-live", "polite");
+        stateRegion.dataset.state = "ready";
+        window.__bdMountedSceneId = sceneId;
+      }
+
+      function setError(error, sceneId, token) {
+        if (token != null && token !== latestLoadToken) return;
         const recovery = document.createElement("button");
         recovery.type = "button";
         recovery.id = "harness-recovery";
@@ -137,6 +152,7 @@
         stateRegion.setAttribute("role", "alert");
         stateRegion.removeAttribute("aria-live");
         stateRegion.dataset.state = "error";
+        window.__bdMountedSceneId = sceneId;
         recovery.addEventListener("click", () => location.reload());
       }
 
@@ -147,8 +163,20 @@
           state: "pending",
           sceneId: observationContext,
         };
-        const onLoad = () => settle("load");
-        const onError = (event) => settle("error", event);
+        const onLoad = () => {
+          if (window.__bdTestImageSeam?.holdEvents || window.__bdTestImageSeam?.mode === "deadline") {
+            record.deferredEvent = { state: "load" };
+            return;
+          }
+          settle("load");
+        };
+        const onError = (event) => {
+          if (window.__bdTestImageSeam?.holdEvents || window.__bdTestImageSeam?.mode === "deadline") {
+            record.deferredEvent = { state: "error", error: event };
+            return;
+          }
+          settle("error", event);
+        };
         record.cleanup = () => {
           image.removeEventListener("load", onLoad);
           image.removeEventListener("error", onError);
@@ -171,9 +199,23 @@
         };
         image.addEventListener("load", onLoad, { once: true });
         image.addEventListener("error", onError, { once: true });
+        record.release = () => {
+          if (!record.deferredEvent) return;
+          const event = record.deferredEvent;
+          record.deferredEvent = null;
+          settle(event.state, event.error);
+        };
+        if (window.__bdTestImageSeam?.mode === "decode" && typeof image.decode === "function") {
+          image.decode = () => Promise.reject(new Error("simulated decode failure"));
+        }
         imageObservations.push(record);
         return record;
       }
+
+      window.__bdReleaseImageEvents = () => {
+        if (window.__bdTestImageSeam) window.__bdTestImageSeam.holdEvents = false;
+        for (const observation of imageObservations) observation.release?.();
+      };
 
       // Excalidraw's image cache uses the global constructor. Keep native
       // HTMLImageElement instances and record their eventual URL/state.
@@ -233,20 +275,6 @@
             "Restore the embedded file data and rebuild the deck.",
           );
         }
-        if (window.__bdTestImageFailure === "deadline") {
-          throw harnessError(
-            "IMAGE_DEADLINE",
-            `Image ${imageName(element)} did not render before the 2000ms deadline.`,
-            "Verify the embedded data URL and rebuild the deck.",
-          );
-        }
-        if (window.__bdTestImageFailure === "decode") {
-          throw harnessError(
-            "IMAGE_DECODE",
-            `Image ${imageName(element)} decoded unsuccessfully.`,
-            "Verify the embedded data URL and rebuild the deck.",
-          );
-        }
         const abort = new Promise((_, reject) => {
           const onAbort = () => reject(harnessError(
             "IMAGE_DEADLINE",
@@ -289,63 +317,174 @@
         }
       };
 
-      function hashRegion(canvas, bounds, sceneBounds) {
-        const scaleX = canvas.width / Math.max(sceneBounds.width, 1);
-        const scaleY = canvas.height / Math.max(sceneBounds.height, 1);
-        const x = Math.max(0, Math.floor((bounds.x - sceneBounds.x) * scaleX));
-        const y = Math.max(0, Math.floor((bounds.y - sceneBounds.y) * scaleY));
+      function fixedChromeRects() {
+        const selectors = [
+          "#bd-state",
+          "#bd-frame-navigation",
+          "#root .App-menu_top",
+          "#root .App-menu_bottom",
+        ];
+        return [...new Set(selectors.flatMap((selector) => [...document.querySelectorAll(selector)]))]
+          .map((element) => {
+            const rect = element.getBoundingClientRect();
+            return { role: element.id || element.className, x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+          })
+          .filter((rect) => rect.width > 0 && rect.height > 0);
+      }
+
+      function chromeModel(viewport = { width: innerWidth, height: innerHeight }) {
+        const rects = fixedChromeRects();
+        const top = Math.max(0, ...rects.filter((rect) => rect.y <= 24).map((rect) => rect.y + rect.height));
+        const bottom = Math.max(0, ...rects.filter((rect) => rect.y + rect.height >= viewport.height - 24).map((rect) => viewport.height - rect.y));
+        const left = Math.max(0, ...rects.filter((rect) => rect.x <= 0 && rect.y > 24 && rect.y + rect.height < viewport.height - 24).map((rect) => rect.x + rect.width));
+        const right = Math.max(0, ...rects.filter((rect) => rect.x + rect.width >= viewport.width && rect.y > 24 && rect.y + rect.height < viewport.height - 24).map((rect) => viewport.width - rect.x));
+        return {
+          rects,
+          offsets: { top, right, bottom, left },
+          usableWidth: Math.max(1, viewport.width - left - right),
+          usableHeight: Math.max(1, viewport.height - top - bottom),
+        };
+      }
+
+      async function fitEditorToFrame(frame) {
+        const model = chromeModel();
+        window.__bdEditor.scrollToContent([frame], {
+          fitToViewport: true,
+          viewportZoomFactor: 1,
+          animate: false,
+          canvasOffsets: model.offsets,
+        });
+        await twoFrames();
+        return window.__bdEditor.getAppState();
+      }
+
+      function editorCanvas() {
+        const canvas = document.querySelector("#root canvas.excalidraw__canvas.static");
+        if (!canvas) {
+          throw harnessError(
+            "IMAGE_CANVAS",
+            "Mounted editor canvas was not available for image sampling.",
+            "Verify that the Excalidraw editor mounted before reading image pixels.",
+          );
+        }
+        return canvas;
+      }
+
+      function viewportBounds(element, appState) {
+        const topLeft = window.__bdApi.sceneCoordsToViewportCoords({ sceneX: element.x, sceneY: element.y }, appState);
+        const bottomRight = window.__bdApi.sceneCoordsToViewportCoords({ sceneX: element.x + element.width, sceneY: element.y + element.height }, appState);
+        return {
+          x: Math.min(topLeft.x, bottomRight.x),
+          y: Math.min(topLeft.y, bottomRight.y),
+          width: Math.abs(bottomRight.x - topLeft.x),
+          height: Math.abs(bottomRight.y - topLeft.y),
+        };
+      }
+
+      async function digestPixels(canvas, bounds) {
+        const canvasRect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / Math.max(canvasRect.width, 1);
+        const scaleY = canvas.height / Math.max(canvasRect.height, 1);
+        const x = Math.max(0, Math.floor((bounds.x - canvasRect.x) * scaleX));
+        const y = Math.max(0, Math.floor((bounds.y - canvasRect.y) * scaleY));
         const width = Math.max(1, Math.min(canvas.width - x, Math.ceil(bounds.width * scaleX)));
         const height = Math.max(1, Math.min(canvas.height - y, Math.ceil(bounds.height * scaleY)));
-        const pixels = canvas.getContext("2d").getImageData(x, y, width, height).data;
-        let hash = 2166136261;
-        for (const pixel of pixels) {
-          hash ^= pixel;
-          hash = Math.imul(hash, 16777619) >>> 0;
+        const pixels = canvas.getContext("2d", { willReadFrequently: true }).getImageData(x, y, width, height).data;
+        const digest = await crypto.subtle.digest("SHA-256", pixels);
+        return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+      }
+
+      async function sampleImageRegions(images, appState) {
+        const canvas = editorCanvas();
+        return Promise.all(images.map(async (image) => ({
+          id: image.id,
+          hash: await digestPixels(canvas, viewportBounds(image, appState)),
+        })));
+      }
+
+      function clearSceneImageObservations(sceneId) {
+        for (const observation of imageObservations.filter((candidate) => candidate.sceneId === sceneId)) {
+          observation.cleanup?.();
+          imageObservations.splice(imageObservations.indexOf(observation), 1);
         }
-        return hash.toString(16).padStart(8, "0");
+        for (const waiter of imageObservationWaiters.filter((candidate) => candidate.sceneId === sceneId)) {
+          waiter.reject(harnessError(
+            "IMAGE_DEADLINE",
+            "Scene image readiness was cancelled while remounting the editor.",
+            "Reload the scene and verify the embedded data URL.",
+          ));
+          imageObservationWaiters.splice(imageObservationWaiters.indexOf(waiter), 1);
+        }
+      }
+
+      async function remountScene(elements, scene, sceneId, includeFiles) {
+        clearSceneImageObservations(sceneId);
+        window.__bdEditor = await window.__bdApi.remountEditor(editorRoot);
+        observationContext = includeFiles ? sceneId : null;
+        try {
+          window.__bdEditor.updateScene({ elements, appState: scene.appState });
+          if (includeFiles) {
+            if (window.__bdTestFileFailure) throw harnessError(
+              "FILE_LOAD",
+              `File load failed: ${window.__bdTestFileFailure}`,
+              "Verify the embedded files and rebuild the deck.",
+            );
+            try {
+              window.__bdEditor.addFiles(Object.values(scene.files || {}));
+            } catch (error) {
+              throw harnessError(
+                "FILE_LOAD",
+                `File load failed: ${error.message || String(error)}`,
+                "Verify the embedded files and rebuild the deck.",
+              );
+            }
+          }
+        } finally {
+          observationContext = null;
+        }
+        watchMainMenu();
+        updateFrameNavigation(elements);
+        const frame = elements.find((element) => element.type === "frame");
+        if (frame) await fitEditorToFrame(frame);
+        return window.__bdEditor.getAppState();
+      }
+
+      function perturbMountedImagePixels(images, appState) {
+        const canvas = editorCanvas();
+        const context = canvas.getContext("2d");
+        for (const image of images) {
+          const bounds = viewportBounds(image, appState);
+          const canvasRect = canvas.getBoundingClientRect();
+          const x = Math.max(0, Math.min(canvas.width - 1, Math.floor((bounds.x - canvasRect.x + bounds.width / 2) * canvas.width / canvasRect.width)));
+          const y = Math.max(0, Math.min(canvas.height - 1, Math.floor((bounds.y - canvasRect.y + bounds.height / 2) * canvas.height / canvasRect.height)));
+          context.putImageData(new ImageData(new Uint8ClampedArray([1, 0, 1, 255]), 1, 1), x, y);
+        }
       }
 
       async function imageRegionOracle(elements, files, sceneId) {
         const images = elements.filter((element) => element.type === "image");
         if (!images.length) return [];
-        if (window.__bdTestImageFailure === "placeholder") {
-          throw harnessError(
-            "IMAGE_PLACEHOLDER",
-            `Image ${imageName(images[0])} rendered only its placeholder region.`,
-            "Verify the editor image renderer and the embedded data URL.",
-          );
-        }
-        if (window.__bdTestImageFailure === "stability") {
-          throw harnessError(
-            "IMAGE_STABILITY",
-            `Image ${imageName(images[0])} did not remain stable across animation frames.`,
-            "Wait for the editor image render to stabilize before reading the scene.",
-          );
-        }
-        const all = elements.filter((element) => !element.isDeleted);
-        const minX = Math.min(...all.map((element) => element.x));
-        const minY = Math.min(...all.map((element) => element.y));
-        const sceneBounds = {
-          x: minX,
-          y: minY,
-          width: Math.max(...all.map((element) => element.x + element.width)) - minX,
-          height: Math.max(...all.map((element) => element.y + element.height)) - minY,
-        };
-        const render = (renderFiles) => window.__bdApi.exportToCanvas({
-          elements: all,
-          appState: { exportBackground: true, viewBackgroundColor: "#ffffff" },
-          files: renderFiles,
-          exportPadding: 0,
-        });
+        const frame = elements.find((element) => element.type === "frame");
+        const loadedState = await fitEditorToFrame(frame);
         const actualFrame = await animationFrame();
-        const actual = await render(files);
+        const loadedActual = await sampleImageRegions(images, loadedState);
+        await animationFrame();
         const stableFrame = await animationFrame();
-        const stable = await render(files);
-        const placeholder = await render({});
-        return images.map((image) => {
-          const actualHash = hashRegion(actual, image, sceneBounds);
-          const stableHash = hashRegion(stable, image, sceneBounds);
-          const placeholderHash = hashRegion(placeholder, image, sceneBounds);
+        if (window.__bdTestImageSeam?.mode === "stability") perturbMountedImagePixels(images, loadedState);
+        const loadedStable = await sampleImageRegions(images, loadedState);
+
+        const placeholderState = await remountScene(elements, { appState: loadedState }, sceneId, false);
+        const placeholder = await sampleImageRegions(images, placeholderState);
+        const actual = window.__bdTestImageSeam?.mode === "placeholder" ? placeholder : loadedActual;
+
+        const restoredState = await remountScene(elements, { appState: loadedState, files }, sceneId, true);
+        await window.__bdWaitForImages(files, images, sceneId);
+        await twoFrames();
+        const restored = await sampleImageRegions(images, restoredState);
+        return images.map((image, index) => {
+          const actualHash = actual[index].hash;
+          const stableHash = loadedStable[index].hash;
+          const placeholderHash = placeholder[index].hash;
           if (actualHash === placeholderHash) {
             throw harnessError(
               "IMAGE_PLACEHOLDER",
@@ -368,6 +507,7 @@
             actualFrame,
             stableFrame,
             distinctAnimationFrames: stableFrame > actualFrame,
+            restoredHash: restored[index].hash,
           };
         });
       }
@@ -379,38 +519,94 @@
       window.__bdReportFidelity = (elements, viewport) => {
         const frames = elements.filter((element) => element.type === "frame");
         const reports = [];
-        const usableWidth = Math.min(viewport.width, 1600);
-        const usableHeight = Math.max(1, viewport.height - 50);
+        const chrome = chromeModel(viewport);
+        const elementById = new Map(elements.map((element) => [element.id, element]));
+        const roleFontFamily = (role) => role === "mono" ? 3 : role === "handwritten" ? 5 : 6;
+        const geometryTolerance = (metric) => Math.max(
+          0.25,
+          Math.min(0.75, Math.max(1, Math.abs(metric.width || 0), Math.abs(metric.height || 0)) * 0.001),
+        );
+        const convertedBounds = (element) => {
+          if (element.type === "text" && element.containerId) {
+            const container = elementById.get(element.containerId);
+            if (!container?.label) return null;
+            const converted = window.__bdApi.convertToExcalidrawElements([{
+              id: container.id,
+              type: container.type,
+              x: container.x,
+              y: container.y,
+              width: container.width,
+              height: container.height,
+              strokeColor: container.strokeColor,
+              backgroundColor: container.backgroundColor,
+              label: { ...container.label, fontFamily: roleFontFamily(container.label.role ?? container.role ?? "prose") },
+            }], { regenerateIds: false });
+            return converted.find((candidate) => candidate.containerId === container.id && candidate.type === "text") ?? null;
+          }
+          if (element.type === "text") {
+            const role = element.role === "mono" || element.role === "handwritten" ? element.role : "prose";
+            const [measured] = window.__bdApi.convertToExcalidrawElements([{
+              id: `${element.id}-fidelity-measure`,
+              type: "text",
+              x: element.x,
+              y: element.y,
+              text: element.text,
+              fontSize: element.fontSize,
+              fontFamily: roleFontFamily(role),
+              role,
+              textAlign: element.textAlign,
+            }], { regenerateIds: false });
+            return measured;
+          }
+          if (element.type === "rectangle" && element.label) {
+            const converted = window.__bdApi.convertToExcalidrawElements([{
+              id: element.id,
+              type: element.type,
+              x: element.x,
+              y: element.y,
+              width: element.width,
+              height: element.height,
+              strokeColor: element.strokeColor,
+              backgroundColor: element.backgroundColor,
+              label: { ...element.label, fontFamily: roleFontFamily(element.label.role ?? element.role ?? "prose") },
+            }], { regenerateIds: false });
+            return converted.find((candidate) => candidate.id === element.id) ?? null;
+          }
+          return null;
+        };
+        const chromeSceneBounds = (rect, appState) => {
+          const topLeft = window.__bdApi.viewportCoordsToSceneCoords({ clientX: rect.x, clientY: rect.y }, appState);
+          const bottomRight = window.__bdApi.viewportCoordsToSceneCoords({ clientX: rect.x + rect.width, clientY: rect.y + rect.height }, appState);
+          return {
+            x: Math.min(topLeft.x, bottomRight.x),
+            y: Math.min(topLeft.y, bottomRight.y),
+            width: Math.abs(bottomRight.x - topLeft.x),
+            height: Math.abs(bottomRight.y - topLeft.y),
+          };
+        };
+        const appState = window.__bdEditor.getAppState();
+        const chromeBounds = chrome.rects.map((rect) => chromeSceneBounds(rect, appState));
         for (const frame of frames) {
-          const fitZoom = Math.min(usableWidth / frame.width, usableHeight / frame.height);
+          const fitZoom = Math.min(chrome.usableWidth / frame.width, chrome.usableHeight / frame.height);
           const members = elements.filter((element) => element.frameId === frame.id);
           const clipped = new Set();
           const overlap = new Set();
           const obscured = new Set();
+          const geometry = new Set();
           const frameBounds = elementBounds(frame);
-          const toolbarBounds = { x: frame.x, y: frame.y, width: frame.width, height: 50 / fitZoom };
           for (const member of members) {
             if (member.customData?.beautidrawCompositionKind === "surface") continue;
             const memberBounds = elementBounds(member);
             if (memberBounds.x < frameBounds.x - 0.5 || memberBounds.y < frameBounds.y - 0.5 ||
               memberBounds.x + memberBounds.width > frameBounds.x + frameBounds.width + 0.5 ||
               memberBounds.y + memberBounds.height > frameBounds.y + frameBounds.height + 0.5) clipped.add(member.id);
-            if (intersects(memberBounds, toolbarBounds)) obscured.add(member.id);
-            if (member.type === "text") {
-              const role = member.role === "mono" || member.role === "handwritten" ? member.role : "prose";
-              const fontFamily = role === "mono" ? 3 : role === "handwritten" ? 5 : 6;
-              const [measured] = window.__bdApi.convertToExcalidrawElements([{
-                id: `${member.id}-fidelity-measure`,
-                type: "text",
-                x: 0,
-                y: 0,
-                text: member.text,
-                fontSize: member.fontSize,
-                fontFamily,
-                role,
-                textAlign: member.textAlign,
-              }], { regenerateIds: false });
-              if (!measured || measured.width > member.width + 0.5 || measured.height > member.height + 0.5) clipped.add(member.id);
+            if (chromeBounds.some((bounds) => intersects(memberBounds, bounds))) obscured.add(member.id);
+            const measured = convertedBounds(member);
+            if (measured) {
+              const tolerance = geometryTolerance(measured);
+              const expected = member.customData?.beautidrawMeasuredBounds;
+              const target = expected ?? measured;
+              if (["x", "y", "width", "height"].some((field) => Math.abs(member[field] - target[field]) > tolerance)) geometry.add(member.id);
             }
           }
           for (let i = 0; i < members.length; i += 1) {
@@ -434,6 +630,7 @@
             clippedElementIds: [...clipped].sort(),
             overlapElementIds: [...overlap].sort(),
             obscuredByChromeElementIds: [...obscured].sort(),
+            geometryElementIds: [...geometry].sort(),
           });
         }
         return reports;
@@ -496,9 +693,7 @@
         }
       })();
 
-      window.__bdLoadScene = async (scene) => {
-        const sceneId = beginScene();
-        registerSceneFiles(sceneId, scene?.files);
+      async function performSceneLoad(scene, sceneId, token) {
         try {
           let elements;
           if (!Array.isArray(scene?.elements)) {
@@ -537,49 +732,51 @@
               "Verify the local fonts and rebuild the deck.",
             );
           }
-          const previousContext = observationContext;
-          observationContext = sceneId;
-          try {
-            window.__bdEditor.updateScene({ elements, appState: scene.appState });
-            try {
-              window.__bdEditor.addFiles(Object.values(scene.files || {}));
-            } catch (error) {
-              throw harnessError(
-                "FILE_LOAD",
-                `File load failed: ${error.message || String(error)}`,
-                "Verify the embedded files and rebuild the deck.",
-              );
-            }
-          } finally {
-            observationContext = previousContext;
-          }
+          await remountScene(elements, scene, sceneId, true);
           const imageElements = elements.filter((element) => element.type === "image");
           const imageReadiness = await window.__bdWaitForImages(scene.files || {}, imageElements, sceneId);
           await twoFrames();
           const imageRegions = await imageRegionOracle(elements, scene.files || {}, sceneId);
           const frames = window.__bdReportFidelity(elements, { width: innerWidth, height: innerHeight });
-          const failedFrames = frames.filter((frame) => frame.clippedElementIds.length || frame.overlapElementIds.length || frame.obscuredByChromeElementIds.length || frame.minimumEffectiveTextPx < 12);
+          const failedFrames = frames.filter((frame) => frame.clippedElementIds.length || frame.overlapElementIds.length || frame.obscuredByChromeElementIds.length || frame.geometryElementIds.length || frame.minimumEffectiveTextPx < 12);
           if (failedFrames.length) {
             const frame = failedFrames[0];
             throw harnessError(
               "FIDELITY",
-              `Fidelity report failed for ${frame.frameId}: ${[...frame.clippedElementIds, ...frame.overlapElementIds, ...frame.obscuredByChromeElementIds].join(", ") || "effective text is below 12px"}.`,
+              `Fidelity report failed for ${frame.frameId}: ${[...frame.clippedElementIds, ...frame.overlapElementIds, ...frame.obscuredByChromeElementIds, ...frame.geometryElementIds].join(", ") || "effective text is below 12px"}.`,
               "Adjust the scene geometry and rebuild the deck.",
             );
           }
-          updateFrameNavigation(elements);
-          setReady(frames.length);
-          return { state: "ready", sceneId, missingImages: [], imageReadiness: imageReadiness.map(({ src, state, sceneId: observedSceneId }) => ({ src, state, sceneId: observedSceneId })), imageRegions, frames };
+          setReady(frames.length, sceneId, token);
+          return {
+            state: "ready",
+            sceneId,
+            missingImages: [],
+            imageReadiness: imageReadiness.map(({ src, state, sceneId: observedSceneId }) => ({ src, state, sceneId: observedSceneId })),
+            imageRegions,
+            frames,
+          };
         } catch (error) {
           const failure = error.harnessFailure ?? {
             reason: `Scene load failed: ${error.message || String(error)}`,
             recovery: "Verify the scene data and rebuild the deck.",
           };
-          setError(failure);
+          setError(failure, sceneId, token);
           return { state: "error", sceneId, error: failure };
         } finally {
           cleanupSceneObservations(sceneId);
         }
+      }
+
+      window.__bdLoadScene = (scene) => {
+        const sceneId = beginScene();
+        const token = ++latestLoadToken;
+        registerSceneFiles(sceneId, scene?.files);
+        setLoading();
+        window.__bdMountedSceneId = null;
+        const run = loadQueue.then(() => performSceneLoad(scene, sceneId, token));
+        loadQueue = run.catch(() => undefined);
+        return run;
       };
     </script>
   </body>

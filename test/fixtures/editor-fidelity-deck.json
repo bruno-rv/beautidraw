@@ -45,7 +45,8 @@
       "containerId": null,
       "originalText": "Loaded prose remains readable at fit-frame zoom.",
       "autoResize": true,
-      "lineHeight": 1.25
+      "lineHeight": 1.25,
+      "customData": { "beautidrawMeasuredBounds": { "x": 680, "y": 250, "width": 540.1676025390625, "height": 32.400000000000006 } }
     },
     {
       "id": "fidelity-mono",
@@ -74,7 +75,8 @@
       "containerId": null,
       "originalText": "node scripts/harness.mjs --viewport=1280x800",
       "autoResize": true,
-      "lineHeight": 1.25
+      "lineHeight": 1.25,
+      "customData": { "beautidrawMeasuredBounds": { "x": 680, "y": 320, "width": 618.75, "height": 28.799999999999997 } }
     },
     {
       "id": "fidelity-handwritten",
@@ -103,7 +105,8 @@
       "containerId": null,
       "originalText": "A measured note, not a guess.",
       "autoResize": true,
-      "lineHeight": 1.25
+      "lineHeight": 1.25,
+      "customData": { "beautidrawMeasuredBounds": { "x": 680, "y": 560, "width": 355.3197021484375, "height": 30 } }
     },
     {
       "id": "fidelity-bound",
@@ -123,6 +126,7 @@
       "groupIds": [],
       "frameId": "fidelity-frame",
       "boundElements": [{ "type": "text", "id": "fidelity-bound-label" }],
+      "customData": { "beautidrawMeasuredBounds": { "x": 680, "y": 400, "width": 640, "height": 105 } },
       "label": {
         "text": "Bound label is sized by the editor converter.",
         "fontSize": 24,
@@ -161,7 +165,8 @@
       "containerId": "fidelity-bound",
       "originalText": "Bound label is sized by the editor converter.",
       "autoResize": false,
-      "lineHeight": 1.25
+      "lineHeight": 1.25,
+      "customData": { "beautidrawMeasuredBounds": { "x": 685, "y": 436.3, "width": 473.95172119140625, "height": 32.400000000000006 } }
     },
     {
       "id": "fidelity-image",

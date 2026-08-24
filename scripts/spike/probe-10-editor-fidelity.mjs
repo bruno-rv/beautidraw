@@ -78,11 +78,14 @@ for (const viewport of viewports) {
       }
     }
     for (const frame of result.frames) {
-      if (frame.minimumEffectiveTextPx < 12 || frame.clippedElementIds.length || frame.overlapElementIds.length || frame.obscuredByChromeElementIds.length) {
+      if (frame.minimumEffectiveTextPx < 12 || frame.clippedElementIds.length || frame.overlapElementIds.length || frame.obscuredByChromeElementIds.length || frame.geometryElementIds.length) {
         throw new Error(`fidelity report failed for ${frame.frameId} at ${viewport.width}x${viewport.height}`);
       }
     }
     if (result.imageReadiness.some((image) => image.state !== "load")) throw new Error("mixed-media fixture image was not decoded");
+    if (result.imageRegions.some((image) => image.actualHash.length !== 64 || image.placeholderHash.length !== 64 || image.actualHash === image.placeholderHash || image.actualHash !== image.restoredHash)) {
+      throw new Error("mounted image pixel digest did not prove loaded, stable scene rendering");
+    }
     return {
       viewport,
       state: result.state,

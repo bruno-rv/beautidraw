@@ -82,30 +82,17 @@ test("scene loading preserves restore, file, and fidelity failure classes", asyn
       },
     });
 
-    await page.evaluate(() => { window.__bdEditor.addFiles = () => { throw new Error("simulated file store failure"); }; });
+    await page.evaluate(() => { window.__bdTestFileFailure = "simulated file store failure"; });
     const file = await page.evaluate((scene) => window.__bdLoadScene(scene), deck);
     assert.equal(file.state, "error");
     assert.match(file.error.reason, /^File load failed: simulated file store failure$/);
     assert.equal(file.error.recovery, "Verify the embedded files and rebuild the deck.");
+    await page.evaluate(() => { delete window.__bdTestFileFailure; });
   });
 });
 
-test("scene loading exposes typed deadline, placeholder, stability, and fidelity failures", async () => {
+test("scene loading exposes typed fidelity failures", async () => {
   await withHarness(async ({ page }) => {
-    for (const [index, mode] of ["deadline", "decode", "placeholder", "stability"].entries()) {
-      const scene = structuredClone(deck);
-      const modeFileId = `typed-failure-${mode}-${index}`;
-      const modeImage = scene.elements.find((element) => element.id === "fidelity-image");
-      const modeFile = scene.files["9993ed1d2781fdafd876038e6be0a1162d377be1"];
-      modeImage.fileId = modeFileId;
-      scene.files = { [modeFileId]: { ...modeFile, id: modeFileId } };
-      await page.evaluate((failureMode) => { window.__bdTestImageFailure = failureMode; }, mode);
-      const result = await page.evaluate((nextScene) => window.__bdLoadScene(nextScene), scene);
-      assert.equal(result.state, "error");
-      assert.match(result.error.reason, mode === "stability" ? /stable/i : new RegExp(mode, "i"));
-      assert.match(result.error.recovery, /embedded data URL|rendered image|stabil/i);
-      await page.evaluate(() => { delete window.__bdTestImageFailure; });
-    }
     const clipped = structuredClone(deck);
     clipped.elements.find((element) => element.id === "fidelity-prose").x = 3000;
     const fidelity = await page.evaluate((scene) => window.__bdLoadScene(scene), clipped);
@@ -141,6 +128,8 @@ test("repeated scene loads prune image observations and keep readiness scene-sco
     invalid.files["9993ed1d2781fdafd876038e6be0a1162d377be1"].dataURL = "data:image/png;base64,invalid-scene-file";
     const failed = await page.evaluate((scene) => window.__bdLoadScene(scene), invalid);
     assert.equal(failed.state, "error");
+    assert.equal(await page.locator("#bd-state").getAttribute("role"), "alert");
+    assert.equal(await page.locator("#bd-state").getAttribute("aria-live"), null);
     assert.equal(await page.evaluate(() => window.__bdImageObservations.length), 0);
 
     const secondScene = structuredClone(deck);
@@ -171,9 +160,13 @@ test("concurrent scenes keep their own image events, hashes, and cleanup", async
     blue.elements.find((element) => element.id === "fidelity-image").customData.beautidrawImageName = "blue";
     blue.files = { [blueId]: { ...deck.files[Object.keys(deck.files)[0]], id: blueId, dataURL: blueData } };
 
-    const redPromise = page.evaluate((scene) => window.__bdLoadScene(scene), red);
-    const bluePromise = page.evaluate((scene) => new Promise((resolve) => setTimeout(() => resolve(window.__bdLoadScene(scene)), 10)), blue);
-    const [redResult, blueResult] = await Promise.all([redPromise, bluePromise]);
+    const concurrent = await page.evaluate(async ({ first, second }) => {
+      const completion = [];
+      const firstPromise = window.__bdLoadScene(first).then((result) => { completion.push(result.sceneId); return result; });
+      const secondPromise = window.__bdLoadScene(second).then((result) => { completion.push(result.sceneId); return result; });
+      return { results: await Promise.all([firstPromise, secondPromise]), completion };
+    }, { first: red, second: blue });
+    const [redResult, blueResult] = concurrent.results;
     assert.equal(redResult.state, "ready");
     assert.equal(blueResult.state, "ready");
     assert.notEqual(redResult.sceneId, blueResult.sceneId);
@@ -184,6 +177,104 @@ test("concurrent scenes keep their own image events, hashes, and cleanup", async
     assert.equal(redResult.imageRegions[0].sceneId, redResult.sceneId);
     assert.equal(blueResult.imageRegions[0].sceneId, blueResult.sceneId);
     assert.notEqual(redResult.imageRegions[0].actualHash, blueResult.imageRegions[0].actualHash);
+    assert.deepEqual(concurrent.completion, [redResult.sceneId, blueResult.sceneId]);
+    assert.equal(await page.evaluate(() => window.__bdMountedSceneId), blueResult.sceneId);
+    assert.deepEqual(await page.evaluate(() => window.__bdEditor.getSceneElements().filter((element) => element.type === "image").map((element) => element.customData?.beautidrawImageName)), ["blue"]);
     assert.equal(await page.evaluate(() => window.__bdImageObservations.length), 0);
+  });
+});
+
+test("corrected same-file-id scene remounts the editor image cache", async () => {
+  await withHarness(async ({ page }) => {
+    const invalid = structuredClone(deck);
+    const fileId = Object.keys(invalid.files)[0];
+    invalid.files[fileId].dataURL = "data:image/png;base64,invalid-first-scene";
+    const failed = await page.evaluate((scene) => window.__bdLoadScene(scene), invalid);
+    assert.equal(failed.state, "error");
+
+    const corrected = structuredClone(deck);
+    const recovered = await page.evaluate((scene) => window.__bdLoadScene(scene), corrected);
+    assert.equal(recovered.state, "ready");
+    assert.equal(await page.locator("#bd-state").getAttribute("role"), "status");
+    assert.equal(await page.locator("#bd-state").getAttribute("aria-live"), "polite");
+    assert.equal(recovered.imageReadiness[0].src, corrected.files[fileId].dataURL);
+    assert.equal(await page.evaluate((id) => window.__bdEditor.getFiles()[id]?.dataURL, fileId), corrected.files[fileId].dataURL);
+    assert.equal(await page.evaluate(() => window.__bdMountedSceneId), recovered.sceneId);
+  });
+});
+
+test("a subsequent load restores loading semantics and only the final scene controls the UI", async () => {
+  await withHarness(async ({ page }) => {
+    const first = await page.evaluate((scene) => window.__bdLoadScene(scene), deck);
+    assert.equal(first.state, "ready");
+    await page.evaluate(() => { window.__bdTestImageSeam = { holdEvents: true }; });
+    const started = await page.evaluate((scene) => {
+      window.__bdPendingLoad = window.__bdLoadScene(scene);
+      const state = document.getElementById("bd-state");
+      return { text: state.textContent, role: state.getAttribute("role"), live: state.getAttribute("aria-live") };
+    }, deck);
+    assert.match(started.text, /loading/i);
+    assert.equal(started.role, "status");
+    assert.equal(started.live, "polite");
+    await page.evaluate(() => window.__bdReleaseImageEvents());
+    const second = await page.evaluate(() => window.__bdPendingLoad);
+    assert.equal(second.state, "ready");
+    assert.equal(await page.evaluate(() => window.__bdMountedSceneId), second.sceneId);
+    assert.match(await page.locator("#bd-state").getAttribute("data-state"), /ready/);
+    await page.evaluate(() => { delete window.__bdTestImageSeam; });
+  });
+});
+
+test("fidelity rejects converter-inflated, undersized, and shifted geometry", async () => {
+  for (const viewport of [{ width: 1600, height: 900 }, { width: 1280, height: 800 }]) {
+    await withHarness(async ({ page }) => {
+      for (const mutate of [
+        (scene) => { scene.elements.find((element) => element.id === "fidelity-prose").width += 20; },
+        (scene) => { scene.elements.find((element) => element.id === "fidelity-prose").width -= 20; },
+        (scene) => { scene.elements.find((element) => element.id === "fidelity-prose").x += 20; },
+      ]) {
+        const changed = structuredClone(deck);
+        mutate(changed);
+        const result = await page.evaluate((scene) => window.__bdLoadScene(scene), changed);
+        assert.equal(result.state, "error");
+        assert.match(result.error.reason, /fidelity|geometry/i);
+      }
+    }, { viewport });
+  }
+});
+
+test("fidelity models mounted editor and frame-navigation chrome at both viewports", async () => {
+  for (const viewport of [{ width: 1600, height: 900 }, { width: 1280, height: 800 }]) {
+    await withHarness(async ({ page }) => {
+      assert.equal((await page.evaluate((scene) => window.__bdLoadScene(scene), deck)).state, "ready");
+      const changed = structuredClone(deck);
+      const target = await page.evaluate(() => {
+        const rect = document.getElementById("bd-frame-navigation").getBoundingClientRect();
+        const scene = window.__bdApi.viewportCoordsToSceneCoords({ clientX: rect.x + 4, clientY: rect.y + 4 }, window.__bdEditor.getAppState());
+        return scene;
+      });
+      const image = changed.elements.find((element) => element.id === "fidelity-image");
+      image.x = target.x;
+      image.y = target.y;
+      image.width = 10;
+      image.height = 10;
+      const result = await page.evaluate((scene) => window.__bdLoadScene(scene), changed);
+      assert.equal(result.state, "error");
+      assert.match(result.error.reason, /fidelity/i);
+      assert.match(await page.locator("#bd-state").innerText(), /fidelity-image/i);
+    }, { viewport });
+  }
+});
+
+test("mounted image pixels exercise real placeholder, stability, decode, and deadline paths", async () => {
+  await withHarness(async ({ page }) => {
+    for (const mode of ["placeholder", "stability", "decode", "deadline"]) {
+      const scene = structuredClone(deck);
+      await page.evaluate((failureMode) => { window.__bdTestImageSeam = { mode: failureMode }; }, mode);
+      const result = await page.evaluate((nextScene) => window.__bdLoadScene(nextScene), scene);
+      assert.equal(result.state, "error");
+      assert.match(result.error.reason, mode === "stability" ? /stable/i : new RegExp(mode, "i"));
+    }
+    await page.evaluate(() => { delete window.__bdTestImageSeam; });
   });
 });
