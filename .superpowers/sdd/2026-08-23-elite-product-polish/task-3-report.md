@@ -170,3 +170,66 @@ git diff --check
 ```
 
 The real Claude build/recovery path passed after the boundary correction.
+
+## Fix Round 4 evidence
+
+### RED
+
+- Added regressions for `/etc`, `/tmp`, and `/private`, authored backticks and
+  newlines, string/array annotation forms, escaping semantic/manual image
+  symlinks, final role/font-family parity, converter-sized containers, and
+  preservation of a long authored callout plus handwritten annotations.
+- The focused suite first failed on the missing singleton-root rejection,
+  trusted backtick path, missing annotation export, missing handwritten corpus,
+  and missing symlink containment. The annotated real-build regression then
+  failed until composition rendered annotations and full text.
+
+### GREEN
+
+- Auto-composed text no longer uses character-count wrapping, `fitChars`, or
+  ellipsis. Text roles are sent to Excalidraw conversion; labels are measured
+  with their declared role/font and containers receive converter-derived bounds
+  plus padding. Long direct text uses a measured transparent text container,
+  preserving authored text while respecting the body zone.
+- Final composition/layout assertions enforce role-to-font-family parity and
+  measured label geometry. `visual.annotation` and `visual.annotations` are
+  normalized in order, rendered as short handwritten elements with role,
+  font-family, custom metadata, and frame membership, and emitted in outline
+  order.
+- Outline path checks reject singleton POSIX roots while retaining slash
+  commands, remove trusted backtick delimiters, normalize newlines, and keep
+  generated code spans under formatter ownership.
+- Semantic, manual, and frame-background asset reads/copies resolve realpaths
+  and reject broken or escaping symlink targets before I/O; portable manifest
+  paths remain source-relative.
+
+Verification:
+
+```text
+node --test test/outline.test.mjs test/semantic-visuals.test.mjs test/build-recovery.test.mjs
+  25 passed, 0 failed
+node --test
+  67 passed, 0 failed
+node scripts/spike/probe-07-text-geometry.mjs
+  all assertions hold
+node scripts/spike/probe-08-font-gate.mjs
+  all assertions hold
+node --check scripts/*.mjs scripts/spike/*.mjs
+node --check test/*.mjs
+git diff --check
+  clean
+```
+
+The real Claude build and annotated Claude build both completed through
+transactional recovery with all deliverables. Remaining risk: annotations and
+very long prose are fail-closed if converter-derived bounds cannot fit their
+declared visual zone; no approximation or truncation is reintroduced.
+
+### Self-review
+
+- Scope stayed within Task 3 semantic/composition/outline/asset paths plus the
+  existing manual frame-background reader needed to close the same asset trust
+  boundary. No generated deck outputs or unrelated cleanup were changed.
+- Existing structured layout, role defaults, error routing, body bounds,
+  contrast, overlap, and recovery gates remain enabled; all current tests and
+  probes pass.

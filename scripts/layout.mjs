@@ -262,6 +262,22 @@ export function formatChecklistRow(label, note) {
   return note ? `• ${label} — ${note}` : `• ${label}`;
 }
 
+function normalizeAnnotation(annotation, index) {
+  if (typeof annotation === "string") return { text: reqText(annotation, `annotation ${index + 1}`) };
+  if (!annotation || typeof annotation !== "object" || Array.isArray(annotation)) {
+    throw new Error(`annotation ${index + 1} must be a string or an object with text`);
+  }
+  return { ...annotation, text: reqText(annotation.text, `annotation ${index + 1} text`) };
+}
+
+function annotationsForVisual(visual = {}) {
+  const values = [
+    ...(visual.annotation == null ? [] : (Array.isArray(visual.annotation) ? visual.annotation : [visual.annotation])),
+    ...(visual.annotations == null ? [] : (Array.isArray(visual.annotations) ? visual.annotations : [visual.annotations])),
+  ];
+  return values.map(normalizeAnnotation);
+}
+
 // ---------------------------------------------------------------------------
 // collectFontRequirements — pure, Node-safe. Returns
 // [{ family: "Nunito", size: 23, chars: "..." }, ...], one entry per
@@ -321,8 +337,7 @@ export function collectFontRequirements(spec) {
     if (visual.image && typeof visual.image === "object") {
       for (const field of ["use", "description"]) if (typeof visual.image[field] === "string") add(visual.image[field], RAMP.note, "prose");
     }
-    const annotations = visual.annotations ?? (visual.annotation ? [visual.annotation] : []);
-    for (const annotation of annotations) if (typeof annotation === "string" && annotation.trim()) add(annotation, RAMP.note, "handwritten");
+    for (const annotation of annotationsForVisual(visual)) add(annotation.text, RAMP.note, "handwritten");
   };
 
   for (const band of plan.bands) {

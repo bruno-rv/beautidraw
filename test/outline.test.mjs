@@ -177,3 +177,37 @@ test("outline permits slash commands and ordinary web URLs", () => {
   safe.bands[0].visual.inspect = "Run /context and read https://example.com/path.";
   assert.doesNotThrow(() => buildOutline(safe));
 });
+
+test("outline rejects single-segment POSIX paths but keeps known slash commands", () => {
+  for (const value of ["/etc", "/tmp", "/private"]) {
+    const unsafe = structuredClone(spec);
+    unsafe.bands[0].visual.inspect = `Read ${value}`;
+    assert.throws(() => buildOutline(unsafe), /absolute|portable|path/i, value);
+  }
+  const safe = structuredClone(spec);
+  safe.bands[0].visual.inspect = "Run /context, /memory, and /tasks.";
+  assert.doesNotThrow(() => buildOutline(safe));
+});
+
+test("outline never trusts backticks or newlines from authored values", () => {
+  const unsafe = structuredClone(spec);
+  unsafe.title = "Title\n# Injected heading";
+  unsafe.bands[0].visual.inspect = "`/tmp`\n# Injected heading";
+  assert.throws(() => buildOutline(unsafe), /absolute|portable|path/i);
+
+  const safe = structuredClone(spec);
+  safe.bands[0].visual.inspect = "`/context`\n# not a heading";
+  const markdown = buildOutline(safe);
+  assert.doesNotMatch(markdown, /^# Injected heading$/m);
+  assert.doesNotMatch(markdown, /^# not a heading$/m);
+  assert.match(markdown, /`\/context`/);
+});
+
+test("outline carries annotation and annotations in authored order", () => {
+  const annotated = structuredClone(spec);
+  annotated.bands[0].visual.annotation = "First handwritten note";
+  annotated.bands[0].visual.annotations = ["Second handwritten note", { text: "Third handwritten note" }];
+  const markdown = buildOutline(annotated);
+  assert.ok(markdown.indexOf("First handwritten note") < markdown.indexOf("Second handwritten note"));
+  assert.ok(markdown.indexOf("Second handwritten note") < markdown.indexOf("Third handwritten note"));
+});

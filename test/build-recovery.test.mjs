@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { access, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
+import { access, cp, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -58,12 +58,46 @@ test("a successful Claude build replaces the output with all six deliverables", 
   assert.equal(diagnostics.build.deliverables.bands.category, "band-png");
   assert.equal(diagnostics.build.deliverables.bands.count, frameCount);
   const composed = deck.elements.filter((element) => element.customData?.beautidrawComposition === true);
+  const familyForRole = { prose: 6, mono: 3, handwritten: 5 };
   assert.ok(composed.filter((element) => element.type === "text").every((element) => ["prose", "mono", "handwritten"].includes(element.role)));
+  assert.ok(composed.filter((element) => element.type === "text").every((element) => element.fontFamily === familyForRole[element.role]));
   assert.ok(composed.some((element) => element.type === "text" && element.role === "mono"));
+  for (const container of composed.filter((element) => element.customData?.beautidrawAutoSize)) {
+    const labelId = (container.boundElements ?? []).find((binding) => binding.type === "text")?.id;
+    const label = composed.find((element) => element.id === labelId);
+    assert.ok(label, `${container.id} has a converted label`);
+    assert.ok(container.width >= label.width + 10 - 0.5, `${container.id} width is measured with padding`);
+    assert.ok(container.height >= label.height + 10 - 0.5, `${container.id} height is measured with padding`);
+  }
   assert.ok(composed.filter((element) => element.customData?.semanticKind).every((element) => ["example", "boundary", "inspect", "warning"].includes(element.customData.semanticKind)));
   for (let index = 1; index <= frameCount; index += 1) {
     assert.equal(await exists(join(output, `band-${String(index).padStart(2, "0")}.png`)), true);
   }
+});
+
+test("semantic composition preserves full authored text and handwritten annotations", { timeout: 120_000 }, async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), "beautidraw-build-annotation-"));
+  const output = join(tempRoot, "out");
+  const spec = JSON.parse(await readFile(claudeSpecPath, "utf8"));
+  const firstCanvas = spec.bands.find((band) => band.visual?.callouts?.length);
+  firstCanvas.visual.annotation = "A short handwritten annotation survives composition.";
+  firstCanvas.visual.annotations = [{ text: "A second annotation remains ordered." }];
+  firstCanvas.visual.callouts[0].note = "This authored label is intentionally long enough to prove that composition preserves every word without character-count ellipsis.";
+  await cp(join(dirname(claudeSpecPath), "assets"), join(tempRoot, "assets"), { recursive: true });
+  const specPath = join(tempRoot, "annotated.json");
+  await writeFile(specPath, JSON.stringify(spec));
+  const result = spawnSync(process.execPath, [resolve(root, "scripts/build-deck.mjs"), specPath, output], {
+    cwd: root,
+    encoding: "utf8",
+    timeout: 110_000,
+  });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const deck = JSON.parse(await readFile(join(output, "deck.excalidraw"), "utf8"));
+  const composed = deck.elements.filter((element) => element.customData?.beautidrawComposition === true);
+  const annotations = composed.filter((element) => element.type === "text" && element.role === "handwritten");
+  assert.ok(annotations.some((element) => element.text.includes("A short handwritten annotation")));
+  assert.ok(annotations.some((element) => element.text.includes("A second annotation remains ordered")));
+  assert.ok(composed.some((element) => element.type === "text" && element.text.includes("without character-count ellipsis")));
 });
 
 test("a missing final artifact preserves the previous output", { timeout: 120_000 }, async () => {

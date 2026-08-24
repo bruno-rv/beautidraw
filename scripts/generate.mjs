@@ -16,6 +16,8 @@ import { CliError, runCli, sanitizeDiagnosticPayload } from "./cli.mjs";
 import { preflightDeck, readJsonInput } from "./preflight.mjs";
 import {
   BAND_HEIGHT_CAP,
+  BOUND_TEXT_PADDING,
+  FONT,
   FONT_NAME,
   PAGE_WIDTH,
   PAGE_X,
@@ -269,6 +271,40 @@ function checkBoundElementsIsArray(elements) {
   return failures;
 }
 
+function checkRoleFontFamilies(elements) {
+  const failures = [];
+  const expected = { prose: FONT.prose, mono: FONT.mono, handwritten: FONT.handwritten };
+  for (const element of elements) {
+    if (!element.role || element.type !== "text") continue;
+    if (!Object.hasOwn(expected, element.role)) {
+      failures.push(`element "${element.id}": unsupported text role "${element.role}"`);
+    } else if (element.fontFamily !== expected[element.role]) {
+      failures.push(`element "${element.id}": role "${element.role}" requires fontFamily ${expected[element.role]}, got ${element.fontFamily}`);
+    }
+  }
+  return failures;
+}
+
+function checkMeasuredGeometry(elements) {
+  const failures = [];
+  const byId = new Map(elements.map((element) => [element.id, element]));
+  for (const container of elements.filter((element) => element.customData?.beautidrawAutoSize === true)) {
+    const labelId = (container.boundElements ?? []).find((binding) => binding.type === "text")?.id;
+    const label = labelId ? byId.get(labelId) : null;
+    if (!label) {
+      failures.push(`element "${container.id}": converter-sized container is missing its bound label`);
+      continue;
+    }
+    if (container.width + 0.5 < label.width + 2 * BOUND_TEXT_PADDING) {
+      failures.push(`element "${container.id}": converted label width exceeds measured container bounds`);
+    }
+    if (container.height + 0.5 < label.height + 2 * BOUND_TEXT_PADDING) {
+      failures.push(`element "${container.id}": converted label height exceeds measured container bounds`);
+    }
+  }
+  return failures;
+}
+
 // Contrast — not one of the six enumerated bullets, but the contract's
 // "Contrast" section says to assert rather than assume, so this runs too.
 function relativeLuminance(hex) {
@@ -318,6 +354,8 @@ function runValidations(elements, diagnostics) {
     ...checkOverview(elements, diagnostics),
     ...checkBoundRolesResolved(elements),
     ...checkBoundElementsIsArray(elements),
+    ...checkRoleFontFamilies(elements),
+    ...checkMeasuredGeometry(elements),
     ...checkContrast(elements),
   ];
 }

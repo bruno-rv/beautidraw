@@ -10,9 +10,10 @@ import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { BODY_INSET, FONT, PAGE_WIDTH, fontForRole } from "./layout.mjs";
+import { BODY_INSET, PAGE_WIDTH, fontForRole } from "./layout.mjs";
 import { CliError, runCli } from "./cli.mjs";
-import { preflightDeck, readJsonInput } from "./preflight.mjs";
+import { normalizeAnnotations } from "./outline.mjs";
+import { preflightDeck, readJsonInput, resolveAssetWithinRoot } from "./preflight.mjs";
 
 const exec = promisify(execFile);
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -62,38 +63,6 @@ function clean(value, fallback) {
   return text || fallback;
 }
 
-function wrapText(value, maxChars = 28, maxLines = 3) {
-  // Authorial newlines are structure — a node's label and its note are two
-  // thoughts, not one phrase. Wrap each authored line independently, then
-  // apply maxLines across the combined result.
-  const segments = clean(value, "").split("\n");
-  const lines = [];
-  for (const segment of segments) {
-    const words = segment.split(/\s+/).filter(Boolean);
-    let current = "";
-    for (const word of words) {
-      const next = current ? `${current} ${word}` : word;
-      if (next.length > maxChars && current) {
-        lines.push(current);
-        current = word;
-      } else {
-        current = next;
-      }
-    }
-    if (current) lines.push(current);
-  }
-  if (lines.length <= maxLines) return lines.join("\n");
-  const kept = lines.slice(0, maxLines);
-  kept[maxLines - 1] = `${kept[maxLines - 1].replace(/[.,;:]?$/, "")}…`;
-  return kept.join("\n");
-}
-
-// Same greedy wrap, never ellipsizes. Reserved: inspection commands must
-// survive rendering typeable, and the audit enforces that at the gate by
-// capping visual.inspect to what the composer's two rendered lines hold
-// (~14 words). Keeping the two-line cap here is deliberate — an unbounded
-// command block overflows the frame bottom on shorter canvas bands.
-
 function normalizeNode(node, index) {
   if (typeof node === "string") return { label: node, note: "" };
   return {
@@ -123,23 +92,13 @@ function text(id, x, y, value, fontSize, strokeColor, role = "prose", customData
     fontFamily: fontForRole(role).family,
     role,
     strokeColor,
-    customData: { ...customData, beautidrawRole: role },
+    customData: { ...customData, beautidrawRole: role, beautidrawMeasuredText: true },
   };
-}
-
-// Wrap width derived from the shape's OWN box: normalized width × body
-// width ÷ ~0.5×fontSize px-per-character (the prose face's measured average),
-// minus slack for Excalidraw's bound-text padding. The old fixed 28-character
-// default both fused label+note lines and ellipsized callout notes that
-// visibly fit their boxes.
-const BODY_W = PAGE_WIDTH - 2 * BODY_INSET;
-
-function fitChars(width, fontSize) {
-  return Math.max(12, Math.floor((width * BODY_W) / (fontSize * 0.5)) - 6);
 }
 
 function shape(id, type, x, y, width, height, value, colors, fontSize = 23, customData = {}) {
   const role = "prose";
+  const font = fontForRole(role);
   return {
     id,
     type,
@@ -151,9 +110,9 @@ function shape(id, type, x, y, width, height, value, colors, fontSize = 23, cust
     backgroundColor: colors.fill,
     strokeWidth: customData.semanticKind ? 3 : undefined,
     role,
-    customData: { beautidrawRole: role, ...customData },
+    customData: { beautidrawRole: role, beautidrawAutoSize: true, ...customData },
     ...(type === "line" || type === "arrow" ? { points: [[0, 0.5], [1, 0.5]] } : {}),
-    label: { text: wrapText(value, fitChars(width, fontSize)), fontSize, fontFamily: FONT.prose, role, strokeColor: colors.text },
+    label: { text: value, fontSize, fontFamily: font.family, role, strokeColor: colors.text },
   };
 }
 
@@ -179,19 +138,9 @@ function line(id, x, y, width, height, points, strokeColor = "#94a3b8") {
   return { id, type: "line", x, y, width, height, points, strokeColor, strokeWidth: 3 };
 }
 
-// The model may write `visual.thesis`: a one-line statement of what the
-// audience should see. The composer renders it as the frame's opening line;
-// without one it skips the line entirely rather than filling the space with
-// boilerplate that carries zero information about THIS deck's content.
-// One rendered line, hard cap: every family places its first shapes at or
-// below y≈0.16 on the left half, and a wrapped second line would collide
-// with them (field's y-axis label sits near that line). 120 characters is
-// the largest single line the body width carries at fontSize 23 with margin;
-// the audit holds visual.thesis to ≤18 words (~120 characters) so the two
-// caps agree and neither ever ellipsizes.
 function thesisLine(meta) {
   return meta.thesis
-    ? [text("thesis", 0.05, 0.04, wrapText(meta.thesis, 120, 1), 23, meta.dark ? darkText : lightText)]
+    ? [text("thesis", 0.05, 0.04, meta.thesis, 23, meta.dark ? darkText : lightText)]
     : [];
 }
 
@@ -222,6 +171,7 @@ function metaForBand(band, index) {
     tradeoff: clean(visual.tradeoff, ""),
     example: clean(visual.example, ""),
     inspect: clean(visual.inspect, ""),
+    annotations: normalizeAnnotations(visual.annotation).concat(normalizeAnnotations(visual.annotations)),
     image: visual.image ?? null,
     bandHeight: band.height,
     nodes,
@@ -232,6 +182,19 @@ function metaForBand(band, index) {
     axisX: clean(visual.axisX, "specificity →"),
     axisY: clean(visual.axisY, "blast radius ↑"),
   };
+}
+
+function annotationElements(meta, { x = 0.05, y = 0.66, maxWidth } = {}) {
+  return meta.annotations.map((annotation, index) => text(
+    `annotation-${index + 1}`,
+    Number.isFinite(annotation.x) ? annotation.x : x,
+    Number.isFinite(annotation.y) ? annotation.y : y + index * 0.04,
+    annotation.text,
+    18,
+    meta.dark ? darkText : lightText,
+    "handwritten",
+    { beautidrawAnnotation: true, ...(maxWidth ? { beautidrawMaxWidth: maxWidth } : {}) },
+  ));
 }
 
 function semanticIcon(kind, { id, x, y, size, label, strokeColor = "#475569", labelColor = strokeColor }) {
@@ -301,21 +264,15 @@ function semanticCalloutShape(id, callout, x, y, width, height, colors, fontSize
 
 function finish(meta, elements, extra = {}) {
   const textColor = meta.dark ? darkText : "#475569";
-  // One evidence item, not two: the footer is a summary, and the second
-  // citation was the line that pushed most bands past the six-line budget
-  // into ellipsis. The spec keeps both; the frame shows the strongest.
   const depthParts = [
     meta.explanation,
     meta.example ? `Example: ${meta.example}` : "",
     meta.tradeoff ? `Boundary: ${meta.tradeoff}` : "",
-    ...meta.evidence.slice(0, 1).map((item) => `Evidence: ${item}`),
+    ...meta.evidence.map((item) => `Evidence: ${item}`),
   ].filter(Boolean);
-  // Six lines × ~105 characters — the footprint every family's shape zones
-  // are laid out around, and the capacity the audit's 560-character footer
-  // gate is tuned to. Truncation past this is blocked at the gate, so an
-  // ellipsis here means the spec was never audited.
-  elements.push(text("explanation", 0.05, 0.73, wrapText(depthParts.join("  •  "), 105, 6), 18, textColor, "prose"));
-  if (meta.inspect) elements.push(text("inspect", 0.58, 0.91, wrapText(`Inspect: ${meta.inspect}`, 50, 2), 18, textColor, "mono"));
+  elements.push(...annotationElements(meta));
+  elements.push(text("explanation", 0.05, 0.78, depthParts.join("  •  "), 18, textColor, "prose", { beautidrawMaxWidth: 0.48 }));
+  if (meta.inspect) elements.push(text("inspect", 0.58, 0.94, `Inspect: ${meta.inspect}`, 18, textColor, "mono"));
   return {
     lane: sequentialFamilies.has(meta.family) || meta.family === "matrix" ? "hybrid" : "composed",
     surfaceColor: meta.dark ? darkSurface : lightSurface,
@@ -450,8 +407,8 @@ function threshold(meta) {
   elements.push(shape("left-zone", "ellipse", 0.08, 0.32, 0.22, 0.18, meta.left, leftColors, 21));
   elements.push(shape("threshold", "diamond", 0.40, 0.39, 0.20, 0.22, meta.middle, centerColors, 24));
   elements.push(shape("right-zone", "ellipse", 0.70, 0.32, 0.22, 0.18, meta.right, rightColors, 21));
-  elements.push(text("threshold-left", 0.08, 0.62, wrapText(meta.nodes[0]?.note ?? "", 30, 2), 18, textColor));
-  elements.push(text("threshold-right", 0.70, 0.62, wrapText(meta.nodes[2]?.note ?? "", 30, 2), 18, textColor));
+  elements.push(text("threshold-left", 0.08, 0.62, meta.nodes[0]?.note ?? "", 18, textColor));
+  elements.push(text("threshold-right", 0.70, 0.62, meta.nodes[2]?.note ?? "", 18, textColor));
   return finish(meta, elements);
 }
 
@@ -480,8 +437,9 @@ async function illustration(meta) {
   const textColor = meta.dark ? darkText : lightText;
   const mutedText = meta.dark ? "#cbd5e1" : "#475569";
   const elements = [
-    text("thesis", textX, 0.08, wrapText(meta.focus, 42, 3), 29, textColor, "prose"),
+    text("thesis", textX, 0.08, meta.focus, 29, textColor, "prose", { beautidrawMaxWidth: 0.39 }),
   ];
+  elements.push(...annotationElements(meta, { x: textX, y: 0.55, maxWidth: 0.39 }));
   callouts.slice(0, 2).forEach((callout, index) => {
     const colors = colorFor(meta, index + 1, meta.dark);
     if (meta.dark) colors.fill = colors.dark;
@@ -503,11 +461,8 @@ async function illustration(meta) {
     meta.tradeoff ? `Boundary: ${meta.tradeoff}` : "",
     meta.evidence[0] ? `Evidence: ${meta.evidence[0]}` : "",
   ].filter(Boolean);
-  // Ten lines is the illustration family's own proven footprint (the image
-  // occupies the left half, so the text column has room no other family has).
-  // The audit's ~90-word cap keeps this under the truncation line.
-  elements.push(text("explanation", textX, 0.64, wrapText(depthParts.join("  •  "), 60, 10), 18, mutedText, "prose"));
-  if (meta.inspect) elements.push(text("inspect", textX, 0.56, wrapText(`Inspect: ${meta.inspect}`, 60, 2), 18, mutedText, "mono"));
+  elements.push(text("explanation", textX, 0.78, depthParts.join("  •  "), 18, mutedText, "prose", { beautidrawMaxWidth: 0.39 }));
+  if (meta.inspect) elements.push(text("inspect", textX, 0.70, `Inspect: ${meta.inspect}`, 18, mutedText, "mono", { beautidrawMaxWidth: 0.39 }));
   return {
     lane: "composed",
     surfaceColor: meta.dark ? darkSurface : lightSurface,
@@ -631,7 +586,9 @@ function matrix(meta) {
 async function buildComposition(band, index) {
   const meta = metaForBand(band, index);
   if (meta.family === "illustration") {
-    const source = resolve(specDir, meta.image.file);
+    const source = await resolveAssetWithinRoot(specDir, meta.image.file, {
+      label: `band ${index} image file`,
+    });
     const stagedRelative = `__build-assets/band-${index}-${basename(meta.image.file)}`;
     const staged = resolve(outDir, stagedRelative);
     await mkdir(dirname(staged), { recursive: true });

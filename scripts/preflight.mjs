@@ -1,4 +1,4 @@
-import { access, readFile } from "node:fs/promises";
+import { access, readFile, realpath } from "node:fs/promises";
 import { constants } from "node:fs";
 import { isAbsolute, relative, resolve, dirname } from "node:path";
 
@@ -43,6 +43,31 @@ function failure(field, reason, { specPath, recovery } = {}) {
 
 function isObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isWithin(root, candidate) {
+  const remainder = relative(root, candidate);
+  return remainder === "" || (!remainder.startsWith("..") && !isAbsolute(remainder));
+}
+
+// Resolve before every asset read/copy. Lexical containment alone lets a
+// symlink in the deck root point outside it; realpath containment closes that
+// direct and indirect escape while still allowing an ordinary in-root file
+// (and an in-root symlink whose target remains in-root).
+export async function resolveAssetWithinRoot(root, candidate, { label = "asset" } = {}) {
+  if (typeof candidate !== "string" || candidate.trim() === "") {
+    throw new Error(`${label} path is required`);
+  }
+  if (isAbsolute(candidate) || /^[A-Za-z]:[\\/]/.test(candidate) || candidate.split(/[\\/]/).includes("..")) {
+    throw new Error(`${label} must be a deck-relative path`);
+  }
+  const rootReal = await realpath(resolve(root));
+  const lexical = resolve(rootReal, candidate);
+  const assetReal = await realpath(lexical);
+  if (!isWithin(rootReal, assetReal)) {
+    throw new Error(`${label} resolves outside the deck root via a symlink`);
+  }
+  return assetReal;
 }
 
 export async function readJsonInput(path, { label = "JSON input" } = {}) {
@@ -216,10 +241,8 @@ async function collectAssetFailures(spec, { specPath, specDir } = {}) {
     const image = band?.visual?.image;
     if (!image || typeof image.file !== "string" || image.file.trim() === "") continue;
     const field = `bands[${index}].visual.image.file`;
-    const file = resolve(root, image.file);
-    const rel = relative(root, file);
-    if (isAbsolute(image.file) || rel === ".." || rel.startsWith(`..${"/"}`)) continue;
     try {
+      const file = await resolveAssetWithinRoot(root, image.file, { label: field });
       await access(file, constants.R_OK);
       const bytes = await readFile(file);
       if (bytes.length < 33 || bytes.subarray(0, 8).toString("hex") !== PNG_SIGNATURE) {

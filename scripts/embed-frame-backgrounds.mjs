@@ -10,6 +10,7 @@ import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { withHarness } from "./harness-runner.mjs";
+import { resolveAssetWithinRoot } from "./preflight.mjs";
 
 function usage() {
   console.error("usage: node scripts/embed-frame-backgrounds.mjs <deck.excalidraw> <manifest.json>");
@@ -52,7 +53,7 @@ for (let i = 0; i < manifest.assets.length; i++) {
     throw new Error(`asset ${i + 1} targets ${asset.frameId}, but frame order has ${frame.id}`);
   }
 
-  const filePath = resolve(manifestDir, asset.file);
+  const filePath = await resolveAssetWithinRoot(manifestDir, asset.file, { label: `manifest asset ${i + 1}` });
   const bytes = await readFile(filePath);
   const digest = sha1(bytes);
   if (digest !== asset.sha1) {

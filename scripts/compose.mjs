@@ -11,9 +11,9 @@
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, normalize, resolve } from "node:path";
-import { BODY_INSET, DECK_BODY_GAP, FRAME_PAD_BOTTOM, PAGE_WIDTH, USABLE_H, USABLE_W } from "./layout.mjs";
+import { BODY_INSET, BOUND_TEXT_PADDING, DECK_BODY_GAP, FRAME_PAD_BOTTOM, FONT, PAGE_WIDTH, USABLE_H, USABLE_W } from "./layout.mjs";
 import { runCli } from "./cli.mjs";
-import { readJsonInput } from "./preflight.mjs";
+import { readJsonInput, resolveAssetWithinRoot } from "./preflight.mjs";
 
 const usage = "usage: node scripts/compose.mjs <deck.excalidraw> <composition-spec.json> <outdir>\n       embeds composed canvas frames into a generated deck and rerenders it.";
 const status = await runCli("compose", async ({ values }) => {
@@ -138,7 +138,9 @@ for (const entry of spec.bands) {
   if (entry.image) {
     const image = entry.image;
     const imageFile = portablePath(image.file, `band ${entry.band} image file`);
-    const imagePath = resolve(compositionDir, imageFile);
+    const imagePath = await resolveAssetWithinRoot(compositionDir, imageFile, {
+      label: `band ${entry.band} image file`,
+    });
     const bytes = await readFile(imagePath);
     const pngSignature = bytes.subarray(0, 8).toString("hex");
     if (pngSignature !== "89504e470d0a1a0a") throw new Error(`${image.file}: only PNG assets are supported`);
@@ -294,10 +296,131 @@ const result = await withHarness(async ({ page }) =>
   page.evaluate(
     async ({ deck, prepared, files, validationConfig }) => {
       const api = window.__bdApi;
+      const roleFontFamily = validationConfig.fontFamily;
+      const sizeFromConvertedBounds = (item) => item.skeletons.map((skeleton) => {
+        if (skeleton.type === "text" && skeleton.customData?.beautidrawMeasuredText) {
+          const role = skeleton.role ?? "prose";
+          const fontFamily = roleFontFamily[role] ?? roleFontFamily.prose;
+          const [measured] = api.convertToExcalidrawElements([{
+            id: `${skeleton.id}-measurement`,
+            type: "text",
+            x: 0,
+            y: 0,
+            text: skeleton.text,
+            fontSize: skeleton.fontSize,
+            fontFamily,
+            role,
+          }], { regenerateIds: false });
+          const x = skeleton.x;
+          const y = skeleton.y;
+          const availableWidth = Math.min(
+            item.body.x + item.body.width - x,
+            Number.isFinite(skeleton.customData?.beautidrawMaxWidth)
+              ? skeleton.customData.beautidrawMaxWidth * item.body.width
+              : Number.POSITIVE_INFINITY,
+          );
+          if (measured.width <= availableWidth + 0.5) {
+            return { ...skeleton, width: measured.width, height: measured.height, role, fontFamily };
+          }
+          if (availableWidth <= 2 * validationConfig.boundTextPadding) {
+            throw new Error(`${skeleton.id}: converter-derived text has no available body width; shorten or reposition the authored text`);
+          }
+          const width = availableWidth;
+          const [wrappedContainer] = api.convertToExcalidrawElements([{
+            id: `${skeleton.id}-container-measurement`,
+            type: "rectangle",
+            x: 0,
+            y: 0,
+            width,
+            strokeColor: "transparent",
+            backgroundColor: "transparent",
+            strokeWidth: 0,
+            roughness: 0,
+            label: {
+              text: skeleton.text,
+              fontSize: skeleton.fontSize,
+              fontFamily,
+              role,
+              strokeColor: skeleton.strokeColor,
+              roughness: 0,
+            },
+          }], { regenerateIds: false });
+          const height = wrappedContainer.height;
+          if (y + height > item.body.y + item.body.height + 0.5) {
+            throw new Error(`${skeleton.id}: converter-derived text bounds exceed the composition body; shorten or reposition the authored text`);
+          }
+          return {
+            id: skeleton.id,
+            type: "rectangle",
+            x,
+            y,
+            width,
+            height,
+            strokeColor: "transparent",
+            backgroundColor: "transparent",
+            strokeWidth: 0,
+            roughness: 0,
+            role,
+            customData: { ...(skeleton.customData ?? {}), beautidrawTextContainer: true },
+            label: {
+              text: skeleton.text,
+              fontSize: skeleton.fontSize,
+              fontFamily,
+              role,
+              strokeColor: skeleton.strokeColor,
+              roughness: 0,
+            },
+          };
+        }
+        if (!skeleton.customData?.beautidrawAutoSize || !skeleton.label) return skeleton;
+        const role = skeleton.label.role ?? skeleton.role ?? "prose";
+        const fontFamily = roleFontFamily[role] ?? roleFontFamily.prose;
+        const [measured] = api.convertToExcalidrawElements([{
+          id: `${skeleton.id}-measurement`,
+          type: "text",
+          x: 0,
+          y: 0,
+          text: skeleton.label.text,
+          fontSize: skeleton.label.fontSize,
+          fontFamily,
+          role,
+        }], { regenerateIds: false });
+        const x = skeleton.x;
+        const y = skeleton.y;
+        const availableWidth = Math.min(
+          item.body.x + item.body.width - x,
+          Number.isFinite(skeleton.width) ? skeleton.width : Number.POSITIVE_INFINITY,
+        );
+        const width = Math.min(
+          Math.max(measured.width + 2 * validationConfig.boundTextPadding, skeleton.width),
+          availableWidth,
+        );
+        const [wrapped] = api.convertToExcalidrawElements([{
+          id: `${skeleton.id}-container-measurement`,
+          type: "rectangle",
+          x: 0,
+          y: 0,
+          width,
+          label: { ...skeleton.label, role, fontFamily },
+        }], { regenerateIds: false });
+        const height = wrapped.height;
+        if (y + height > item.body.y + item.body.height + 0.5) {
+          throw new Error(`${skeleton.id}: converter-derived label bounds exceed the composition body (y=${y.toFixed(1)}, height=${height.toFixed(1)}, bodyBottom=${(item.body.y + item.body.height).toFixed(1)}); shorten or reposition the authored text`);
+        }
+        return {
+          ...skeleton,
+          width,
+          height,
+          role,
+          fontFamily,
+          label: { ...skeleton.label, role, fontFamily },
+        };
+      });
       const byFrame = new Map();
       for (const item of prepared) {
+        const skeletons = sizeFromConvertedBounds(item);
         const converted = api
-          .convertToExcalidrawElements(item.skeletons, { regenerateIds: false })
+          .convertToExcalidrawElements(skeletons, { regenerateIds: false })
           .map((element) => ({
             ...element,
             frameId: item.body.frameId,
@@ -333,7 +456,6 @@ const result = await withHarness(async ({ page }) =>
           .filter((element) => element.role || element.customData?.beautidrawRole)
           .map((element) => [element.id, element.role ?? element.customData.beautidrawRole]),
       );
-      const roleFontFamily = { prose: 6, mono: 3, handwritten: 5 };
       const restored = api.restoreElements(output, null).map((element) => {
         const role = element.role ?? element.customData?.beautidrawRole ?? roleById.get(element.id) ?? roleById.get(element.containerId);
         if (!role) return { ...element, boundElements: element.boundElements ?? [] };
@@ -363,6 +485,29 @@ const result = await withHarness(async ({ page }) =>
         );
         if (!label || label.type !== "text" || typeof label.text !== "string" || label.text.trim() === "") {
           failures.push(`${icon.id}: semantic icon must have a visible label`);
+        }
+      }
+
+      for (const element of restored) {
+        if (element.customData?.beautidrawComposition !== true || element.type !== "text") continue;
+        const expectedFamily = roleFontFamily[element.role];
+        if (!expectedFamily) failures.push(`${element.id}: unsupported text role "${element.role}"`);
+        else if (element.fontFamily !== expectedFamily) {
+          failures.push(`${element.id}: role "${element.role}" requires fontFamily ${expectedFamily}, got ${element.fontFamily}`);
+        }
+      }
+      for (const container of restored.filter((element) => element.customData?.beautidrawAutoSize === true)) {
+        const labelId = (container.boundElements ?? []).find((binding) => binding.type === "text")?.id;
+        const label = labelId ? elementById.get(labelId) : null;
+        if (!label) {
+          failures.push(`${container.id}: converter-sized container is missing its bound label`);
+          continue;
+        }
+        if (container.width + 0.5 < label.width + 2 * validationConfig.boundTextPadding) {
+          failures.push(`${container.id}: converted label width exceeds measured container bounds`);
+        }
+        if (container.height + 0.5 < label.height + 2 * validationConfig.boundTextPadding) {
+          failures.push(`${container.id}: converted label height exceeds measured container bounds`);
         }
       }
 
@@ -490,7 +635,13 @@ const result = await withHarness(async ({ page }) =>
       deck,
       prepared,
       files,
-      validationConfig: { pageWidth: PAGE_WIDTH, usableWidth: USABLE_W, usableHeight: USABLE_H },
+      validationConfig: {
+        pageWidth: PAGE_WIDTH,
+        usableWidth: USABLE_W,
+        usableHeight: USABLE_H,
+        boundTextPadding: BOUND_TEXT_PADDING,
+        fontFamily: { prose: FONT.prose, mono: FONT.mono, handwritten: FONT.handwritten },
+      },
     },
   ),
 );

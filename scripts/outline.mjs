@@ -13,7 +13,11 @@ const PATH_RE = /(?:^|[\s(])((?:\.{0,2}\/)?(?:[A-Za-z0-9_.~-]+\/)+[A-Za-z0-9_.~:
 const FILE_URL_RE = /\bfile:\/\//i;
 const WINDOWS_PATH_RE = /\b[A-Za-z]:[\\/][^\s`<>\])},;!?]+/;
 const UNC_PATH_RE = /\\{2,}[^\\/\s]+[\\/]+[^\\/\s]+(?:[\\/]+[^\\/\s]+)*/;
-const POSIX_PATH_RE = /(?<![A-Za-z0-9_.~-])\/(?:[A-Za-z0-9_.~-]+\/)+[A-Za-z0-9_.~:-]+/;
+const POSIX_PATH_RE = /(?<![A-Za-z0-9_.~-])\/[A-Za-z0-9_.~-]+(?:\/[A-Za-z0-9_.~:-]+)*/g;
+const POSIX_SINGLETON_ROOTS = new Set([
+  "etc", "tmp", "private", "var", "usr", "home", "users", "system", "opt", "bin", "sbin", "dev", "proc",
+  "root", "volumes", "applications", "library", "network", "cores", "run", "srv", "data",
+]);
 
 function hasAbsolutePath(value) {
   const source = String(value ?? "");
@@ -21,7 +25,15 @@ function hasAbsolutePath(value) {
   // Strip ordinary web URLs before checking slash-prefixed tokens: a URL path
   // is not a local filesystem path, while a file:// URL is explicitly unsafe.
   const withoutWebUrls = source.replace(/https?:\/\/[^\s)]+/gi, "");
-  return POSIX_PATH_RE.test(withoutWebUrls);
+  POSIX_PATH_RE.lastIndex = 0;
+  for (const match of withoutWebUrls.matchAll(POSIX_PATH_RE)) {
+    if (match.index > 0 && withoutWebUrls[match.index - 1] === "~") continue;
+    const candidate = match[0].replace(/[.,;:!?)}\]]+$/, "");
+    const segments = candidate.slice(1).split("/");
+    if (segments.length === 1 && !POSIX_SINGLETON_ROOTS.has(segments[0].toLowerCase())) continue;
+    return true;
+  }
+  return false;
 }
 
 function text(value, where) {
@@ -50,9 +62,10 @@ function escapeMarkdown(value) {
 }
 
 function codeToken(token) {
-  const value = token.trim();
+  // Delimiters are always ours. Strip authored delimiters/newlines before
+  // creating a code span so a value cannot inject a fence or a heading.
+  const value = String(token).replace(/[`\r\n]/g, "").trim();
   if (!value) return value;
-  if (value.startsWith("`") && value.endsWith("`")) return value;
   return `\`${value}\``;
 }
 
@@ -67,9 +80,9 @@ function formatInline(value, { inspection = false } = {}) {
     return marker;
   };
 
-  // Preserve author-provided inline/fenced code exactly, while still allowing
-  // links and paths in surrounding prose to receive their own treatment.
-  source = source.replace(/`[^`]+`/g, (match) => protect(match));
+  // Author-provided backticks are delimiters, not trusted structure. Remove
+  // them and regenerate only the code spans this formatter owns below.
+  source = source.replace(/`/g, "");
   source = source.replace(URL_RE, (url) => {
     const cleanUrl = url.replace(/[.,;:!?]+$/, "");
     const trailing = url.slice(cleanUrl.length);
@@ -101,6 +114,33 @@ function normalizeCallout(callout, index) {
   return { kind, label, note: note === "" ? "" : text(note, `callout ${index + 1} note`) };
 }
 
+function normalizeAnnotation(annotation, index) {
+  if (typeof annotation === "string") {
+    return { text: text(annotation, `annotation ${index + 1}`) };
+  }
+  if (!annotation || typeof annotation !== "object" || Array.isArray(annotation)) {
+    throw new Error(`annotation ${index + 1} must be a string or an object with text`);
+  }
+  const value = annotation.text;
+  return {
+    ...annotation,
+    text: text(value, `annotation ${index + 1} text`),
+  };
+}
+
+export function normalizeAnnotations(value) {
+  if (value == null) return [];
+  const values = Array.isArray(value) ? value : [value];
+  return values.map(normalizeAnnotation);
+}
+
+function annotationsFor(visual = {}) {
+  return [
+    ...normalizeAnnotations(visual.annotation),
+    ...normalizeAnnotations(visual.annotations),
+  ];
+}
+
 export function validateSemanticVisuals(visual = {}) {
   if (!visual || typeof visual !== "object" || Array.isArray(visual)) {
     throw new Error("visual must be an object");
@@ -109,6 +149,7 @@ export function validateSemanticVisuals(visual = {}) {
     if (!Array.isArray(visual.callouts)) throw new Error("visual.callouts must be an array");
     visual.callouts.map(normalizeCallout);
   }
+  annotationsFor(visual);
   if (visual.image !== undefined) {
     if (!visual.image || typeof visual.image !== "object" || Array.isArray(visual.image)) {
       throw new Error("visual.image must be an object");
@@ -227,6 +268,11 @@ export function buildOutline(spec, { frameNames = [], compositionManifest = {} }
         const kindLabel = callout.kind[0].toUpperCase() + callout.kind.slice(1);
         lines.push(`- **${kindLabel}: ${formatInline(callout.label)}**${callout.note ? ` — ${formatInline(callout.note)}` : ""}`);
       }
+    }
+    const annotations = annotationsFor(visual);
+    if (annotations.length) {
+      lines.push("", "**Annotations:**");
+      for (const annotation of annotations) lines.push(`- ${formatInline(annotation.text)}`);
     }
     if (visual.image) {
       const imagePath = portablePath(visual.image.file, `bands[${index}].visual.image.file`);

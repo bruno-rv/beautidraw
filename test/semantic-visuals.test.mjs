@@ -13,9 +13,11 @@ import {
 } from "../scripts/layout.mjs";
 import {
   normalizeCallout,
+  normalizeAnnotations,
   SEMANTIC_KINDS,
   validateSemanticVisuals,
 } from "../scripts/outline.mjs";
+import { preflightDeck } from "../scripts/preflight.mjs";
 
 test("mono, handwritten, and prose roles route to their declared fonts", () => {
   assert.deepEqual(fontForRole("mono"), { family: FONT.mono, name: FONT_NAME.mono });
@@ -67,12 +69,22 @@ test("font requirements include canvas prose, mono, and handwritten corpora", ()
         explanation: "A paragraph",
         inspect: "node scripts/build-deck.mjs /context",
         annotation: "Short note",
+        annotations: [{ text: "Second note" }],
       },
     }],
   });
   assert.ok(requirements.some((item) => item.role === "prose" && [...new Set("Focus")].every((character) => item.chars.includes(character))));
   assert.ok(requirements.some((item) => item.role === "mono" && item.family === FONT_NAME.mono && [...new Set("/context")].every((character) => item.chars.includes(character))));
   assert.ok(requirements.some((item) => item.role === "handwritten" && item.family === FONT_NAME.handwritten));
+});
+
+test("annotation and annotations normalize to ordered handwritten text descriptors", () => {
+  assert.deepEqual(normalizeAnnotations("First note"), [{ text: "First note" }]);
+  assert.deepEqual(normalizeAnnotations(["Second note", { text: "Third note", x: 0.5 }]), [
+    { text: "Second note" },
+    { text: "Third note", x: 0.5 },
+  ]);
+  assert.throws(() => normalizeAnnotations([{ label: "missing text" }]), /annotation.*text/i);
 });
 
 test("compose rejects traversal before reading an outside image", async () => {
@@ -113,4 +125,79 @@ test("compose rejects traversal before reading an outside image", async () => {
   });
   assert.notEqual(result.status, 0);
   assert.match(`${result.stdout}${result.stderr}`, /deck-relative|portable|outside|traversal/i);
+});
+
+test("compose rejects an escaping image symlink before reading it", async () => {
+  const root = await mkdtemp(join(tmpdir(), "beautidraw-compose-symlink-"));
+  const compositionDir = join(root, "composition");
+  const deckDir = join(root, "deck");
+  await mkdir(compositionDir);
+  await mkdir(deckDir);
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
+  const outside = join(root, "outside.png");
+  await writeFile(outside, png);
+  const symlink = join(compositionDir, "linked.png");
+  await (await import("node:fs/promises")).symlink(outside, symlink);
+  await writeFile(join(deckDir, "deck.excalidraw"), JSON.stringify({
+    elements: [
+      { id: "b0-deck", type: "text", x: 80, y: 100, width: 100, height: 20 },
+      { id: "b0-frame", type: "frame", x: 0, y: 0, width: 2280, height: 620, children: [] },
+    ],
+    files: {},
+  }));
+  await writeFile(join(deckDir, "diagnostics.json"), JSON.stringify({ diagnostics: { bands: [{ index: 0, pattern: "canvas" }] } }));
+  await writeFile(join(compositionDir, "composition.json"), JSON.stringify({ bands: [{
+    band: 0,
+    lane: "composed",
+    surfaceColor: "#f8fafc",
+    image: {
+      file: "linked.png",
+      path: "assets/linked.png",
+      mode: "side",
+      use: "Use",
+      description: "Description",
+      x: 0,
+      y: 0,
+      width: 0.1,
+      height: 0.1,
+    },
+  }] }));
+  const result = spawnSync(process.execPath, [resolve(import.meta.dirname, "../scripts/compose.mjs"), join(deckDir, "deck.excalidraw"), join(compositionDir, "composition.json"), join(root, "out")], {
+    cwd: resolve(import.meta.dirname, ".."),
+    encoding: "utf8",
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(`${result.stdout}${result.stderr}`, /symlink|outside|realpath|contain/i);
+});
+
+test("preflight rejects an escaping semantic image symlink", async () => {
+  const root = await mkdtemp(join(tmpdir(), "beautidraw-preflight-symlink-"));
+  const outside = join(root, "outside.png");
+  const linked = join(root, "linked.png");
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
+  await writeFile(outside, png);
+  const deckRoot = join(root, "deck");
+  await mkdir(deckRoot);
+  await (await import("node:fs/promises")).symlink(outside, join(deckRoot, "linked.png"));
+  const result = await preflightDeck({
+    specPath: join(deckRoot, "spec.json"),
+    spec: {
+      title: "Title",
+      subtitle: "Subtitle",
+      footer: "Footer",
+      bands: [{
+        heading: "Canvas",
+        deck: "Deck",
+        pattern: "canvas",
+        accent: "blue",
+        height: 620,
+        visual: {
+          family: "illustration",
+          image: { file: "linked.png", use: "Use", description: "Description" },
+        },
+      }],
+    },
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.failures.map((failure) => failure.reason).join("\n"), /symlink|outside|realpath|contain|escape|readable/i);
 });
