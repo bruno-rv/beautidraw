@@ -193,6 +193,20 @@ test("Claude Code exemplar satisfies its mixed-media contract", { timeout: 300_0
       assert.match(result.error.reason, new RegExp(generatedBound.containerId));
     }
 
+    const missingSerializedRoles = structuredClone(deck);
+    const missingRoleText = missingSerializedRoles.elements.find((element) => element.id === generatedBound.id);
+    const missingRoleContainer = missingSerializedRoles.elements.find((element) => element.id === generatedBound.containerId);
+    delete missingRoleText.role;
+    delete missingRoleText.customData.beautidrawRole;
+    delete missingRoleContainer.role;
+    delete missingRoleContainer.customData.beautidrawRole;
+    const missingSerializedRoleResult = await withHarness(async ({ page }) =>
+      page.evaluate((scene) => window.__bdLoadScene(scene), missingSerializedRoles));
+    assert.equal(missingSerializedRoleResult.state, "error", "generated bound label missing every role source must fail fidelity");
+    assert.match(missingSerializedRoleResult.error.reason, /^Fidelity report failed/);
+    assert.match(missingSerializedRoleResult.error.reason, new RegExp(generatedBound.id));
+    assert.match(missingSerializedRoleResult.error.reason, new RegExp(generatedBound.containerId));
+
     const legacyLineHeight = structuredClone(deck);
     legacyLineHeight.elements.find((element) => element.id === generatedBound.id).lineHeight = 1.25;
     const legacyResult = await withHarness(async ({ page }) =>

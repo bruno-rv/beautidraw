@@ -593,7 +593,9 @@
             };
             const boundTextBinding = (container.boundElements ?? []).find((binding) => binding.type === "text" && binding.id === element.id);
             const duplicateLabel = container.label ?? null;
-            const hasRoleContract = [element.customData?.beautidrawRole, container.customData?.beautidrawRole]
+            const isGeneratedComposition = element.customData?.beautidrawComposition === true ||
+              container.customData?.beautidrawComposition === true;
+            const hasRoleContract = isGeneratedComposition || [element.customData?.beautidrawRole, container.customData?.beautidrawRole]
               .some((role) => role !== undefined);
             const expectedLineHeights = element.role === "mono" ? [1.2] : element.role === "handwritten" ? [1.25] : [1.25, 1.35];
             const lineHeightMismatch = Number.isFinite(element.lineHeight) && !expectedLineHeights.includes(element.lineHeight);
@@ -704,7 +706,9 @@
               const expected = member.customData?.beautidrawMeasuredBounds;
               const differs = (left, right) => ["x", "y", "width", "height"].some((field) => Math.abs(left[field] - right[field]) > tolerance);
               const ignoredTupleFields = new Set(measurement.ignoredTupleFields ?? []);
-              const generatedRoleContract = member.customData?.beautidrawRole !== undefined ||
+              const generatedRoleContract = member.customData?.beautidrawComposition === true ||
+                elementById.get(member.containerId)?.customData?.beautidrawComposition === true ||
+                member.customData?.beautidrawRole !== undefined ||
                 elementById.get(member.containerId)?.customData?.beautidrawRole !== undefined;
               const tupleDiffers = member.type === "text" && member.containerId && boundTupleFields.some((field) =>
                 !ignoredTupleFields.has(field) && (field !== "role" || generatedRoleContract) &&
