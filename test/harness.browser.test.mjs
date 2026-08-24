@@ -90,9 +90,15 @@ test("scene loading preserves restore, file, and fidelity failure classes", asyn
 
 test("scene loading exposes typed deadline, placeholder, stability, and fidelity failures", async () => {
   await withHarness(async ({ page }) => {
-    for (const mode of ["deadline", "decode", "placeholder", "stability"]) {
+    for (const [index, mode] of ["deadline", "decode", "placeholder", "stability"].entries()) {
+      const scene = structuredClone(deck);
+      const modeFileId = `typed-failure-${mode}-${index}`;
+      const modeImage = scene.elements.find((element) => element.id === "fidelity-image");
+      const modeFile = scene.files["9993ed1d2781fdafd876038e6be0a1162d377be1"];
+      modeImage.fileId = modeFileId;
+      scene.files = { [modeFileId]: { ...modeFile, id: modeFileId } };
       await page.evaluate((failureMode) => { window.__bdTestImageFailure = failureMode; }, mode);
-      const result = await page.evaluate((scene) => window.__bdLoadScene(scene), deck);
+      const result = await page.evaluate((nextScene) => window.__bdLoadScene(nextScene), scene);
       assert.equal(result.state, "error");
       assert.match(result.error.reason, mode === "stability" ? /stable/i : new RegExp(mode, "i"));
       assert.match(result.error.recovery, /embedded data URL|rendered image|stabil/i);
@@ -121,4 +127,30 @@ test("boot failure promotes loading state to a truthful recovery alert", async (
     assert.equal(await alert.isVisible(), true);
     assert.match(await alert.innerText(), /Editor boot failed.*Reload the harness/i);
   }, { allowBootFailure: true, failBoot: true });
+});
+
+test("repeated scene loads prune image observations and keep readiness scene-scoped", async () => {
+  await withHarness(async ({ page }) => {
+    const first = await page.evaluate((scene) => window.__bdLoadScene(scene), deck);
+    assert.equal(first.state, "ready");
+    assert.equal(await page.evaluate(() => window.__bdImageObservations.length), 0);
+
+    const invalid = structuredClone(deck);
+    invalid.files["9993ed1d2781fdafd876038e6be0a1162d377be1"].dataURL = "data:image/png;base64,invalid-scene-file";
+    const failed = await page.evaluate((scene) => window.__bdLoadScene(scene), invalid);
+    assert.equal(failed.state, "error");
+    assert.equal(await page.evaluate(() => window.__bdImageObservations.length), 0);
+
+    const secondScene = structuredClone(deck);
+    const secondFileId = "second-scene-file-id";
+    const secondImage = secondScene.elements.find((element) => element.id === "fidelity-image");
+    const secondFile = secondScene.files["9993ed1d2781fdafd876038e6be0a1162d377be1"];
+    secondImage.fileId = secondFileId;
+    secondScene.files = { [secondFileId]: { ...secondFile, id: secondFileId } };
+    const second = await page.evaluate((scene) => window.__bdLoadScene(scene), secondScene);
+    assert.equal(second.state, "ready");
+    assert.equal(await page.evaluate(() => window.__bdImageObservations.length), 0);
+    assert.ok(second.imageReadiness[0].sceneId > first.imageReadiness[0].sceneId);
+    assert.notEqual(second.imageReadiness[0].sceneId, first.imageReadiness[0].sceneId);
+  });
 });

@@ -76,7 +76,20 @@
       const NativeImage = window.Image;
       const imageObservations = [];
       const imageObservationWaiters = [];
+      let activeSceneId = 0;
       window.__bdImageObservations = imageObservations;
+
+      function clearImageObservations() {
+        for (const observation of imageObservations) observation.cleanup?.();
+        imageObservations.length = 0;
+        imageObservationWaiters.splice(0);
+      }
+
+      function beginScene() {
+        clearImageObservations();
+        activeSceneId += 1;
+        return activeSceneId;
+      }
 
       function harnessError(code, reason, recovery) {
         const error = new Error(reason);
@@ -109,6 +122,14 @@
           element: image,
           src: "",
           state: "pending",
+          sceneId: activeSceneId,
+        };
+        const onLoad = () => settle("load");
+        const onError = (event) => settle("error", event);
+        record.cleanup = () => {
+          image.removeEventListener("load", onLoad);
+          image.removeEventListener("error", onError);
+          record.element = null;
         };
         const settle = (state, error) => {
           if (record.state !== "pending") return;
@@ -116,13 +137,13 @@
           record.state = state;
           if (error) record.error = String(error.message || error);
           for (const waiter of [...imageObservationWaiters]) {
-            if (waiter.expected !== record.src) continue;
+            if (waiter.expected !== record.src || waiter.sceneId !== record.sceneId) continue;
             imageObservationWaiters.splice(imageObservationWaiters.indexOf(waiter), 1);
             waiter.resolve(record);
           }
         };
-        image.addEventListener("load", () => settle("load"), { once: true });
-        image.addEventListener("error", (event) => settle("error", event), { once: true });
+        image.addEventListener("load", onLoad, { once: true });
+        image.addEventListener("error", onError, { once: true });
         imageObservations.push(record);
         return record;
       }
@@ -142,15 +163,16 @@
         return element.customData?.beautidrawImageName || element.id || element.fileId || "image";
       }
 
-      function waitForObservation(expected, element, signal) {
+      function waitForObservation(expected, element, signal, sceneId) {
         return new Promise((resolve, reject) => {
-          const existing = imageObservations.find((candidate) => candidate.src === expected);
+          const existing = imageObservations.find((candidate) => candidate.sceneId === sceneId && candidate.src === expected);
           if (existing) {
             resolve(existing);
             return;
           }
           const waiter = {
             expected,
+            sceneId,
             resolve: (record) => {
               signal.removeEventListener("abort", onAbort);
               resolve(record);
@@ -207,7 +229,7 @@
           if (signal.aborted) return onAbort();
           signal.addEventListener("abort", onAbort, { once: true });
         });
-        const record = await Promise.race([waitForObservation(expected, element, signal), abort]);
+        const record = await Promise.race([waitForObservation(expected, element, signal, activeSceneId), abort]);
         if (record.state === "error") {
           throw harnessError(
             "IMAGE_ERROR",
@@ -447,6 +469,7 @@
       })();
 
       window.__bdLoadScene = async (scene) => {
+        beginScene();
         try {
           let elements;
           if (!Array.isArray(scene?.elements)) {
@@ -511,7 +534,7 @@
           }
           updateFrameNavigation(elements);
           setReady(frames.length);
-          return { state: "ready", missingImages: [], imageReadiness: imageReadiness.map(({ src, state }) => ({ src, state })), imageRegions, frames };
+          return { state: "ready", missingImages: [], imageReadiness: imageReadiness.map(({ src, state, sceneId: observedSceneId }) => ({ src, state, sceneId: observedSceneId })), imageRegions, frames };
         } catch (error) {
           const failure = error.harnessFailure ?? {
             reason: `Scene load failed: ${error.message || String(error)}`,
@@ -519,6 +542,8 @@
           };
           setError(failure);
           return { state: "error", error: failure };
+        } finally {
+          clearImageObservations();
         }
       };
     </script>
