@@ -64,6 +64,20 @@ test("LLM token-flow exemplar has a stable, image-led learning contract", async 
     assets.map((asset) => asset.file ?? asset.path).sort(),
     imageBands.map((band) => band.visual.image.file).sort(),
   );
+  // Each raster supports exactly one thesis: pin which image illustrates
+  // which frame so a future spec edit cannot silently swap scenes.
+  assert.deepEqual(
+    imageBands.map((band) => [band.heading, band.visual.image.file]),
+    [
+      ["The whole pipeline", "assets/pipeline-mechanism.png"],
+      ["One integer becomes a vector", "assets/vector-lookup-space.png"],
+      ["From scores to a sampled token", "assets/probability-selection.png"],
+    ],
+  );
+  const bandNumber = (file) => bands.findIndex((band) => band.visual?.image?.file === file) + 1;
+  for (const asset of assets) {
+    assert.equal(asset.suggestedBand, bandNumber(asset.file ?? asset.path), `${asset.file ?? asset.path} suggestedBand must match its frame`);
+  }
   for (const asset of assets) {
     const path = asset.file ?? asset.path;
     const visualImage = imageBands.find((band) => band.visual.image.file === path)?.visual.image;
