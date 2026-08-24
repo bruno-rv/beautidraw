@@ -203,6 +203,23 @@ test("outline never trusts backticks or newlines from authored values", () => {
   assert.match(markdown, /`\/context`/);
 });
 
+test("outline headings cannot create authored Markdown links or headings", () => {
+  const unsafe = structuredClone(spec);
+  unsafe.title = "Title [open](https://example.com)";
+  unsafe.bands[0].heading = "Frame [open](https://example.com)\n## injected";
+  const markdown = buildOutline(unsafe);
+  assert.match(markdown, /\\\[open\\\]\\\(https:\/\/example\.com\\\)/);
+  assert.doesNotMatch(markdown, /^## injected$/m);
+});
+
+test("outline rejects home-directory asset paths", () => {
+  for (const file of ["~/private.png", "~other/private.png"]) {
+    const unsafe = structuredClone(spec);
+    unsafe.bands[0].visual.image.file = file;
+    assert.throws(() => buildOutline(unsafe), /absolute|portable|home|path/i, file);
+  }
+});
+
 test("outline carries annotation and annotations in authored order", () => {
   const annotated = structuredClone(spec);
   annotated.bands[0].visual.annotation = "First handwritten note";

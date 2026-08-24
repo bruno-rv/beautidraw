@@ -14,27 +14,320 @@
         height: 100vh;
         overflow: hidden;
       }
+
+      #bd-state {
+        position: fixed;
+        z-index: 10000;
+        top: 8px;
+        left: 8px;
+        max-width: min(620px, calc(100vw - 16px));
+        padding: 8px 12px;
+        border: 1px solid #64748b;
+        border-radius: 4px;
+        background: #ffffff;
+        color: #0f172a;
+        font: 14px/1.35 system-ui, sans-serif;
+      }
+
+      #bd-state[data-state="error"] {
+        border-color: #b91c1c;
+        color: #7f1d1d;
+      }
+
+      #bd-state button {
+        margin-left: 8px;
+        padding: 4px 8px;
+      }
+
+      #bd-frame-navigation {
+        position: fixed;
+        z-index: 9999;
+        right: 8px;
+        bottom: 8px;
+        display: flex;
+        gap: 4px;
+        padding: 4px;
+        border: 1px solid #64748b;
+        border-radius: 4px;
+        background: #ffffff;
+        font: 13px/1.2 system-ui, sans-serif;
+      }
+
+      #bd-frame-navigation:empty {
+        display: none;
+      }
+
+      #bd-frame-navigation button {
+        padding: 4px 8px;
+      }
     </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="bd-state" role="status" aria-live="polite" data-state="loading">Loading editor…</div>
+    <nav id="bd-frame-navigation" aria-label="Frame navigation"></nav>
+    <main id="root" aria-label="Excalidraw editor"></main>
     <script type="module">
       // Fonts are fetched relative to this path. Everything is local — no CDN
       // at render time.
       window.EXCALIDRAW_ASSET_PATH = new URL("./vendor/", location.href).href;
 
+      const stateRegion = document.getElementById("bd-state");
+      const frameNavigation = document.getElementById("bd-frame-navigation");
+      const NativeImage = window.Image;
+      const imageObservations = [];
+      window.__bdImageObservations = imageObservations;
+
+      function setReady(frameCount) {
+        stateRegion.replaceChildren(document.createTextNode(`Ready — ${frameCount} frame${frameCount === 1 ? "" : "s"}`));
+        stateRegion.setAttribute("role", "status");
+        stateRegion.dataset.state = "ready";
+      }
+
+      function setError(error) {
+        const recovery = document.createElement("button");
+        recovery.type = "button";
+        recovery.id = "harness-recovery";
+        recovery.dataset.testid = "harness-recovery";
+        recovery.textContent = "Recover editor";
+        stateRegion.replaceChildren(document.createTextNode(`${error.reason} ${error.recovery}`), recovery);
+        stateRegion.setAttribute("role", "alert");
+        stateRegion.removeAttribute("aria-live");
+        stateRegion.dataset.state = "error";
+        recovery.addEventListener("click", () => location.reload());
+      }
+
+      function observeImage(image) {
+        const record = { element: image, src: "", state: "pending" };
+        const settle = (state, error) => {
+          record.src = image.currentSrc || image.src || "";
+          record.state = state;
+          if (error) record.error = String(error.message || error);
+        };
+        image.addEventListener("load", () => settle("load"), { once: true });
+        image.addEventListener("error", (event) => settle("error", event), { once: true });
+        imageObservations.push(record);
+        return record;
+      }
+
+      // Excalidraw's image cache uses the global constructor. Keep native
+      // HTMLImageElement instances and record their eventual URL/state.
+      window.Image = function ObservedImage(...args) {
+        return observeImage(new NativeImage(...args)).element;
+      };
+      window.Image.prototype = NativeImage.prototype;
+
+      const twoFrames = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+      function imageName(element) {
+        return element.customData?.beautidrawImageName || element.id || element.fileId || "image";
+      }
+
+      async function waitForImage(file, element, deadline) {
+        const expected = file?.dataURL;
+        if (!expected) {
+          const error = new Error(`Image ${imageName(element)} did not render before the 2000ms deadline.`);
+          error.imageName = imageName(element);
+          throw error;
+        }
+        while (Date.now() < deadline) {
+          const record = imageObservations.find((candidate) => candidate.src === expected);
+          if (record?.state === "error") {
+            const error = new Error(`Image ${imageName(element)} did not render before the 2000ms deadline.`);
+            error.imageName = imageName(element);
+            throw error;
+          }
+          if (record?.state === "load") {
+            if (typeof record.element.decode === "function") {
+              try {
+                await record.element.decode();
+              } catch {
+                const error = new Error(`Image ${imageName(element)} did not render before the 2000ms deadline.`);
+                error.imageName = imageName(element);
+                throw error;
+              }
+            }
+            return record;
+          }
+          await wait(16);
+        }
+        const error = new Error(`Image ${imageName(element)} did not render before the 2000ms deadline.`);
+        error.imageName = imageName(element);
+        throw error;
+      }
+
+      window.__bdWaitForImages = async (files = {}, imageElements = []) => {
+        const deadline = Date.now() + 2000;
+        return Promise.all(imageElements.map((element) => waitForImage(files[element.fileId], element, deadline)));
+      };
+
+      function hashRegion(canvas, bounds, sceneBounds) {
+        const scaleX = canvas.width / Math.max(sceneBounds.width, 1);
+        const scaleY = canvas.height / Math.max(sceneBounds.height, 1);
+        const x = Math.max(0, Math.floor((bounds.x - sceneBounds.x) * scaleX));
+        const y = Math.max(0, Math.floor((bounds.y - sceneBounds.y) * scaleY));
+        const width = Math.max(1, Math.min(canvas.width - x, Math.ceil(bounds.width * scaleX)));
+        const height = Math.max(1, Math.min(canvas.height - y, Math.ceil(bounds.height * scaleY)));
+        const pixels = canvas.getContext("2d").getImageData(x, y, width, height).data;
+        let hash = 2166136261;
+        for (const pixel of pixels) {
+          hash ^= pixel;
+          hash = Math.imul(hash, 16777619) >>> 0;
+        }
+        return hash.toString(16).padStart(8, "0");
+      }
+
+      async function imageRegionOracle(elements, files) {
+        const images = elements.filter((element) => element.type === "image");
+        if (!images.length) return [];
+        const all = elements.filter((element) => !element.isDeleted);
+        const minX = Math.min(...all.map((element) => element.x));
+        const minY = Math.min(...all.map((element) => element.y));
+        const sceneBounds = {
+          x: minX,
+          y: minY,
+          width: Math.max(...all.map((element) => element.x + element.width)) - minX,
+          height: Math.max(...all.map((element) => element.y + element.height)) - minY,
+        };
+        const render = (renderFiles) => window.__bdApi.exportToCanvas({
+          elements: all,
+          appState: { exportBackground: true, viewBackgroundColor: "#ffffff" },
+          files: renderFiles,
+          exportPadding: 0,
+        });
+        const actual = await render(files);
+        const stable = await render(files);
+        const placeholder = await render({});
+        return images.map((image) => {
+          const actualHash = hashRegion(actual, image, sceneBounds);
+          const stableHash = hashRegion(stable, image, sceneBounds);
+          const placeholderHash = hashRegion(placeholder, image, sceneBounds);
+          if (actualHash === placeholderHash) {
+            const error = new Error(`Image ${imageName(image)} rendered only its placeholder region.`);
+            error.imageName = imageName(image);
+            throw error;
+          }
+          if (actualHash !== stableHash) {
+            const error = new Error(`Image ${imageName(image)} did not remain stable for two frames.`);
+            error.imageName = imageName(image);
+            throw error;
+          }
+          return { id: image.id, actualHash, placeholderHash };
+        });
+      }
+
+      const elementBounds = (element) => ({ x: element.x, y: element.y, width: element.width || 0, height: element.height || 0 });
+      const intersects = (a, b) => Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x) > 0 &&
+        Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y) > 0;
+
+      window.__bdReportFidelity = (elements, viewport) => {
+        const frames = elements.filter((element) => element.type === "frame");
+        const reports = [];
+        const usableWidth = Math.min(viewport.width, 1600);
+        const usableHeight = Math.max(1, viewport.height - 50);
+        for (const frame of frames) {
+          const fitZoom = Math.min(usableWidth / frame.width, usableHeight / frame.height);
+          const members = elements.filter((element) => element.frameId === frame.id);
+          const clipped = new Set();
+          const overlap = new Set();
+          const obscured = new Set();
+          const frameBounds = elementBounds(frame);
+          const toolbarBounds = { x: frame.x, y: frame.y, width: frame.width, height: 50 / fitZoom };
+          for (const member of members) {
+            if (member.customData?.beautidrawCompositionKind === "surface") continue;
+            const memberBounds = elementBounds(member);
+            if (memberBounds.x < frameBounds.x - 0.5 || memberBounds.y < frameBounds.y - 0.5 ||
+              memberBounds.x + memberBounds.width > frameBounds.x + frameBounds.width + 0.5 ||
+              memberBounds.y + memberBounds.height > frameBounds.y + frameBounds.height + 0.5) clipped.add(member.id);
+            if (intersects(memberBounds, toolbarBounds)) obscured.add(member.id);
+            if (member.type === "text") {
+              const role = member.role === "mono" || member.role === "handwritten" ? member.role : "prose";
+              const fontFamily = role === "mono" ? 3 : role === "handwritten" ? 5 : 6;
+              const [measured] = window.__bdApi.convertToExcalidrawElements([{
+                id: `${member.id}-fidelity-measure`,
+                type: "text",
+                x: 0,
+                y: 0,
+                text: member.text,
+                fontSize: member.fontSize,
+                fontFamily,
+                role,
+                textAlign: member.textAlign,
+              }], { regenerateIds: false });
+              if (!measured || measured.width > member.width + 0.5 || measured.height > member.height + 0.5) clipped.add(member.id);
+            }
+          }
+          for (let i = 0; i < members.length; i += 1) {
+            for (let j = i + 1; j < members.length; j += 1) {
+              const a = members[i];
+              const b = members[j];
+              if (a.id === b.containerId || b.id === a.containerId) continue;
+              if ([a.type, b.type].some((type) => type === "line" || type === "arrow")) continue;
+              if (a.customData?.beautidrawCompositionKind === "surface" || b.customData?.beautidrawCompositionKind === "surface") continue;
+              if (intersects(elementBounds(a), elementBounds(b))) {
+                overlap.add(a.id);
+                overlap.add(b.id);
+              }
+            }
+          }
+          const textSizes = members.filter((element) => element.type === "text").map((element) => element.fontSize * fitZoom);
+          reports.push({
+            frameId: frame.id,
+            fitZoom,
+            minimumEffectiveTextPx: textSizes.length ? Math.min(...textSizes) : 0,
+            clippedElementIds: [...clipped].sort(),
+            overlapElementIds: [...overlap].sort(),
+            obscuredByChromeElementIds: [...obscured].sort(),
+          });
+        }
+        return reports;
+      };
+
+      function updateFrameNavigation(elements) {
+        frameNavigation.replaceChildren();
+        for (const frame of elements.filter((element) => element.type === "frame")) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.textContent = frame.name || frame.id;
+          button.addEventListener("click", () => window.__bdEditor.scrollToContent([frame]));
+          frameNavigation.append(button);
+        }
+      }
+
       window.__bdReady = (async () => {
         const api = await import("./vendor/excalidraw.js");
         window.__bdApi = api;
-        window.__bdEditor = await api.mountEditor(
-          document.getElementById("root"),
-        );
+        window.__bdEditor = await api.mountEditor(document.getElementById("root"));
         await document.fonts.ready;
+        document.querySelector('[data-testid="main-menu-trigger"]')?.setAttribute("aria-label", "Open main menu");
         return true;
       })().then(
         () => ({ ok: true }),
         (err) => ({ ok: false, error: String(err && err.stack) || String(err) }),
       );
+
+      window.__bdLoadScene = async (scene) => {
+        try {
+          const elements = window.__bdApi.restoreElements(scene.elements, null);
+          window.__bdEditor.updateScene({ elements, appState: scene.appState });
+          window.__bdEditor.addFiles(Object.values(scene.files || {}));
+          const imageElements = elements.filter((element) => element.type === "image");
+          const imageReadiness = await window.__bdWaitForImages(scene.files || {}, imageElements);
+          await twoFrames();
+          const imageRegions = await imageRegionOracle(elements, scene.files || {});
+          const frames = window.__bdReportFidelity(elements, { width: innerWidth, height: innerHeight });
+          updateFrameNavigation(elements);
+          setReady(frames.length);
+          return { state: "ready", missingImages: [], imageReadiness: imageReadiness.map(({ src, state }) => ({ src, state })), imageRegions, frames };
+        } catch (error) {
+          const failure = {
+            reason: `Image ${error.imageName || "red"} did not render before the 2000ms deadline.`,
+            recovery: "Verify the embedded data URL and rebuild the deck.",
+          };
+          setError(failure);
+          return { state: "error", error: failure };
+        }
+      };
     </script>
   </body>
 </html>

@@ -41,6 +41,54 @@ test("semantic callouts accept exactly the four labelled kinds", () => {
   assert.throws(() => validateSemanticVisuals({ callouts: [{ kind: "example", note: "missing label" }] }), /label/i);
   assert.deepEqual(normalizeCallout({ label: "Legacy" }, 0), { kind: "example", label: "Legacy", note: "" });
   assert.deepEqual(normalizeCallout("Legacy string", 1), { kind: "example", label: "Callout 2", note: "Legacy string" });
+  assert.throws(() => normalizeCallout({ kind: "", label: "Blank" }, 0), /kind/i);
+  assert.throws(() => normalizeCallout({ kind: "   ", label: "Whitespace" }, 0), /kind/i);
+});
+
+test("preflight rejects an explicitly empty callout kind but keeps omitted legacy kinds", async () => {
+  const base = {
+    title: "Title",
+    subtitle: "Subtitle",
+    footer: "Footer",
+    bands: [{
+      heading: "Canvas",
+      deck: "Deck",
+      pattern: "canvas",
+      accent: "blue",
+      height: 620,
+      visual: { family: "spotlight", callouts: [{ label: "Legacy" }] },
+    }],
+  };
+  assert.equal((await preflightDeck({ spec: structuredClone(base) })).ok, true);
+  const invalid = structuredClone(base);
+  invalid.bands[0].visual.callouts = [{ kind: "   ", label: "Blank" }];
+  const result = await preflightDeck({ spec: invalid });
+  assert.equal(result.ok, false);
+  assert.match(result.failures.map((failure) => `${failure.field}: ${failure.reason}`).join("\n"), /callouts\[0\]\.kind.*non-empty/i);
+});
+
+test("auto-compose reports explicit empty kind as a structured preflight failure", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "beautidraw-empty-callout-kind-"));
+  const specPath = join(directory, "deck.json");
+  await writeFile(specPath, JSON.stringify({
+    title: "Title",
+    subtitle: "Subtitle",
+    footer: "Footer",
+    bands: [{
+      heading: "Canvas",
+      deck: "Deck",
+      pattern: "canvas",
+      accent: "blue",
+      height: 620,
+      visual: { family: "spotlight", callouts: [{ kind: "", label: "Blank" }] },
+    }],
+  }));
+  const result = spawnSync(process.execPath, [resolve(import.meta.dirname, "../scripts/auto-compose.mjs"), specPath, join(directory, "out")], {
+    cwd: resolve(import.meta.dirname, ".."),
+    encoding: "utf8",
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(`${result.stdout}${result.stderr}`, /callouts\[0\]\.kind.*non-empty|kind is required/i);
 });
 
 test("image descriptions are mandatory and distinct from their use", () => {

@@ -18,6 +18,15 @@ const probes = (await readdir(here))
   .filter((f) => /^probe-\d+-.*\.mjs$/.test(f))
   .sort()
   .filter((f) => withNetwork || !f.includes("viewer-parity"));
+if (!withNetwork && !probes.includes("probe-10-editor-fidelity.mjs")) {
+  throw new CliError({
+    command: "spike",
+    stage: "probe",
+    input: "probe-10-editor-fidelity.mjs",
+    reason: "offline probe list is missing the editor-fidelity probe",
+    recovery: "Restore scripts/spike/probe-10-editor-fidelity.mjs and rerun the offline spike.",
+  });
+}
 
 const run = (file) =>
   new Promise((done) => {

@@ -160,7 +160,9 @@ function metaForBand(band, index) {
     caption: clean(visual.caption, band.deck),
     explanation: clean(visual.explanation, band.deck),
     callouts: (Array.isArray(visual.callouts) ? visual.callouts : []).map((callout, calloutIndex) => {
-      const kind = clean(callout?.kind, "example");
+      const hasKind = callout && typeof callout === "object" && Object.prototype.hasOwnProperty.call(callout, "kind");
+      const kind = hasKind ? clean(callout.kind, "") : "example";
+      if (hasKind && !kind) throw new Error(`band ${index} callout ${calloutIndex + 1}: kind is required when provided`);
       if (!SEMANTIC_KINDS.has(kind)) throw new Error(`band ${index} callout ${calloutIndex + 1}: unsupported semantic icon kind "${kind}"`);
       if (typeof callout === "string") return { kind: "example", label: `Callout ${calloutIndex + 1}`, note: callout };
       const label = clean(callout?.label, "");
@@ -284,8 +286,11 @@ function finish(meta, elements, extra = {}) {
     ...meta.evidence.map((item) => `Evidence: ${item}`),
   ].filter(Boolean);
   elements.push(...annotationElements(meta));
-  elements.push(text("explanation", 0.05, 0.78, depthParts.join("  •  "), 18, textColor, "prose", { beautidrawMaxWidth: 0.48 }));
-  if (meta.inspect) elements.push(text("inspect", 0.58, 0.94, `Inspect: ${meta.inspect}`, 18, textColor, "mono"));
+  elements.push(text("explanation", 0.05, 0.70, depthParts.join("  •  "), 18, textColor, "prose", { beautidrawMaxWidth: 0.60 }));
+  // Exact-font loading can wrap long commands to two lines; keep the command
+  // above the body's bottom edge so converter-derived height, not fallback
+  // metrics, decides whether it fits.
+  if (meta.inspect) elements.push(text("inspect", 0.05, 0.88, `Inspect: ${meta.inspect}`, 18, textColor, "mono"));
   return {
     lane: sequentialFamilies.has(meta.family) || meta.family === "matrix" ? "hybrid" : "composed",
     surfaceColor: meta.dark ? darkSurface : lightSurface,
@@ -300,7 +305,7 @@ function orbit(meta) {
   // element the satellites' arrows imply, and #dbeafe with dark text keeps
   // its contrast where a dark fill would flatten it.
   const focusColors = { ...colorFor(meta, 0, meta.dark), fill: "#dbeafe", text: lightText };
-  elements.push(shape("focus", "ellipse", 0.39, 0.31, 0.22, 0.22, meta.focus, focusColors, 26));
+  elements.push(shape("focus", "ellipse", 0.39, 0.36, 0.22, 0.22, meta.focus, focusColors, 26));
   // Ring top clears the thesis strip (y∈[0.03,0.16] on the left half) and
   // the ring bottom stays at y≤0.72 above the footer — same rules every
   // family obeys.
@@ -371,7 +376,7 @@ function constellation(meta) {
   const elements = thesisLine(meta);
   // star-2 sits below the thesis strip: at y=0.12 it grazed the one-line
   // thesis's worst-case rendered height on short bands.
-  const positions = [[0.10, 0.18], [0.38, 0.16], [0.68, 0.18], [0.22, 0.50], [0.52, 0.46], [0.76, 0.52]];
+  const positions = [[0.10, 0.18], [0.38, 0.16], [0.68, 0.18], [0.22, 0.42], [0.52, 0.46], [0.76, 0.52]];
   positions.slice(0, Math.min(meta.nodes.length, positions.length)).forEach(([x, y], index) => {
     const colors = colorFor(meta, index, meta.dark);
     if (meta.dark) colors.fill = colors.dark;

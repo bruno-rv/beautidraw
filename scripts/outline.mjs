@@ -14,13 +14,14 @@ const FILE_URL_RE = /\bfile:\/\//i;
 const WINDOWS_PATH_RE = /\b[A-Za-z]:[\\/][^\s`<>\])},;!?]+/;
 const UNC_PATH_RE = /\\{2,}[^\\/\s]+[\\/]+[^\\/\s]+(?:[\\/]+[^\\/\s]+)*/;
 const POSIX_PATH_RE = /(?<![A-Za-z0-9_.~-])\/[A-Za-z0-9_.~-]+(?:\/[A-Za-z0-9_.~:-]+)*/g;
+const HOME_PATH_RE = /(?:^|[\s(])~(?:[^/\s]*)\/[A-Za-z0-9_.~:-]+(?:\/[A-Za-z0-9_.~:-]+)*/;
 const SLASH_COMMANDS = new Set([
   "compact", "context", "deploy", "hooks", "memory", "name", "review-invoice", "status", "tasks",
 ]);
 
 function hasAbsolutePath(value) {
   const source = String(value ?? "");
-  if (FILE_URL_RE.test(source) || WINDOWS_PATH_RE.test(source) || UNC_PATH_RE.test(source)) return true;
+  if (FILE_URL_RE.test(source) || WINDOWS_PATH_RE.test(source) || UNC_PATH_RE.test(source) || HOME_PATH_RE.test(source)) return true;
   // Strip ordinary web URLs before checking slash-prefixed tokens: a URL path
   // is not a local filesystem path, while a file:// URL is explicitly unsafe.
   const withoutWebUrls = source.replace(/https?:\/\/[^\s)]+/gi, "");
@@ -44,7 +45,7 @@ function text(value, where) {
 
 function portablePath(value, where) {
   const path = text(value, where);
-  if (isAbsolute(path) || path.startsWith("/") || /^[A-Za-z]:[\\/]/.test(path) || path.split(/[\\/]/).includes("..")) {
+  if (isAbsolute(path) || path.startsWith("/") || /^~(?:[^/\s]*)\//.test(path) || /^[A-Za-z]:[\\/]/.test(path) || path.split(/[\\/]/).includes("..")) {
     throw new Error(`${where} must be a portable deck-relative path`);
   }
   const normalized = normalize(path);
@@ -58,6 +59,10 @@ function escapeMarkdown(value) {
   return String(value)
     .replace(/\\/g, "\\\\")
     .replace(/([*_#[\]()>|])/g, "\\$1");
+}
+
+function formatHeading(value, where) {
+  return escapeMarkdown(normalizeHeading(value, where).replace(/`/g, ""));
 }
 
 function codeToken(token) {
@@ -106,7 +111,9 @@ function normalizeCallout(callout, index) {
   if (!callout || typeof callout !== "object" || Array.isArray(callout)) {
     throw new Error(`callout ${index + 1} must be an object with kind and label`);
   }
-  const kind = callout.kind == null ? "example" : text(callout.kind, `callout ${index + 1} kind`);
+  const kind = Object.prototype.hasOwnProperty.call(callout, "kind")
+    ? text(callout.kind, `callout ${index + 1} kind`)
+    : "example";
   if (!SEMANTIC_KINDS.has(kind)) throw new Error(`unsupported semantic icon kind "${kind}"`);
   const label = text(callout.label, `callout ${index + 1} label`);
   const note = callout.note ?? callout.text ?? "";
@@ -223,7 +230,7 @@ export function buildOutline(spec, { frameNames = [], compositionManifest = {} }
   if (!Array.isArray(spec?.bands) || spec.bands.length === 0) throw new Error("bands must be a non-empty array");
   const overview = buildOverview(spec);
   const lines = [
-    `# ${formatInline(title)}`,
+    `# ${formatHeading(title, "title")}`,
     "",
     subtitle,
     "",
@@ -236,7 +243,7 @@ export function buildOutline(spec, { frameNames = [], compositionManifest = {} }
 
   spec.bands.forEach((band, index) => {
     const name = frameNameFor(spec, frameNames, index);
-    lines.push("", `## ${normalizeHeading(name, `frame ${index + 1}`)}`, "", formatInline(band.deck ?? ""));
+    lines.push("", `## ${formatHeading(name, `frame ${index + 1}`)}`, "", formatInline(band.deck ?? ""));
     if (band.pattern !== "canvas") {
       if (band.relation) lines.push("", `**Relation:** ${formatInline(band.relation)}`);
       if (band.nodes?.length) lines.push("", renderNodes(band.nodes));

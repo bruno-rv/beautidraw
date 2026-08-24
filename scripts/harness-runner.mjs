@@ -55,11 +55,11 @@ export const LAUNCH_ARGS = ["--font-render-hinting=none", "--disable-lcd-text"];
 export const DEVICE_SCALE_FACTOR = 1;
 export const VIEWPORT = { width: 1600, height: 900 };
 
-export async function withHarness(fn) {
+export async function withHarness(fn, { viewport = VIEWPORT } = {}) {
   const server = await serve();
   const browser = await chromium.launch({ args: LAUNCH_ARGS });
   const context = await browser.newContext({
-    viewport: VIEWPORT,
+    viewport,
     deviceScaleFactor: DEVICE_SCALE_FACTOR,
   });
   const page = await context.newPage();

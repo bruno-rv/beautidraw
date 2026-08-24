@@ -222,6 +222,25 @@ the measured converted bounds at `min(viewportWidth / PAGE_WIDTH,
 viewportHeight / BAND_HEIGHT_CAP)`; it does not use fit-all scene zoom for a
 tall deck.
 
+### Editor-fidelity harness contract
+
+The browser harness hydrates a scene by restoring elements and calling
+`updateScene` **before** `addFiles`. `__bdWaitForImages(files, imageElements)`
+observes the exact `Image` instances created by the editor, waits for `load`
+and successful decode, and fails at 2000ms with a named recovery. A loaded
+image must also differ from a placeholder-only render in its cropped scene
+region and remain stable for two animation frames.
+
+`__bdReportFidelity(elements, viewport)` returns one record per frame:
+`{ frameId, fitZoom, minimumEffectiveTextPx, clippedElementIds,
+overlapElementIds, obscuredByChromeElementIds }`. `fitZoom` uses the same
+usable vertical chrome inset as `USABLE_H` (viewport height minus 50px) and a
+usable width capped at `USABLE_W`; text metrics are re-measured through
+`convertToExcalidrawElements` for the emitted role/font/text tuple. Overlap
+checks allow a bound text/container pair and ignore line/arrow strokes and the
+surface rectangle, matching composition validation. Every failure is reported
+by element ID; no screenshot OCR or fixed sleep is a fidelity oracle.
+
 **Edge-coverage exemptions.** `EDGE_COVERAGE_EXEMPT_PATTERNS = { "flow", "canvas" }`. A centred
 `flow` column cannot clear `ε` by construction, and widening it back out would reintroduce the
 composition defect the narrowing exists to remove. A `canvas` is deliberately empty during base

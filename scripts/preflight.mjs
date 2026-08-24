@@ -15,6 +15,7 @@ export const CONTENT_BUDGETS = Object.freeze({
 });
 
 const MAX_HEADING_CHARS = 2000;
+const SEMANTIC_KINDS = new Set(["example", "boundary", "inspect", "warning"]);
 const PNG_SIGNATURE = "89504e470d0a1a0a";
 const CRC_TABLE = Array.from({ length: 256 }, (_, value) => {
   let crc = value;
@@ -220,6 +221,13 @@ export function collectDeckPreflightFailures(spec, { specPath, specDir, mode = "
     for (const [calloutIndex, callout] of (Array.isArray(visual.callouts) ? visual.callouts : []).entries()) {
       const label = typeof callout === "string" ? "" : callout?.label;
       const note = typeof callout === "string" ? callout : callout?.note ?? callout?.text;
+      if (callout && typeof callout === "object" && !Array.isArray(callout) && Object.prototype.hasOwnProperty.call(callout, "kind")) {
+        if (typeof callout.kind !== "string" || callout.kind.trim() === "") {
+          failures.push(failure(`bands[${index}].visual.callouts[${calloutIndex}].kind`, "callout kind must be a non-empty string when provided", { specPath }));
+        } else if (!SEMANTIC_KINDS.has(callout.kind.trim())) {
+          failures.push(failure(`bands[${index}].visual.callouts[${calloutIndex}].kind`, `unsupported semantic icon kind "${callout.kind.trim()}"`, { specPath }));
+        }
+      }
       const labelLength = chars(label);
       const noteLength = chars(note);
       if (labelLength > CONTENT_BUDGETS.calloutLabelChars) {

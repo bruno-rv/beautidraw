@@ -11,7 +11,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, normalize, resolve } from "node:path";
-import { BODY_INSET, BOUND_TEXT_PADDING, DECK_BODY_GAP, FRAME_PAD_BOTTOM, FONT, PAGE_WIDTH, USABLE_H, USABLE_W } from "./layout.mjs";
+import { BODY_INSET, BOUND_TEXT_PADDING, DECK_BODY_GAP, FRAME_PAD_BOTTOM, FONT, FONT_NAME, PAGE_WIDTH, USABLE_H, USABLE_W } from "./layout.mjs";
 import { runCli } from "./cli.mjs";
 import { readJsonInput, resolveAssetWithinRoot } from "./preflight.mjs";
 
@@ -291,12 +291,44 @@ for (const band of canvasBands) {
   if (!requestedBands.has(band)) throw new Error(`canvas band ${band} has no composition entry`);
 }
 
+// Composition emits text from semantic skeletons, which can use a different
+// role/size corpus from the base layout. Keep the exact text descriptor (not a
+// character approximation) so the browser gate verifies the same tuple the
+// converter will measure.
+const compositionFontRequirements = (() => {
+  const seen = new Set();
+  const requirements = [];
+  const add = (descriptor, fallbackRole = "prose") => {
+    if (!descriptor || typeof descriptor.text !== "string" || !descriptor.text.trim()) return;
+    const role = descriptor.role === "mono" || descriptor.role === "handwritten" ? descriptor.role : fallbackRole;
+    const size = descriptor.fontSize;
+    if (!Number.isFinite(size)) return;
+    const family = FONT_NAME[role] ?? FONT_NAME.prose;
+    const key = JSON.stringify([role, family, size, descriptor.text]);
+    if (seen.has(key)) return;
+    seen.add(key);
+    requirements.push({ role, family, size, text: descriptor.text });
+  };
+  for (const skeleton of prepared.flatMap((item) => item.skeletons)) {
+    if (skeleton.type === "text") add(skeleton);
+    if (skeleton.label) add(skeleton.label, skeleton.role ?? "prose");
+  }
+  return requirements;
+})();
+
 const { withHarness } = await import("./harness-runner.mjs");
 const result = await withHarness(async ({ page }) =>
   page.evaluate(
-    async ({ deck, prepared, files, validationConfig }) => {
+    async ({ deck, prepared, files, fontRequirements, validationConfig }) => {
       const api = window.__bdApi;
       const roleFontFamily = validationConfig.fontFamily;
+      await Promise.all(fontRequirements.map(({ family, size, text }) => document.fonts.load(`${size}px "${family}"`, text)));
+      await document.fonts.ready;
+      const missingFontTuples = fontRequirements.filter(({ family, size, text }) => !document.fonts.check(`${size}px "${family}"`, text));
+      if (missingFontTuples.length) {
+        const tuple = missingFontTuples[0];
+        throw new Error(`composition font gate failed for ${tuple.role}:${tuple.family}@${tuple.size} "${tuple.text}"`);
+      }
       const sizeFromConvertedBounds = (item, skeletons = item.skeletons) => skeletons.map((skeleton) => {
         if (skeleton.type === "text" && skeleton.customData?.beautidrawMeasuredText) {
           const role = skeleton.role ?? "prose";
@@ -372,6 +404,10 @@ const result = await withHarness(async ({ page }) =>
             },
           };
         }
+        if (skeleton.type === "text") {
+          const role = skeleton.role ?? "prose";
+          return { ...skeleton, role, fontFamily: roleFontFamily[role] ?? roleFontFamily.prose };
+        }
         if (!skeleton.customData?.beautidrawAutoSize || !skeleton.label) return skeleton;
         const role = skeleton.label.role ?? skeleton.role ?? "prose";
         const fontFamily = roleFontFamily[role] ?? roleFontFamily.prose;
@@ -391,6 +427,8 @@ const result = await withHarness(async ({ page }) =>
           item.body.x + item.body.width - x,
           Number.isFinite(skeleton.width) ? skeleton.width : Number.POSITIVE_INFINITY,
         );
+        // Skeleton width is only a maximum wrap width; the converter still
+        // supplies the measured minimum width and resulting height.
         const width = Math.min(
           Math.max(measured.width + 2 * validationConfig.boundTextPadding, skeleton.width),
           availableWidth,
@@ -532,12 +570,13 @@ const result = await withHarness(async ({ page }) =>
           .map((element) => [element.id, element.role ?? element.customData.beautidrawRole]),
       );
       const restored = api.restoreElements(output, null).map((element) => {
-        const role = element.role ?? element.customData?.beautidrawRole ?? roleById.get(element.id) ?? roleById.get(element.containerId);
+        const role = element.role ?? element.customData?.beautidrawRole ?? roleById.get(element.id) ?? roleById.get(element.containerId) ??
+          (element.type === "text" && element.customData?.beautidrawComposition === true ? "prose" : undefined);
         if (!role) return { ...element, boundElements: element.boundElements ?? [] };
         return {
           ...element,
           role,
-          fontFamily: element.fontFamily ?? roleFontFamily[role] ?? roleFontFamily.prose,
+          fontFamily: roleFontFamily[role] ?? roleFontFamily.prose,
           customData: { ...(element.customData ?? {}), beautidrawRole: role },
           boundElements: element.boundElements ?? [],
         };
@@ -710,6 +749,7 @@ const result = await withHarness(async ({ page }) =>
       deck,
       prepared,
       files,
+      fontRequirements: compositionFontRequirements,
       validationConfig: {
         pageWidth: PAGE_WIDTH,
         usableWidth: USABLE_W,
