@@ -52,6 +52,7 @@ test("invalid image exposes a structured recovery state", async () => {
     const result = await page.evaluate((scene) => window.__bdLoadScene(scene), invalid);
     assert.deepEqual(result, {
       state: "error",
+      sceneId: 1,
       error: {
         reason: "Image red failed to load.",
         recovery: "Verify the embedded data URL and rebuild the deck.",
@@ -74,6 +75,7 @@ test("scene loading preserves restore, file, and fidelity failure classes", asyn
     const restore = await page.evaluate((scene) => window.__bdLoadScene(scene), invalidRestore);
     assert.deepEqual(restore, {
       state: "error",
+      sceneId: 1,
       error: {
         reason: "Scene restore failed: elements must be an array",
         recovery: "Verify the serialized scene elements and rebuild the deck.",
@@ -152,5 +154,36 @@ test("repeated scene loads prune image observations and keep readiness scene-sco
     assert.equal(await page.evaluate(() => window.__bdImageObservations.length), 0);
     assert.ok(second.imageReadiness[0].sceneId > first.imageReadiness[0].sceneId);
     assert.notEqual(second.imageReadiness[0].sceneId, first.imageReadiness[0].sceneId);
+  });
+});
+
+test("concurrent scenes keep their own image events, hashes, and cleanup", async () => {
+  await withHarness(async ({ page }) => {
+    const red = structuredClone(deck);
+    const blue = structuredClone(deck);
+    const redId = "concurrent-red-file";
+    const blueId = "concurrent-blue-file";
+    const imageData = deck.files["9993ed1d2781fdafd876038e6be0a1162d377be1"].dataURL;
+    const blueData = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYPj/HwADAgH/5ncLrgAAAABJRU5ErkJggg==";
+    red.elements.find((element) => element.id === "fidelity-image").fileId = redId;
+    red.files = { [redId]: { ...deck.files[Object.keys(deck.files)[0]], id: redId, dataURL: imageData } };
+    blue.elements.find((element) => element.id === "fidelity-image").fileId = blueId;
+    blue.elements.find((element) => element.id === "fidelity-image").customData.beautidrawImageName = "blue";
+    blue.files = { [blueId]: { ...deck.files[Object.keys(deck.files)[0]], id: blueId, dataURL: blueData } };
+
+    const redPromise = page.evaluate((scene) => window.__bdLoadScene(scene), red);
+    const bluePromise = page.evaluate((scene) => new Promise((resolve) => setTimeout(() => resolve(window.__bdLoadScene(scene)), 10)), blue);
+    const [redResult, blueResult] = await Promise.all([redPromise, bluePromise]);
+    assert.equal(redResult.state, "ready");
+    assert.equal(blueResult.state, "ready");
+    assert.notEqual(redResult.sceneId, blueResult.sceneId);
+    assert.equal(redResult.imageReadiness[0].src, imageData);
+    assert.equal(blueResult.imageReadiness[0].src, blueData);
+    assert.equal(redResult.imageReadiness[0].sceneId, redResult.sceneId);
+    assert.equal(blueResult.imageReadiness[0].sceneId, blueResult.sceneId);
+    assert.equal(redResult.imageRegions[0].sceneId, redResult.sceneId);
+    assert.equal(blueResult.imageRegions[0].sceneId, blueResult.sceneId);
+    assert.notEqual(redResult.imageRegions[0].actualHash, blueResult.imageRegions[0].actualHash);
+    assert.equal(await page.evaluate(() => window.__bdImageObservations.length), 0);
   });
 });

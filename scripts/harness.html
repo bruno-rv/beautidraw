@@ -76,19 +76,42 @@
       const NativeImage = window.Image;
       const imageObservations = [];
       const imageObservationWaiters = [];
-      let activeSceneId = 0;
+      const sceneStates = new Map();
+      let nextSceneId = 0;
+      let observationContext = null;
       window.__bdImageObservations = imageObservations;
 
-      function clearImageObservations() {
-        for (const observation of imageObservations) observation.cleanup?.();
-        imageObservations.length = 0;
-        imageObservationWaiters.splice(0);
+      function beginScene() {
+        const sceneId = ++nextSceneId;
+        sceneStates.set(sceneId, { id: sceneId, urls: new Set() });
+        return sceneId;
       }
 
-      function beginScene() {
-        clearImageObservations();
-        activeSceneId += 1;
-        return activeSceneId;
+      function registerSceneFiles(sceneId, files) {
+        const state = sceneStates.get(sceneId);
+        if (!state) return;
+        for (const file of Object.values(files || {})) if (file?.dataURL) state.urls.add(file.dataURL);
+      }
+
+      function cleanupSceneObservations(sceneId) {
+        for (const observation of imageObservations.filter((candidate) => candidate.sceneId === sceneId)) {
+          observation.cleanup?.();
+          imageObservations.splice(imageObservations.indexOf(observation), 1);
+        }
+        for (const waiter of imageObservationWaiters.filter((candidate) => candidate.sceneId === sceneId)) {
+          waiter.reject(harnessError(
+            "IMAGE_DEADLINE",
+            "Scene image readiness was cancelled when its scene completed.",
+            "Reload the scene and verify the embedded data URL.",
+          ));
+          imageObservationWaiters.splice(imageObservationWaiters.indexOf(waiter), 1);
+        }
+        sceneStates.delete(sceneId);
+        if (sceneStates.size === 0) {
+          for (const observation of imageObservations) observation.cleanup?.();
+          imageObservations.length = 0;
+          imageObservationWaiters.splice(0);
+        }
       }
 
       function harnessError(code, reason, recovery) {
@@ -122,7 +145,7 @@
           element: image,
           src: "",
           state: "pending",
-          sceneId: activeSceneId,
+          sceneId: observationContext,
         };
         const onLoad = () => settle("load");
         const onError = (event) => settle("error", event);
@@ -136,6 +159,10 @@
           record.src = image.currentSrc || image.src || "";
           record.state = state;
           if (error) record.error = String(error.message || error);
+          if (record.sceneId == null) {
+            const matches = [...sceneStates.values()].filter((scene) => scene.urls.has(record.src));
+            if (matches.length === 1) record.sceneId = matches[0].id;
+          }
           for (const waiter of [...imageObservationWaiters]) {
             if (waiter.expected !== record.src || waiter.sceneId !== record.sceneId) continue;
             imageObservationWaiters.splice(imageObservationWaiters.indexOf(waiter), 1);
@@ -197,7 +224,7 @@
         });
       }
 
-      async function waitForImage(file, element, signal) {
+      async function waitForImage(file, element, signal, sceneId) {
         const expected = file?.dataURL;
         if (!expected) {
           throw harnessError(
@@ -229,7 +256,7 @@
           if (signal.aborted) return onAbort();
           signal.addEventListener("abort", onAbort, { once: true });
         });
-        const record = await Promise.race([waitForObservation(expected, element, signal, activeSceneId), abort]);
+        const record = await Promise.race([waitForObservation(expected, element, signal, sceneId), abort]);
         if (record.state === "error") {
           throw harnessError(
             "IMAGE_ERROR",
@@ -252,11 +279,11 @@
         return record;
       }
 
-      window.__bdWaitForImages = async (files = {}, imageElements = []) => {
+      window.__bdWaitForImages = async (files = {}, imageElements = [], sceneId = observationContext) => {
         const controller = new AbortController();
         const deadline = setTimeout(() => controller.abort(), 2000);
         try {
-          return await Promise.all(imageElements.map((element) => waitForImage(files[element.fileId], element, controller.signal)));
+          return await Promise.all(imageElements.map((element) => waitForImage(files[element.fileId], element, controller.signal, sceneId)));
         } finally {
           clearTimeout(deadline);
         }
@@ -278,7 +305,7 @@
         return hash.toString(16).padStart(8, "0");
       }
 
-      async function imageRegionOracle(elements, files) {
+      async function imageRegionOracle(elements, files, sceneId) {
         const images = elements.filter((element) => element.type === "image");
         if (!images.length) return [];
         if (window.__bdTestImageFailure === "placeholder") {
@@ -335,6 +362,7 @@
           }
           return {
             id: image.id,
+            sceneId,
             actualHash,
             placeholderHash,
             actualFrame,
@@ -469,7 +497,8 @@
       })();
 
       window.__bdLoadScene = async (scene) => {
-        beginScene();
+        const sceneId = beginScene();
+        registerSceneFiles(sceneId, scene?.files);
         try {
           let elements;
           if (!Array.isArray(scene?.elements)) {
@@ -508,20 +537,26 @@
               "Verify the local fonts and rebuild the deck.",
             );
           }
-          window.__bdEditor.updateScene({ elements, appState: scene.appState });
+          const previousContext = observationContext;
+          observationContext = sceneId;
           try {
-            window.__bdEditor.addFiles(Object.values(scene.files || {}));
-          } catch (error) {
-            throw harnessError(
-              "FILE_LOAD",
-              `File load failed: ${error.message || String(error)}`,
-              "Verify the embedded files and rebuild the deck.",
-            );
+            window.__bdEditor.updateScene({ elements, appState: scene.appState });
+            try {
+              window.__bdEditor.addFiles(Object.values(scene.files || {}));
+            } catch (error) {
+              throw harnessError(
+                "FILE_LOAD",
+                `File load failed: ${error.message || String(error)}`,
+                "Verify the embedded files and rebuild the deck.",
+              );
+            }
+          } finally {
+            observationContext = previousContext;
           }
           const imageElements = elements.filter((element) => element.type === "image");
-          const imageReadiness = await window.__bdWaitForImages(scene.files || {}, imageElements);
+          const imageReadiness = await window.__bdWaitForImages(scene.files || {}, imageElements, sceneId);
           await twoFrames();
-          const imageRegions = await imageRegionOracle(elements, scene.files || {});
+          const imageRegions = await imageRegionOracle(elements, scene.files || {}, sceneId);
           const frames = window.__bdReportFidelity(elements, { width: innerWidth, height: innerHeight });
           const failedFrames = frames.filter((frame) => frame.clippedElementIds.length || frame.overlapElementIds.length || frame.obscuredByChromeElementIds.length || frame.minimumEffectiveTextPx < 12);
           if (failedFrames.length) {
@@ -534,16 +569,16 @@
           }
           updateFrameNavigation(elements);
           setReady(frames.length);
-          return { state: "ready", missingImages: [], imageReadiness: imageReadiness.map(({ src, state, sceneId: observedSceneId }) => ({ src, state, sceneId: observedSceneId })), imageRegions, frames };
+          return { state: "ready", sceneId, missingImages: [], imageReadiness: imageReadiness.map(({ src, state, sceneId: observedSceneId }) => ({ src, state, sceneId: observedSceneId })), imageRegions, frames };
         } catch (error) {
           const failure = error.harnessFailure ?? {
             reason: `Scene load failed: ${error.message || String(error)}`,
             recovery: "Verify the scene data and rebuild the deck.",
           };
           setError(failure);
-          return { state: "error", error: failure };
+          return { state: "error", sceneId, error: failure };
         } finally {
-          clearImageObservations();
+          cleanupSceneObservations(sceneId);
         }
       };
     </script>
