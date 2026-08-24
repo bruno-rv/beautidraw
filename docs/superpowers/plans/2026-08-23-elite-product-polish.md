@@ -814,6 +814,8 @@ git commit -m "fix: make editor output readable and deterministic"
 
 **Files:**
 - Create: `test/claude-code-artifacts.test.mjs`
+- Modify: `scripts/harness.html`
+- Modify: `test/harness.browser.test.mjs`
 - Modify: `decks/claude-code-artifacts/deck-spec.json`
 - Modify: `decks/claude-code-artifacts/image-asset-manifest.json`
 - Modify only if its source image fails visual review:
@@ -828,6 +830,20 @@ git commit -m "fix: make editor output readable and deterministic"
 **Interfaces:**
 - Consumes the image-description, icon, mono, outline, and harness contracts.
 - Produces the reference mixed-media deck for later documentation and final QA.
+
+- [ ] **Step 0: Resolve the carried Task 4 bound-label fidelity ruling**
+
+Task 4 exhausted five rounds with one load-bearing false-ready path. For bound
+text, derive fresh converter measurement from the bound text element's own
+serialized `text`, `originalText`, `fontSize`, `fontFamily`, line height, and
+alignment tuple. Explicitly reject disagreement between that element and the
+container's duplicated `label` before comparing geometry. Add a browser
+regression that lengthens only the bound text element while leaving the
+container label/metadata stale; `geometryElementIds` must name both sides of
+the mismatch and the scene must not reach Ready.
+
+This is a Ruling carried from Task 4 and must pass the assigned and adversarial
+Task 5 reviews before exemplar polish is accepted.
 
 - [ ] **Step 1: Write the failing exemplar contract test**
 
@@ -876,7 +892,8 @@ git add decks/claude-code-artifacts/deck-spec.json \
   decks/claude-code-artifacts/assets/monorepo-city.png \
   decks/claude-code-artifacts/assets/settings-precedence-layers.png \
   decks/claude-code-artifacts/assets/trust-boundary.png \
-  test/claude-code-artifacts.test.mjs
+  test/claude-code-artifacts.test.mjs scripts/harness.html \
+  test/harness.browser.test.mjs
 git commit -m "feat: polish the Claude Code learning canvas"
 ```
 
