@@ -568,6 +568,10 @@
         const reports = [];
         const elementById = new Map(elements.map((element) => [element.id, element]));
         const roleFontFamily = (role) => role === "mono" ? 3 : role === "handwritten" ? 5 : 6;
+        const boundTupleFields = ["text", "originalText", "fontSize", "fontFamily", "lineHeight", "textAlign", "verticalAlign", "role"];
+        const canonicalText = (value) => typeof value === "string"
+          ? value.replace(/-\r?\n/g, "-").replace(/\r?\n/g, " ").replace(/\s+/g, " ").trim()
+          : value;
         const geometryTolerance = (metric) => Math.max(
           0.25,
           Math.min(0.75, Math.max(1, Math.abs(metric.width || 0), Math.abs(metric.height || 0)) * 0.001),
@@ -575,7 +579,7 @@
         const convertedBounds = (element) => {
           if (element.type === "text" && element.containerId) {
             const container = elementById.get(element.containerId);
-            if (!container?.label) return null;
+            if (!container) return null;
             const labelTuple = {
               text: element.text,
               originalText: element.originalText,
@@ -586,12 +590,19 @@
               verticalAlign: element.verticalAlign,
               role: element.role,
             };
-            const duplicatedFields = ["text", "originalText", "fontSize", "fontFamily", "lineHeight", "textAlign", "verticalAlign", "role"];
+            const boundTextBinding = (container.boundElements ?? []).find((binding) => binding.type === "text" && binding.id === element.id);
+            const duplicateLabel = container.label ?? null;
             const expectedLineHeights = element.role === "mono" ? [1.2] : element.role === "handwritten" ? [1.25] : [1.25, 1.35];
             const lineHeightMismatch = Number.isFinite(element.lineHeight) && !expectedLineHeights.includes(element.lineHeight);
-            const mismatchedIds = duplicatedFields.some((field) =>
-              labelTuple[field] !== undefined && container.label[field] !== undefined && labelTuple[field] !== container.label[field],
-            ) || element.originalText !== element.text || lineHeightMismatch ? [container.id, element.id] : [];
+            const fontRoleMismatch = element.role && element.fontFamily !== roleFontFamily(element.role);
+            const duplicateMismatch = duplicateLabel && boundTupleFields.some((field) =>
+              labelTuple[field] !== undefined && duplicateLabel[field] !== undefined && labelTuple[field] !== duplicateLabel[field],
+            );
+            const originalTextMismatch = typeof element.originalText === "string" &&
+              canonicalText(element.originalText) !== canonicalText(element.text);
+            const mismatchedIds = !boundTextBinding || duplicateMismatch || originalTextMismatch || lineHeightMismatch || fontRoleMismatch
+              ? [container.id, element.id]
+              : [];
             // Older bound-label fixtures serialize prose lineHeight=1.25 while
             // the converter's default prose metric is 1.35. Preserve that
             // compatibility case, while all other serialized tuple fields feed
@@ -608,13 +619,13 @@
               strokeColor: container.strokeColor,
               backgroundColor: container.backgroundColor,
               label: {
-                ...container.label,
+                ...(duplicateLabel ?? {}),
                 ...converterTuple,
                 fontFamily: converterTuple.fontFamily,
               },
             }], { regenerateIds: false });
             const bounds = converted.find((candidate) => candidate.containerId === container.id && candidate.type === "text") ?? null;
-            return bounds ? { bounds, mismatchedIds } : null;
+            return bounds ? { bounds, mismatchedIds, ignoredTupleFields: legacyLineHeight ? ["lineHeight"] : [] } : null;
           }
           if (element.type === "text") {
             const role = element.role === "mono" || element.role === "handwritten" ? element.role : "prose";
@@ -684,7 +695,14 @@
               const tolerance = geometryTolerance(measured);
               const expected = member.customData?.beautidrawMeasuredBounds;
               const differs = (left, right) => ["x", "y", "width", "height"].some((field) => Math.abs(left[field] - right[field]) > tolerance);
-              if (differs(member, measured) || (expected && (differs(member, expected) || differs(expected, measured)))) geometry.add(member.id);
+              const ignoredTupleFields = new Set(measurement.ignoredTupleFields ?? []);
+              const tupleDiffers = member.type === "text" && member.containerId && boundTupleFields.some((field) =>
+                field !== "role" && !ignoredTupleFields.has(field) && measured[field] !== undefined && member[field] !== measured[field],
+              );
+              if (tupleDiffers || differs(member, measured) || (expected && (differs(member, expected) || differs(expected, measured)))) {
+                geometry.add(member.id);
+                if (member.containerId) geometry.add(member.containerId);
+              }
             }
           }
           for (let i = 0; i < members.length; i += 1) {

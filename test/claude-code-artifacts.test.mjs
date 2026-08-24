@@ -36,12 +36,18 @@ test("Claude Code exemplar satisfies its mixed-media contract", { timeout: 300_0
     imageBands.map((band) => band.visual.image.file).sort(),
     "manifest paths must exactly match visual image paths",
   );
+  const imageMetadataByPath = new Map(imageBands.map((band) => [band.visual.image.file, band.visual.image]));
   for (const asset of assets) {
-    portable(asset.file ?? asset.path);
+    const path = asset.file ?? asset.path;
+    const image = imageMetadataByPath.get(path);
+    assert.ok(image, `${path} must have matching visual metadata`);
+    portable(path);
     assert.ok(asset.use?.trim(), `${asset.file ?? asset.path} needs a use`);
     assert.ok(asset.description?.trim(), `${asset.file ?? asset.path} needs a description`);
+    assert.equal(asset.use, image.use, `${path} manifest use must match visual metadata`);
+    assert.equal(asset.description, image.description, `${path} manifest description must match visual metadata`);
     assert.notEqual(asset.use.trim(), asset.description.trim());
-    const bytes = await readFile(join(deckDir, asset.file ?? asset.path));
+    const bytes = await readFile(join(deckDir, path));
     assert.equal(createHash("sha1").update(bytes).digest("hex"), asset.sha1);
   }
   for (const band of imageBands) {
@@ -95,12 +101,22 @@ test("Claude Code exemplar satisfies its mixed-media contract", { timeout: 300_0
   assert.equal(Object.keys(deck.files).length, 4);
   for (const asset of assets) assert.ok(deck.files[asset.sha1], `embedded file ${asset.file ?? asset.path} must use its SHA-1 id`);
   assert.equal(compositionManifest.images.length, 4);
-  for (const asset of compositionManifest.images) portable(asset.path);
+  for (const asset of compositionManifest.images) {
+    const manifestAsset = assets.find((candidate) => (candidate.file ?? candidate.path) === asset.path);
+    assert.ok(manifestAsset, `${asset.path} composition metadata must have a matching manifest asset`);
+    portable(asset.path);
+    assert.equal(asset.use, manifestAsset.use, `${asset.path} composition use must match manifest metadata`);
+    assert.equal(asset.description, manifestAsset.description, `${asset.path} composition description must match manifest metadata`);
+    assert.equal(asset.sha1, manifestAsset.sha1, `${asset.path} composition SHA-1 must match manifest metadata`);
+    assert.equal(asset.pixelWidth, manifestAsset.pixelWidth, `${asset.path} composition width must match manifest metadata`);
+    assert.equal(asset.pixelHeight, manifestAsset.pixelHeight, `${asset.path} composition height must match manifest metadata`);
+  }
   assert.doesNotMatch(JSON.stringify(compositionManifest), /(?:^|[" ])\/(?:Users|private|tmp)\//);
   assert.doesNotMatch(outline, /\/(?:Users|private|tmp)\//);
-  for (const name of expectedNames) {
-    const heading = `## ${name.replace(/`/g, "")}`;
-    assert.ok(outline.includes(heading), `outline is missing ${heading}`);
+  const outlineHeadingOffsets = expectedNames.map((name) => outline.indexOf(`## ${name.replace(/`/g, "")}`));
+  assert.ok(outlineHeadingOffsets.every((offset) => offset >= 0), "outline is missing an expected frame heading");
+  for (let index = 1; index < outlineHeadingOffsets.length; index += 1) {
+    assert.ok(outlineHeadingOffsets[index] > outlineHeadingOffsets[index - 1], "outline frame headings must remain in frame order");
   }
 
   const overview = new Map(elements.filter((element) => element.id.startsWith("deck-overview-")).map((element) => [element.id, element]));
@@ -127,6 +143,19 @@ test("Claude Code exemplar satisfies its mixed-media contract", { timeout: 300_0
     });
     assert.equal(rendered?.customData?.semanticKind, callout.kind, `${callout.label} kind must survive composition`);
   }
+  const shapeTypes = (prefix) => new Set(elements.filter((element) => new RegExp(`^${prefix}\\d+$`).test(element.id)).map((element) => element.type));
+  for (const [prefix, expectedType] of [
+    ["b1-field-", "ellipse"], ["b2-field-", "ellipse"],
+    ["b4-evidence-", "rectangle"], ["b8-star-", "ellipse"],
+    ["b11-satellite-", "ellipse"], ["b12-evidence-", "rectangle"],
+    ["b13-quadrant-", "rectangle"],
+  ]) {
+    assert.deepEqual(shapeTypes(prefix), new Set([expectedType]), `${prefix} must use one relationship shape`);
+  }
+  const semanticShapeByKind = { example: "ellipse", boundary: "diamond", inspect: "line", warning: "rectangle" };
+  for (const element of semanticElements) {
+    assert.equal(element.type, semanticShapeByKind[element.customData.semanticKind], `${element.id} shape must follow its semantic kind`);
+  }
 
     for (const viewport of [{ width: 1600, height: 900 }, { width: 1280, height: 800 }]) {
       await withHarness(async ({ page }) => {
@@ -142,6 +171,21 @@ test("Claude Code exemplar satisfies its mixed-media contract", { timeout: 300_0
           assert.deepEqual(frame.geometryElementIds, []);
         }
       }, { viewport });
+    }
+
+    const generatedBound = elements.find((element) => element.type === "text" && element.containerId);
+    assert.ok(generatedBound, "generated deck must contain a bound text element");
+    for (const mutate of [
+      (element) => { element.text += " stale generated text"; },
+      (element) => { element.fontSize += 1; },
+      (element) => { element.lineHeight += 0.5; },
+    ]) {
+      const changed = structuredClone(deck);
+      mutate(changed.elements.find((element) => element.id === generatedBound.id));
+      const result = await withHarness(async ({ page }) =>
+        page.evaluate((scene) => window.__bdLoadScene(scene), changed));
+      assert.equal(result.state, "error", `${generatedBound.id}: generated bound-label mutation must fail fidelity`);
+      assert.match(result.error.reason, new RegExp(generatedBound.id));
     }
   } finally {
     await rm(output, { recursive: true, force: true });

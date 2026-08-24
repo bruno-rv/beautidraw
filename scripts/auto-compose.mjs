@@ -218,7 +218,7 @@ function annotationElements(meta, { x = 0.05, y = 0.66, maxWidth } = {}) {
 
 function semanticIcon(kind, { id, x, y, size, label, strokeColor = "#475569", labelColor = strokeColor }) {
   if (!SEMANTIC_KINDS.has(kind)) throw new Error(`unsupported semantic icon kind "${kind}"`);
-  const type = { example: "ellipse", boundary: "diamond", inspect: "line", warning: "triangle" }[kind];
+  const type = { example: "ellipse", boundary: "diamond", inspect: "line", warning: "rectangle" }[kind];
   const iconId = `${id}-icon`;
   const labelId = `${id}-label`;
   const icon = {
@@ -320,12 +320,11 @@ function orbit(meta) {
     [0.41, 0.16], [0.72, 0.26], [0.72, 0.48],
     [0.41, 0.58], [0.09, 0.48], [0.09, 0.26],
   ];
-  const shapes = ["ellipse", "rectangle", "ellipse", "rectangle", "ellipse", "rectangle"];
-  positions.forEach(([x, y], index) => {
-    const node = meta.nodes[index % meta.nodes.length];
+  positions.slice(0, Math.min(meta.nodes.length, positions.length)).forEach(([x, y], index) => {
+    const node = meta.nodes[index];
     const colors = colorFor(meta, index, meta.dark);
     if (meta.dark) colors.fill = colors.dark;
-    elements.push(shape(`node-${index + 1}`, shapes[index], x, y, 0.19, 0.14, nodeText(node), colors));
+    elements.push(shape(`node-${index + 1}`, "ellipse", x, y, 0.19, 0.14, nodeText(node), colors));
   });
   return finish(meta, elements);
 }
@@ -342,9 +341,8 @@ function field(meta) {
   positions.slice(0, Math.min(meta.nodes.length, positions.length)).forEach(([x, y], index) => {
     const colors = colorFor(meta, index, meta.dark);
     if (meta.dark) colors.fill = colors.dark;
-    const type = index % 3 === 0 ? "ellipse" : index % 3 === 1 ? "rectangle" : "diamond";
     const size = index < 2 ? [0.24, 0.16] : [0.18, 0.13];
-    elements.push(shape(`field-${index + 1}`, type, x, y, size[0], size[1], nodeText(meta.nodes[index]), colors, RAMP.note));
+    elements.push(shape(`field-${index + 1}`, "ellipse", x, y, size[0], size[1], nodeText(meta.nodes[index]), colors, RAMP.note));
   });
   return finish(meta, elements);
 }
@@ -359,9 +357,9 @@ function spotlight(meta) {
   // expands its container downward past the declared box, and 0.53 + growth
   // grazed the 0.73 footer line on this band height.
   const positions = [[0.06, 0.16], [0.68, 0.16], [0.06, 0.52], [0.68, 0.52]];
-  const callouts = meta.callouts.length ? meta.callouts : meta.nodes.slice(0, 4).map((node) => ({ label: node.label, note: node.note }));
-  positions.forEach(([x, y], index) => {
-    const callout = callouts[index % callouts.length];
+  const callouts = meta.callouts.length ? meta.callouts.slice(0, positions.length) : meta.nodes.slice(0, positions.length).map((node) => ({ label: node.label, note: node.note }));
+  callouts.forEach((callout, index) => {
+    const [x, y] = positions[index];
     const colors = colorFor(meta, index + 1, meta.dark);
     if (meta.dark) colors.fill = colors.dark;
     elements.push(...semanticCalloutShape(
@@ -373,7 +371,7 @@ function spotlight(meta) {
       0.14,
       colors,
       RAMP.note,
-      index % 2 ? "rectangle" : "ellipse",
+      "rectangle",
     ));
   });
   return finish(meta, elements);
@@ -387,9 +385,7 @@ function constellation(meta) {
   positions.slice(0, Math.min(meta.nodes.length, positions.length)).forEach(([x, y], index) => {
     const colors = colorFor(meta, index, meta.dark);
     if (meta.dark) colors.fill = colors.dark;
-    const shapeType = index === 0 ? "ellipse" : index % 2 ? "diamond" : "rectangle";
-    const size = index === 0 ? [0.24, 0.18] : [0.18, 0.14];
-    elements.push(shape(`star-${index + 1}`, shapeType, x, y, size[0], size[1], nodeText(meta.nodes[index]), colors, RAMP.note));
+    elements.push(shape(`star-${index + 1}`, "ellipse", x, y, 0.18, 0.14, nodeText(meta.nodes[index]), colors, RAMP.note));
   });
   return finish(meta, elements);
 }
@@ -410,7 +406,7 @@ function evidence(meta) {
   positions.forEach(([x, y], index) => {
     const colors = colorFor(meta, index + 1, meta.dark);
     if (meta.dark) colors.fill = colors.dark;
-    elements.push(shape(`evidence-${index + 1}`, index % 2 ? "ellipse" : "rectangle", x, y, 0.23, 0.14, nodeText(sources[index]), colors, RAMP.note));
+    elements.push(shape(`evidence-${index + 1}`, "rectangle", x, y, 0.23, 0.14, nodeText(sources[index]), colors, RAMP.note));
   });
   if (sources.length >= 2) {
     // From the left column's centroid (between its top and bottom sources)
@@ -482,7 +478,7 @@ async function illustration(meta) {
       0.14,
       colors,
       RAMP.note,
-      index % 2 ? "ellipse" : "rectangle",
+      "rectangle",
     ));
   });
   const depthParts = [
@@ -520,8 +516,7 @@ function pipeline(meta) {
     const x = 0.03 + index * 0.16;
     const colors = colorFor(meta, index, meta.dark);
     if (meta.dark) colors.fill = colors.dark;
-    const type = ["rectangle", "ellipse", "diamond"][index % 3];
-    elements.push(shape(`stage-${index + 1}`, type, x, 0.36, stepWidth, 0.20, nodeText(node), colors));
+    elements.push(shape(`stage-${index + 1}`, "rectangle", x, 0.36, stepWidth, 0.20, nodeText(node), colors));
     if (index < nodes.length - 1) elements.push(arrowBetween(`stage-arrow-${index + 1}`, x + stepWidth, 0.46, x + 0.16, 0.46, meta.dark ? "#94a3b8" : "#64748b"));
   });
   return finish(meta, elements);
@@ -540,12 +535,11 @@ function map(meta) {
   // them: side columns, a centre node under the thesis strip, a centre
   // node above the footer.
   const positions = [[0.08, 0.16], [0.70, 0.14], [0.05, 0.44], [0.73, 0.34], [0.42, 0.18], [0.67, 0.56]];
-  positions.forEach(([x, y], index) => {
-    const node = meta.nodes[index % meta.nodes.length];
+  positions.slice(0, Math.min(meta.nodes.length, positions.length)).forEach(([x, y], index) => {
+    const node = meta.nodes[index];
     const colors = colorFor(meta, index + 1, meta.dark);
     if (meta.dark) colors.fill = colors.dark;
-    const type = index % 2 ? "ellipse" : "rectangle";
-    elements.push(shape(`satellite-${index + 1}`, type, x, y, 0.19, 0.14, nodeText(node), colors));
+    elements.push(shape(`satellite-${index + 1}`, "ellipse", x, y, 0.19, 0.14, nodeText(node), colors));
   });
   return finish(meta, elements);
 }

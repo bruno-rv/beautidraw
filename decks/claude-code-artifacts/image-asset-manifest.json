@@ -8,7 +8,7 @@
       "pixelWidth": 1672,
       "pixelHeight": 941,
       "suggestedBand": 1,
-      "use": "Developer inside a repository-shaped control environment surrounded by five artifact types.",
+      "use": "Show a developer operating inside a repository-shaped environment surrounded by context, tools, controls, and state.",
       "description": "Paper-cut developer control room showing context, tools, trust, state, and extension sources around one working session.",
       "promptSummary": "Editorial paper-cut control room; five distinct artifact sources; no text, arrows, logos, or UI screenshots."
     },
@@ -18,7 +18,7 @@
       "pixelWidth": 1672,
       "pixelHeight": 941,
       "suggestedBand": 6,
-      "use": "Monorepo as a paper-cut city with the billing district illuminated.",
+      "use": "Show a monorepo as a city whose shared root remains visible while the billing package gains local detail.",
       "description": "Top-down repository city whose illuminated billing district shows how path-scoped instructions narrow to one package.",
       "promptSummary": "Top-down blueprint-paper city map; distinct package districts; spotlighted billing area; no text or arrows."
     },
@@ -28,7 +28,7 @@
       "pixelWidth": 1672,
       "pixelHeight": 941,
       "suggestedBand": 8,
-      "use": "Settings precedence as layered scalar resolution, with separate motifs for merged arrays and restrictive safety exceptions.",
+      "use": "Show settings as translucent authoritative layers, with merged-array strands and a restrictive safety clamp as separate exception motifs.",
       "description": "Translucent configuration layers resolving into one value beside separate merge strands and a restrictive safety clamp.",
       "promptSummary": "Translucent acrylic settings layers, a resolved dial, merged strands, and a restrictive clamp; no text, arrows, or flowchart boxes."
     },
@@ -38,7 +38,7 @@
       "pixelWidth": 1672,
       "pixelHeight": 941,
       "suggestedBand": 11,
-      "use": "Soft guidance contrasted with a physical enforcement checkpoint and human decision.",
+      "use": "Contrast a soft cloud of guidance with a physical enforcement checkpoint and a human decision between them.",
       "description": "Handcrafted scene contrasting soft guidance with a lockable enforcement gate and a deliberate human decision.",
       "promptSummary": "Cinematic handcrafted diorama; suggestion cloud versus lockable gate; no labels, arrows, logos, or UI."
     }

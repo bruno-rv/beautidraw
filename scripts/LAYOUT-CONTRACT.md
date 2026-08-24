@@ -16,7 +16,7 @@ are what the spike proved.
 | Fonts: `document.fonts.load(font, chars)` for the deck's own characters, then `document.fonts.ready`, then `document.fonts.check(font, chars)` **with the text argument**. Abort on failure. | spike F2 / F8 — a bare `check` passes vacuously and Cyrillic then measures 13.34% narrow |
 | `lineHeight` is read from the library, never declared. | spike F4 |
 | `boundElements: []`, never `null`. | measured: the viewer canonicalises `null` → `[]` |
-| Bound text lives **only in rectangles**. Ellipses/diamonds carry unbound labels. | only rectangles accept a bound container |
+| Bound text is resolved through `containerId` plus the container's `boundElements`; serialized `container.label` is optional. | production serialization can omit the duplicate label object, so fidelity must measure from the bound text tuple and real container geometry |
 | Children emitted before their frame. | convention (contiguity is not correctness — spike F6.4) |
 | Frame `name` is navigation metadata, not typography. Zero-padded numeric prefix. | frame names drive viewer navigation order |
 | Frame bounds are re-pinned to `[PAGE_X, PAGE_X + PAGE_WIDTH]` **after** conversion. | `convertToExcalidrawElements` refits a frame to its children's bounding box and discards the skeleton's `x`/`width`. Left unpinned, frame origin becomes content-derived and the page edge jitters between bands as you pan. |
@@ -261,12 +261,12 @@ Those same rectangles are transformed through
 strip is used. Each frame is fitted against those measured offsets before its
 content and heading/deck chrome are checked, so an off-screen frame cannot be
 mistaken for a navigation overlap. Text and bound-label/container metrics are re-measured through
-`convertToExcalidrawElements` for the exact role/font/text tuple. Serialized
-converter bounds, when emitted by composition, are compared on x/y/width/height
-using an absolute tolerance derived from the converted metric, both against the
-serialized element and against a fresh converter measurement for the serialized
-text/font/size tuple. A stale stored measurement therefore cannot become the
-fidelity oracle. Overlap checks
+`convertToExcalidrawElements` for the exact role/font/text/originalText/lineHeight/alignment tuple,
+using the real serialized container geometry and the bound text located through
+`containerId`/`boundElements`. Serialized converter bounds, when emitted by composition,
+are compared on x/y/width/height using an absolute tolerance derived from the converted metric,
+both against the serialized element and against a fresh converter measurement. A stale stored
+measurement therefore cannot become the fidelity oracle. Overlap checks
 allow a bound text/container pair and ignore line/arrow strokes and the surface
 rectangle, matching composition validation. Every failure is reported by
 element ID; no screenshot OCR or fixed sleep is a fidelity oracle.
