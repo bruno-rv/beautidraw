@@ -21,6 +21,8 @@ for (const viewport of [
       assert.equal(result.imageReadiness[0].state, "load");
       assert.equal(result.imageRegions[0].distinctAnimationFrames, true);
       assert.ok(result.imageRegions[0].stableFrame > result.imageRegions[0].actualFrame);
+      assert.equal(result.imageRegions[0].restoredHash, result.imageRegions[0].actualHash);
+      assert.equal(result.imageRegions[0].distinctRestoredAnimationFrames, true);
       for (const frame of result.frames) {
         assert.ok(frame.fitZoom > 0);
         assert.ok(frame.minimumEffectiveTextPx >= 12);
@@ -53,6 +55,8 @@ test("invalid image exposes a structured recovery state", async () => {
     assert.deepEqual(result, {
       state: "error",
       sceneId: 1,
+      mountedSceneId: 1,
+      attemptedSceneId: 1,
       error: {
         reason: "Image red failed to load.",
         recovery: "Verify the embedded data URL and rebuild the deck.",
@@ -76,6 +80,8 @@ test("scene loading preserves restore, file, and fidelity failure classes", asyn
     assert.deepEqual(restore, {
       state: "error",
       sceneId: 1,
+      mountedSceneId: null,
+      attemptedSceneId: 1,
       error: {
         reason: "Scene restore failed: elements must be an array",
         recovery: "Verify the serialized scene elements and rebuild the deck.",
@@ -87,6 +93,8 @@ test("scene loading preserves restore, file, and fidelity failure classes", asyn
     assert.equal(file.state, "error");
     assert.match(file.error.reason, /^File load failed: simulated file store failure$/);
     assert.equal(file.error.recovery, "Verify the embedded files and rebuild the deck.");
+    assert.equal(file.mountedSceneId, file.attemptedSceneId);
+    assert.equal(await page.evaluate(() => window.__bdMountedSceneId), file.attemptedSceneId);
     await page.evaluate(() => { delete window.__bdTestFileFailure; });
   });
 });
@@ -275,6 +283,86 @@ test("mounted image pixels exercise real placeholder, stability, decode, and dea
       assert.equal(result.state, "error");
       assert.match(result.error.reason, mode === "stability" ? /stable/i : new RegExp(mode, "i"));
     }
+    await page.evaluate(() => { delete window.__bdTestImageSeam; });
+  });
+});
+
+test("fidelity rejects stale text, font, and measured-bound metadata with element IDs", async () => {
+  await withHarness(async ({ page }) => {
+    const mutations = [
+      {
+        id: "fidelity-prose",
+        mutate: (scene) => {
+          scene.elements.find((element) => element.id === "fidelity-prose").text += " stale text";
+        },
+      },
+      {
+        id: "fidelity-prose",
+        mutate: (scene) => {
+          scene.elements.find((element) => element.id === "fidelity-prose").fontFamily = 3;
+        },
+      },
+      {
+        id: "fidelity-mono",
+        mutate: (scene) => {
+          scene.elements.find((element) => element.id === "fidelity-mono").customData.beautidrawMeasuredBounds.width += 18;
+        },
+      },
+    ];
+    for (const { id, mutate } of mutations) {
+      const changed = structuredClone(deck);
+      mutate(changed);
+      const result = await page.evaluate((scene) => window.__bdLoadScene(scene), changed);
+      assert.equal(result.state, "error");
+      assert.match(result.error.reason, new RegExp(id));
+    }
+  });
+});
+
+test("pre-remount restore and font failures preserve the mounted scene and expose the attempt", async () => {
+  await withHarness(async ({ page }) => {
+    const loaded = await page.evaluate((scene) => window.__bdLoadScene(scene), deck);
+    assert.equal(loaded.state, "ready");
+    const mountedText = await page.evaluate(() => window.__bdEditor.getSceneElements().find((element) => element.id === "fidelity-prose")?.text);
+
+    const invalidRestore = structuredClone(deck);
+    invalidRestore.elements = null;
+    const restore = await page.evaluate((scene) => window.__bdLoadScene(scene), invalidRestore);
+    assert.equal(restore.state, "error");
+    assert.equal(restore.mountedSceneId, loaded.sceneId);
+    assert.notEqual(restore.attemptedSceneId, loaded.sceneId);
+    assert.equal(await page.evaluate(() => window.__bdMountedSceneId), loaded.sceneId);
+    assert.equal(await page.evaluate(() => window.__bdEditor.getSceneElements().find((element) => element.id === "fidelity-prose")?.text), mountedText);
+
+    await page.evaluate(() => {
+      window.__bdOriginalFontCheck = document.fonts.check;
+      document.fonts.check = () => false;
+    });
+    const font = await page.evaluate((scene) => window.__bdLoadScene(scene), deck);
+    assert.equal(font.state, "error");
+    assert.equal(font.mountedSceneId, loaded.sceneId);
+    assert.notEqual(font.attemptedSceneId, loaded.sceneId);
+    assert.equal(await page.evaluate(() => window.__bdMountedSceneId), loaded.sceneId);
+    assert.equal(await page.evaluate(() => window.__bdEditor.getSceneElements().find((element) => element.id === "fidelity-prose")?.text), mountedText);
+    await page.evaluate(() => { document.fonts.check = window.__bdOriginalFontCheck; });
+  });
+});
+
+test("final restored remount is hash-verified for an arbitrary scene before ready", async () => {
+  await withHarness(async ({ page }) => {
+    const scene = structuredClone(deck);
+    const image = scene.elements.find((element) => element.id === "fidelity-image");
+    image.x = 180;
+    image.y = 275;
+    image.width = 260;
+    image.height = 180;
+    image.customData.beautidrawImageName = "arbitrary-red";
+    await page.evaluate(() => { window.__bdTestImageSeam = { restoredHashMismatch: true }; });
+    const result = await page.evaluate((nextScene) => window.__bdLoadScene(nextScene), scene);
+    assert.equal(result.state, "error");
+    assert.match(result.error.reason, /arbitrary-red|restored|hash/i);
+    assert.match(result.error.recovery, /render|scene|image/i);
+    assert.equal(await page.evaluate(() => window.__bdMountedSceneId), result.mountedSceneId);
     await page.evaluate(() => { delete window.__bdTestImageSeam; });
   });
 });

@@ -83,7 +83,7 @@ for (const viewport of viewports) {
       }
     }
     if (result.imageReadiness.some((image) => image.state !== "load")) throw new Error("mixed-media fixture image was not decoded");
-    if (result.imageRegions.some((image) => image.actualHash.length !== 64 || image.placeholderHash.length !== 64 || image.actualHash === image.placeholderHash || image.actualHash !== image.restoredHash)) {
+    if (result.imageRegions.some((image) => image.actualHash.length !== 64 || image.placeholderHash.length !== 64 || image.actualHash === image.placeholderHash || image.actualHash !== image.restoredHash || image.distinctRestoredAnimationFrames !== true)) {
       throw new Error("mounted image pixel digest did not prove loaded, stable scene rendering");
     }
     return {

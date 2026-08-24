@@ -232,6 +232,12 @@ image cache. Concurrent calls are serialized; each call enters visible
 `Loading` with `role=status` and `aria-live=polite`, while only the latest
 serialized scene may promote the mounted UI to `Ready` or `Error`.
 
+Each load result carries its attempted `sceneId` plus explicit
+`mountedSceneId`/`attemptedSceneId` fields. Restore and font-gate failures that
+occur before remount preserve the previous mounted scene and never publish the
+failed attempt as mounted; failures after remount may report the new mounted
+scene.
+
 `__bdWaitForImages(files, imageElements)` observes the exact `Image` instances
 created by the editor, waits for `load` and successful decode, and fails at
 2000ms with a named recovery. A loaded image is sampled from the mounted
@@ -240,7 +246,10 @@ uses a SHA-256 digest of the painted pixels, must differ from a placeholder-only
 mounted render, and must remain stable across two distinct animation frames.
 The oracle never calls `exportToCanvas`; failure regressions use event/decode
 seams that drive the real deadline, decode, placeholder, and pixel-stability
-paths.
+paths. After the placeholder comparison, the final restored mount is sampled
+again across distinct animation frames; its digest must equal the original
+loaded digest before the scene can become `Ready`, otherwise a typed restore or
+stability failure is published.
 
 `__bdReportFidelity(elements, viewport)` returns one record per frame:
 `{ frameId, fitZoom, minimumEffectiveTextPx, clippedElementIds,
@@ -252,7 +261,10 @@ Those same rectangles are transformed through
 strip is used. Text and bound-label/container metrics are re-measured through
 `convertToExcalidrawElements` for the exact role/font/text tuple. Serialized
 converter bounds, when emitted by composition, are compared on x/y/width/height
-using an absolute tolerance derived from the converted metric. Overlap checks
+using an absolute tolerance derived from the converted metric, both against the
+serialized element and against a fresh converter measurement for the serialized
+text/font/size tuple. A stale stored measurement therefore cannot become the
+fidelity oracle. Overlap checks
 allow a bound text/container pair and ignore line/arrow strokes and the surface
 rectangle, matching composition validation. Every failure is reported by
 element ID; no screenshot OCR or fixed sleep is a fidelity oracle.

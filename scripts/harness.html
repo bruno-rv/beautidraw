@@ -84,6 +84,7 @@
       let loadQueue = Promise.resolve();
       window.__bdImageObservations = imageObservations;
       window.__bdMountedSceneId = null;
+      window.__bdAttemptedSceneId = null;
 
       function beginScene() {
         const sceneId = ++nextSceneId;
@@ -141,7 +142,7 @@
         window.__bdMountedSceneId = sceneId;
       }
 
-      function setError(error, sceneId, token) {
+      function setError(error, attemptedSceneId, token) {
         if (token != null && token !== latestLoadToken) return;
         const recovery = document.createElement("button");
         recovery.type = "button";
@@ -152,7 +153,7 @@
         stateRegion.setAttribute("role", "alert");
         stateRegion.removeAttribute("aria-live");
         stateRegion.dataset.state = "error";
-        window.__bdMountedSceneId = sceneId;
+        if (attemptedSceneId != null) window.__bdAttemptedSceneId = attemptedSceneId;
         recovery.addEventListener("click", () => location.reload());
       }
 
@@ -420,6 +421,7 @@
       async function remountScene(elements, scene, sceneId, includeFiles) {
         clearSceneImageObservations(sceneId);
         window.__bdEditor = await window.__bdApi.remountEditor(editorRoot);
+        window.__bdMountedSceneId = sceneId;
         observationContext = includeFiles ? sceneId : null;
         try {
           window.__bdEditor.updateScene({ elements, appState: scene.appState });
@@ -480,7 +482,12 @@
         const restoredState = await remountScene(elements, { appState: loadedState, files }, sceneId, true);
         await window.__bdWaitForImages(files, images, sceneId);
         await twoFrames();
+        const restoredActualFrame = await animationFrame();
+        if (window.__bdTestImageSeam?.restoredHashMismatch) perturbMountedImagePixels(images, restoredState);
         const restored = await sampleImageRegions(images, restoredState);
+        await animationFrame();
+        const restoredStableFrame = await animationFrame();
+        const restoredStable = await sampleImageRegions(images, restoredState);
         return images.map((image, index) => {
           const actualHash = actual[index].hash;
           const stableHash = loadedStable[index].hash;
@@ -499,6 +506,20 @@
               "Wait for the editor image render to stabilize before reading the scene.",
             );
           }
+          if (restored[index].hash !== actualHash) {
+            throw harnessError(
+              "IMAGE_RESTORE",
+              `Image ${imageName(image)} restored mounted hash did not match the loaded scene hash.`,
+              "Verify the final restored scene render before publishing the scene.",
+            );
+          }
+          if (restored[index].hash !== restoredStable[index].hash) {
+            throw harnessError(
+              "IMAGE_STABILITY",
+              `Image ${imageName(image)} did not remain stable across final restored animation frames.`,
+              "Wait for the restored editor image render to stabilize before publishing the scene.",
+            );
+          }
           return {
             id: image.id,
             sceneId,
@@ -508,6 +529,9 @@
             stableFrame,
             distinctAnimationFrames: stableFrame > actualFrame,
             restoredHash: restored[index].hash,
+            restoredActualFrame,
+            restoredStableFrame,
+            distinctRestoredAnimationFrames: restoredStableFrame > restoredActualFrame,
           };
         });
       }
@@ -539,7 +563,7 @@
               height: container.height,
               strokeColor: container.strokeColor,
               backgroundColor: container.backgroundColor,
-              label: { ...container.label, fontFamily: roleFontFamily(container.label.role ?? container.role ?? "prose") },
+              label: { ...container.label, fontFamily: container.label.fontFamily ?? roleFontFamily(container.label.role ?? container.role ?? "prose") },
             }], { regenerateIds: false });
             return converted.find((candidate) => candidate.containerId === container.id && candidate.type === "text") ?? null;
           }
@@ -552,7 +576,7 @@
               y: element.y,
               text: element.text,
               fontSize: element.fontSize,
-              fontFamily: roleFontFamily(role),
+              fontFamily: element.fontFamily ?? roleFontFamily(role),
               role,
               textAlign: element.textAlign,
             }], { regenerateIds: false });
@@ -605,8 +629,8 @@
             if (measured) {
               const tolerance = geometryTolerance(measured);
               const expected = member.customData?.beautidrawMeasuredBounds;
-              const target = expected ?? measured;
-              if (["x", "y", "width", "height"].some((field) => Math.abs(member[field] - target[field]) > tolerance)) geometry.add(member.id);
+              const differs = (left, right) => ["x", "y", "width", "height"].some((field) => Math.abs(left[field] - right[field]) > tolerance);
+              if (differs(member, measured) || (expected && (differs(member, expected) || differs(expected, measured)))) geometry.add(member.id);
             }
           }
           for (let i = 0; i < members.length; i += 1) {
@@ -751,6 +775,8 @@
           return {
             state: "ready",
             sceneId,
+            mountedSceneId: window.__bdMountedSceneId,
+            attemptedSceneId: sceneId,
             missingImages: [],
             imageReadiness: imageReadiness.map(({ src, state, sceneId: observedSceneId }) => ({ src, state, sceneId: observedSceneId })),
             imageRegions,
@@ -762,7 +788,13 @@
             recovery: "Verify the scene data and rebuild the deck.",
           };
           setError(failure, sceneId, token);
-          return { state: "error", sceneId, error: failure };
+          return {
+            state: "error",
+            sceneId,
+            mountedSceneId: window.__bdMountedSceneId,
+            attemptedSceneId: sceneId,
+            error: failure,
+          };
         } finally {
           cleanupSceneObservations(sceneId);
         }
@@ -771,9 +803,9 @@
       window.__bdLoadScene = (scene) => {
         const sceneId = beginScene();
         const token = ++latestLoadToken;
+        window.__bdAttemptedSceneId = sceneId;
         registerSceneFiles(sceneId, scene?.files);
         setLoading();
-        window.__bdMountedSceneId = null;
         const run = loadQueue.then(() => performSceneLoad(scene, sceneId, token));
         loadQueue = run.catch(() => undefined);
         return run;
