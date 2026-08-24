@@ -815,6 +815,10 @@ git commit -m "fix: make editor output readable and deterministic"
 **Files:**
 - Create: `test/claude-code-artifacts.test.mjs`
 - Modify: `scripts/harness.html`
+- Modify: `scripts/layout.mjs`
+- Modify: `scripts/auto-compose.mjs`
+- Modify: `scripts/compose.mjs`
+- Modify: `scripts/LAYOUT-CONTRACT.md`
 - Modify: `test/harness.browser.test.mjs`
 - Modify: `decks/claude-code-artifacts/deck-spec.json`
 - Modify: `decks/claude-code-artifacts/image-asset-manifest.json`
@@ -877,6 +881,13 @@ Use the harness at 1600x900 and 1280x800. Inspect all 14 band PNGs and the
 scene together. Fix text clipping, the known explanation-zone marker overlap,
 dark/light inconsistency, small paragraphs, and decorative shape repetition.
 
+The real generated deck, not only the fidelity fixture, must pass. If the
+1280x800 fit zoom makes the shared 18 px note role smaller than 12 effective
+pixels, raise the shared note/body ramp at the responsible layout/composition
+layer and update `LAYOUT-CONTRACT.md`; do not special-case the Claude spec. Fit
+and position frames against measured editor chrome so headings are not hidden
+under the toolbar or bottom navigation at either required viewport.
+
 - [ ] **Step 5: Confirm the complete contract**
 
 Assert 14 band PNGs, four embedded assets with matching SHA-1 file IDs,
@@ -893,7 +904,8 @@ git add decks/claude-code-artifacts/deck-spec.json \
   decks/claude-code-artifacts/assets/settings-precedence-layers.png \
   decks/claude-code-artifacts/assets/trust-boundary.png \
   test/claude-code-artifacts.test.mjs scripts/harness.html \
-  test/harness.browser.test.mjs
+  scripts/layout.mjs scripts/auto-compose.mjs scripts/compose.mjs \
+  scripts/LAYOUT-CONTRACT.md test/harness.browser.test.mjs
 git commit -m "feat: polish the Claude Code learning canvas"
 ```
 
