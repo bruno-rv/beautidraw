@@ -618,6 +618,8 @@ git commit -m "feat: emit accessible semantic learning output"
 - Create: `test/harness.browser.test.mjs`
 - Create: `test/fixtures/editor-fidelity-deck.json`
 - Create: `scripts/spike/probe-10-editor-fidelity.mjs`
+- Modify: `scripts/outline.mjs`
+- Modify: `scripts/preflight.mjs`
 - Modify: `scripts/harness.html`
 - Modify: `scripts/harness-runner.mjs`
 - Modify: `scripts/vendor-entry.js`
@@ -625,6 +627,8 @@ git commit -m "feat: emit accessible semantic learning output"
 - Modify: `scripts/compose.mjs`
 - Modify: `scripts/spike/run-all.mjs`
 - Modify: `scripts/LAYOUT-CONTRACT.md`
+- Modify: `test/outline.test.mjs`
+- Modify: `test/semantic-visuals.test.mjs`
 
 **Interfaces:**
 - Consumes role-aware measured elements from Task 3.
@@ -634,6 +638,30 @@ git commit -m "feat: emit accessible semantic learning output"
   frame: `fitZoom`, `minimumEffectiveTextPx`, `clippedElementIds`,
   `overlapElementIds`, and `obscuredByChromeElementIds`.
 - Later example tasks use the browser test to prove their real editor output.
+
+- [ ] **Step 0: Resolve the three carried Task 3 breaker rulings**
+
+Task 3 exhausted five rounds with three load-bearing residuals. Resolve them
+before the new harness work:
+
+1. Derive the exact composition-page font corpus from emitted text descriptors
+   after semantic composition: every role, font family, actual font size, and
+   full text string. In the composition harness, call `document.fonts.load()`
+   and `document.fonts.check()` for every exact tuple before converter
+   measurement; fail with the missing tuple rather than measuring fallback
+   fonts. Add prose, mono, and handwritten browser regressions using actual
+   emitted sizes.
+2. Route frame headings through a heading-safe Markdown formatter so authored
+   link syntax cannot create a link. Reject `~/path` and `~user/path` as
+   nonportable home paths while preserving explicit supported slash commands,
+   relative repository paths, and real HTTPS links. Add direct injection/home
+   path regressions.
+3. In direct auto-compose, distinguish an omitted `kind` (temporary legacy
+   compatibility) from an explicitly empty/whitespace `kind` (structured
+   preflight failure). Add entrypoint and pure-validation regressions.
+
+These are Rulings carried from Task 3, not optional Task 4 polish. Task 4 cannot
+complete until its assigned reviewer and adversarial reviewer verify all three.
 
 - [ ] **Step 1: Write the failing dual-viewport browser test**
 
