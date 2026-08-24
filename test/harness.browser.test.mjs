@@ -343,6 +343,16 @@ test("fidelity rejects a bound label that disagrees with its container label", a
   });
 });
 
+test("legacy generic bound labels without duplicate labels retain line-height compatibility", async () => {
+  await withHarness(async ({ page }) => {
+    const changed = structuredClone(deck);
+    delete changed.elements.find((element) => element.id === "fidelity-bound").label;
+    changed.elements.find((element) => element.id === "fidelity-bound-label").lineHeight = 1.25;
+    const result = await page.evaluate((scene) => window.__bdLoadScene(scene), changed);
+    assert.equal(result.state, "ready");
+  });
+});
+
 test("pre-remount restore and font failures preserve the mounted scene and expose the attempt", async () => {
   await withHarness(async ({ page }) => {
     const loaded = await page.evaluate((scene) => window.__bdLoadScene(scene), deck);

@@ -567,6 +567,7 @@
         const frames = elements.filter((element) => element.type === "frame");
         const reports = [];
         const elementById = new Map(elements.map((element) => [element.id, element]));
+        const supportedRoles = new Set(["prose", "mono", "handwritten"]);
         const roleFontFamily = (role) => role === "mono" ? 3 : role === "handwritten" ? 5 : 6;
         const boundTupleFields = ["text", "originalText", "fontSize", "fontFamily", "lineHeight", "textAlign", "verticalAlign", "role"];
         const canonicalText = (value) => typeof value === "string"
@@ -592,22 +593,29 @@
             };
             const boundTextBinding = (container.boundElements ?? []).find((binding) => binding.type === "text" && binding.id === element.id);
             const duplicateLabel = container.label ?? null;
+            const hasRoleContract = [element.customData?.beautidrawRole, container.customData?.beautidrawRole]
+              .some((role) => role !== undefined);
             const expectedLineHeights = element.role === "mono" ? [1.2] : element.role === "handwritten" ? [1.25] : [1.25, 1.35];
             const lineHeightMismatch = Number.isFinite(element.lineHeight) && !expectedLineHeights.includes(element.lineHeight);
             const fontRoleMismatch = element.role && element.fontFamily !== roleFontFamily(element.role);
+            const roleMismatch = hasRoleContract && (
+              !supportedRoles.has(element.role) ||
+              (element.customData?.beautidrawRole !== undefined && element.customData.beautidrawRole !== element.role) ||
+              (container.customData?.beautidrawRole !== undefined && container.customData.beautidrawRole !== element.role)
+            );
             const duplicateMismatch = duplicateLabel && boundTupleFields.some((field) =>
               labelTuple[field] !== undefined && duplicateLabel[field] !== undefined && labelTuple[field] !== duplicateLabel[field],
             );
             const originalTextMismatch = typeof element.originalText === "string" &&
               canonicalText(element.originalText) !== canonicalText(element.text);
-            const mismatchedIds = !boundTextBinding || duplicateMismatch || originalTextMismatch || lineHeightMismatch || fontRoleMismatch
+            const mismatchedIds = !boundTextBinding || duplicateMismatch || originalTextMismatch || lineHeightMismatch || fontRoleMismatch || roleMismatch
               ? [container.id, element.id]
               : [];
             // Older bound-label fixtures serialize prose lineHeight=1.25 while
             // the converter's default prose metric is 1.35. Preserve that
             // compatibility case, while all other serialized tuple fields feed
             // the fresh converter measurement below.
-            const legacyLineHeight = element.role === "prose" && element.lineHeight === 1.25 && container.label.lineHeight === undefined;
+            const legacyLineHeight = element.role === "prose" && element.lineHeight === 1.25 && duplicateLabel?.lineHeight === undefined;
             const converterTuple = legacyLineHeight ? { ...labelTuple, lineHeight: undefined, originalText: undefined } : labelTuple;
             const converted = window.__bdApi.convertToExcalidrawElements([{
               id: container.id,
@@ -696,8 +704,11 @@
               const expected = member.customData?.beautidrawMeasuredBounds;
               const differs = (left, right) => ["x", "y", "width", "height"].some((field) => Math.abs(left[field] - right[field]) > tolerance);
               const ignoredTupleFields = new Set(measurement.ignoredTupleFields ?? []);
+              const generatedRoleContract = member.customData?.beautidrawRole !== undefined ||
+                elementById.get(member.containerId)?.customData?.beautidrawRole !== undefined;
               const tupleDiffers = member.type === "text" && member.containerId && boundTupleFields.some((field) =>
-                field !== "role" && !ignoredTupleFields.has(field) && measured[field] !== undefined && member[field] !== measured[field],
+                !ignoredTupleFields.has(field) && (field !== "role" || generatedRoleContract) &&
+                measured[field] !== undefined && member[field] !== measured[field],
               );
               if (tupleDiffers || differs(member, measured) || (expected && (differs(member, expected) || differs(expected, measured)))) {
                 geometry.add(member.id);

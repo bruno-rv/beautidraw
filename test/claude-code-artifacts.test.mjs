@@ -175,17 +175,35 @@ test("Claude Code exemplar satisfies its mixed-media contract", { timeout: 300_0
 
     const generatedBound = elements.find((element) => element.type === "text" && element.containerId);
     assert.ok(generatedBound, "generated deck must contain a bound text element");
-    for (const mutate of [
-      (element) => { element.text += " stale generated text"; },
-      (element) => { element.fontSize += 1; },
-      (element) => { element.lineHeight += 0.5; },
+    for (const [mutation, mutate] of [
+      ["text", (element) => { element.text += " stale generated text"; }],
+      ["font", (element) => { element.fontSize += 1; }],
+      ["line height", (element) => { element.lineHeight += 0.5; }],
+      ["bogus role", (element) => { element.role = "bogus"; }],
+      ["missing role", (element) => { delete element.role; }],
     ]) {
       const changed = structuredClone(deck);
       mutate(changed.elements.find((element) => element.id === generatedBound.id));
       const result = await withHarness(async ({ page }) =>
         page.evaluate((scene) => window.__bdLoadScene(scene), changed));
-      assert.equal(result.state, "error", `${generatedBound.id}: generated bound-label mutation must fail fidelity`);
+      assert.equal(result.state, "error", `${generatedBound.id}: generated ${mutation} mutation must fail fidelity`);
+      assert.match(result.error.reason, /^Fidelity report failed/);
+      assert.match(result.error.recovery, /geometry|bounds/i);
       assert.match(result.error.reason, new RegExp(generatedBound.id));
+      assert.match(result.error.reason, new RegExp(generatedBound.containerId));
+    }
+
+    const legacyLineHeight = structuredClone(deck);
+    legacyLineHeight.elements.find((element) => element.id === generatedBound.id).lineHeight = 1.25;
+    const legacyResult = await withHarness(async ({ page }) =>
+      page.evaluate((scene) => window.__bdLoadScene(scene), legacyLineHeight));
+    assert.ok(
+      legacyResult.state === "ready" || (legacyResult.state === "error" && legacyResult.error?.code === "FIDELITY"),
+      `${generatedBound.id}: generated lineHeight=1.25 must pass compatibility or fail as typed fidelity, got ${legacyResult.error?.reason ?? legacyResult.state}`,
+    );
+    if (legacyResult.state === "error") {
+      assert.match(legacyResult.error.reason, new RegExp(generatedBound.id));
+      assert.match(legacyResult.error.reason, new RegExp(generatedBound.containerId));
     }
   } finally {
     await rm(output, { recursive: true, force: true });
