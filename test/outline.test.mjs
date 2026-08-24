@@ -179,7 +179,7 @@ test("outline permits slash commands and ordinary web URLs", () => {
 });
 
 test("outline rejects single-segment POSIX paths but keeps known slash commands", () => {
-  for (const value of ["/etc", "/tmp", "/private"]) {
+  for (const value of ["/etc", "/tmp", "/private", "/project", "/srv", "/data"]) {
     const unsafe = structuredClone(spec);
     unsafe.bands[0].visual.inspect = `Read ${value}`;
     assert.throws(() => buildOutline(unsafe), /absolute|portable|path/i, value);

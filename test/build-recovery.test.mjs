@@ -80,9 +80,18 @@ test("semantic composition preserves full authored text and handwritten annotati
   const output = join(tempRoot, "out");
   const spec = JSON.parse(await readFile(claudeSpecPath, "utf8"));
   const firstCanvas = spec.bands.find((band) => band.visual?.callouts?.length);
-  firstCanvas.visual.annotation = "A short handwritten annotation survives composition.";
-  firstCanvas.visual.annotations = [{ text: "A second annotation remains ordered." }];
   firstCanvas.visual.callouts[0].note = "This authored label is intentionally long enough to prove that composition preserves every word without character-count ellipsis.";
+  const orbitBand = spec.bands[1];
+  orbitBand.visual.family = "orbit";
+  orbitBand.visual.annotations = [
+    { text: "Orbit annotation one", x: 0.41, y: 0.66 },
+    { text: "Orbit annotation two" },
+  ];
+  const matrixBand = spec.bands.find((band) => band.visual?.family === "matrix");
+  matrixBand.visual.annotations = [
+    { text: "Matrix annotation one stays clear of quadrants.", x: 0.58, y: 0.51 },
+    { text: "Matrix annotation two remains handwritten." },
+  ];
   await cp(join(dirname(claudeSpecPath), "assets"), join(tempRoot, "assets"), { recursive: true });
   const specPath = join(tempRoot, "annotated.json");
   await writeFile(specPath, JSON.stringify(spec));
@@ -95,9 +104,34 @@ test("semantic composition preserves full authored text and handwritten annotati
   const deck = JSON.parse(await readFile(join(output, "deck.excalidraw"), "utf8"));
   const composed = deck.elements.filter((element) => element.customData?.beautidrawComposition === true);
   const annotations = composed.filter((element) => element.type === "text" && element.role === "handwritten");
-  assert.ok(annotations.some((element) => element.text.includes("A short handwritten annotation")));
-  assert.ok(annotations.some((element) => element.text.includes("A second annotation remains ordered")));
+  assert.ok(annotations.some((element) => element.text.includes("Orbit annotation one")));
+  assert.ok(annotations.some((element) => element.text.includes("Orbit annotation two")));
+  assert.ok(annotations.findIndex((element) => element.text.includes("Orbit annotation one")) < annotations.findIndex((element) => element.text.includes("Orbit annotation two")));
   assert.ok(composed.some((element) => element.type === "text" && element.text.includes("without character-count ellipsis")));
+
+  const overlaps = (a, b) =>
+    Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x) > 0 &&
+    Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y) > 0;
+  for (const frameId of ["b1-frame", "b13-frame"]) {
+    const frame = deck.elements.find((element) => element.id === frameId);
+    const members = composed.filter((element) => element.frameId === frameId);
+    const frameAnnotations = members.filter((element) => element.type === "text" && element.role === "handwritten");
+    assert.ok(frameAnnotations.length >= 2, `${frameId} has handwritten annotations`);
+    for (const annotation of frameAnnotations) {
+      assert.equal(annotation.frameId, frameId);
+      assert.equal(annotation.fontFamily, 5);
+      assert.ok(frame.children.includes(annotation.id), `${annotation.id} is a frame child`);
+      assert.ok(annotation.x >= frame.x && annotation.y >= frame.y);
+      assert.ok(annotation.x + annotation.width <= frame.x + frame.width);
+      assert.ok(annotation.y + annotation.height <= frame.y + frame.height);
+      for (const other of members) {
+        if (other.id === annotation.id || other.customData?.beautidrawCompositionKind === "surface") continue;
+        if (["line", "arrow"].includes(other.type)) continue;
+        if (other.containerId === annotation.id || annotation.containerId === other.id) continue;
+        assert.equal(overlaps(annotation, other), false, `${annotation.id} overlaps ${other.id}`);
+      }
+    }
+  }
 });
 
 test("a missing final artifact preserves the previous output", { timeout: 120_000 }, async () => {

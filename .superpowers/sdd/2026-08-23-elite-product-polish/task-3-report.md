@@ -233,3 +233,63 @@ declared visual zone; no approximation or truncation is reintroduced.
 - Existing structured layout, role defaults, error routing, body bounds,
   contrast, overlap, and recovery gates remain enabled; all current tests and
   probes pass.
+
+## Fix Round 5 evidence
+
+### RED
+
+- Extended the singleton POSIX regression with `/project`, `/srv`, and
+  `/data`; before the fix `/project` passed because the detector allowlisted
+  arbitrary singleton slash tokens.
+- Added a real transactional Claude build regression that changes one band to
+  `orbit` and annotates it plus the dense `matrix` family at deliberate
+  collision coordinates. Before collision-aware placement, composition failed
+  with overlap diagnostics for both annotated families.
+
+### GREEN
+
+- Replaced the generic singleton-root allowlist with an explicit slash-command
+  set covering commands demonstrated by the deck specs/tests (`/context`,
+  `/memory`, `/tasks`, `/compact`, `/status`, `/hooks`, `/name`, `/deploy`,
+  `/review-invoice`). Unknown singleton roots and all multi-segment absolute
+  paths remain rejected while web URLs and relative repository paths remain
+  valid.
+- Auto-composition now carries each annotation's source field into its
+  metadata. `compose.mjs` measures each annotation through the Excalidraw
+  converter, tries the requested coordinate followed by deterministic reserved
+  candidates, rejects collisions with converted family elements and prior
+  annotations, checks both body and frame bounds, preserves authored order,
+  and fails closed with a field-addressed diagnostic when no candidate fits.
+- The real regression asserts orbit and matrix annotations preserve order,
+  frame membership, handwritten role/font family, frame/body containment, and
+  no overlap with other family elements.
+
+Verification:
+
+```text
+node --test test/outline.test.mjs test/semantic-visuals.test.mjs test/build-recovery.test.mjs
+  25 passed, 0 failed
+node --test
+  67 passed, 0 failed
+node scripts/spike/probe-07-text-geometry.mjs
+  all assertions hold
+node scripts/spike/probe-08-font-gate.mjs
+  all assertions hold
+node --check scripts/*.mjs scripts/spike/*.mjs
+node --check test/*.mjs
+git diff --check
+  clean
+```
+
+The normal Claude build, recovery build, and annotated orbit/matrix build all
+completed with the full deliverable set. Very long annotations still fail
+closed when measured bounds cannot fit any reserved candidate.
+
+### Self-review
+
+- Scope is limited to explicit slash-command recognition, annotation source
+  metadata, measured collision-aware composition, and their outline/build
+  regressions. No generated deck outputs or unrelated cleanup were changed.
+- Existing path validation, URL handling, measured text geometry, frame/body
+  checks, role/font parity, overlap validation, transactional recovery, and
+  diagnostics remain enabled; the full suite and required probes are green.

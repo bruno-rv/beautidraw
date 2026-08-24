@@ -14,9 +14,8 @@ const FILE_URL_RE = /\bfile:\/\//i;
 const WINDOWS_PATH_RE = /\b[A-Za-z]:[\\/][^\s`<>\])},;!?]+/;
 const UNC_PATH_RE = /\\{2,}[^\\/\s]+[\\/]+[^\\/\s]+(?:[\\/]+[^\\/\s]+)*/;
 const POSIX_PATH_RE = /(?<![A-Za-z0-9_.~-])\/[A-Za-z0-9_.~-]+(?:\/[A-Za-z0-9_.~:-]+)*/g;
-const POSIX_SINGLETON_ROOTS = new Set([
-  "etc", "tmp", "private", "var", "usr", "home", "users", "system", "opt", "bin", "sbin", "dev", "proc",
-  "root", "volumes", "applications", "library", "network", "cores", "run", "srv", "data",
+const SLASH_COMMANDS = new Set([
+  "compact", "context", "deploy", "hooks", "memory", "name", "review-invoice", "status", "tasks",
 ]);
 
 function hasAbsolutePath(value) {
@@ -30,7 +29,7 @@ function hasAbsolutePath(value) {
     if (match.index > 0 && withoutWebUrls[match.index - 1] === "~") continue;
     const candidate = match[0].replace(/[.,;:!?)}\]]+$/, "");
     const segments = candidate.slice(1).split("/");
-    if (segments.length === 1 && !POSIX_SINGLETON_ROOTS.has(segments[0].toLowerCase())) continue;
+    if (segments.length === 1 && SLASH_COMMANDS.has(segments[0].toLowerCase())) continue;
     return true;
   }
   return false;

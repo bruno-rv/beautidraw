@@ -171,7 +171,16 @@ function metaForBand(band, index) {
     tradeoff: clean(visual.tradeoff, ""),
     example: clean(visual.example, ""),
     inspect: clean(visual.inspect, ""),
-    annotations: normalizeAnnotations(visual.annotation).concat(normalizeAnnotations(visual.annotations)),
+    annotations: [
+      ...normalizeAnnotations(visual.annotation).map((annotation, annotationIndex) => ({
+        ...annotation,
+        field: `bands[${index}].visual.annotation${Array.isArray(visual.annotation) ? `[${annotationIndex}]` : ""}`,
+      })),
+      ...normalizeAnnotations(visual.annotations).map((annotation, annotationIndex) => ({
+        ...annotation,
+        field: `bands[${index}].visual.annotations[${annotationIndex}]`,
+      })),
+    ],
     image: visual.image ?? null,
     bandHeight: band.height,
     nodes,
@@ -193,7 +202,11 @@ function annotationElements(meta, { x = 0.05, y = 0.66, maxWidth } = {}) {
     18,
     meta.dark ? darkText : lightText,
     "handwritten",
-    { beautidrawAnnotation: true, ...(maxWidth ? { beautidrawMaxWidth: maxWidth } : {}) },
+    {
+      beautidrawAnnotation: true,
+      beautidrawAnnotationField: annotation.field,
+      ...(maxWidth ? { beautidrawMaxWidth: maxWidth } : {}),
+    },
   ));
 }
 

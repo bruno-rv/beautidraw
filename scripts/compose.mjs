@@ -297,7 +297,7 @@ const result = await withHarness(async ({ page }) =>
     async ({ deck, prepared, files, validationConfig }) => {
       const api = window.__bdApi;
       const roleFontFamily = validationConfig.fontFamily;
-      const sizeFromConvertedBounds = (item) => item.skeletons.map((skeleton) => {
+      const sizeFromConvertedBounds = (item, skeletons = item.skeletons) => skeletons.map((skeleton) => {
         if (skeleton.type === "text" && skeleton.customData?.beautidrawMeasuredText) {
           const role = skeleton.role ?? "prose";
           const fontFamily = roleFontFamily[role] ?? roleFontFamily.prose;
@@ -416,17 +416,92 @@ const result = await withHarness(async ({ page }) =>
           label: { ...skeleton.label, role, fontFamily },
         };
       });
+      const annotationCandidates = [
+        [0.05, 0.18], [0.30, 0.18], [0.55, 0.18],
+        [0.05, 0.30], [0.30, 0.30], [0.55, 0.30],
+        [0.05, 0.42], [0.30, 0.42], [0.55, 0.42],
+        [0.05, 0.54], [0.30, 0.54], [0.55, 0.54],
+        [0.05, 0.60], [0.30, 0.60], [0.55, 0.60],
+        [0.05, 0.66], [0.30, 0.66], [0.55, 0.66],
+        [0.05, 0.70], [0.30, 0.70], [0.55, 0.70],
+      ];
+      const annotationOverlaps = (a, b) =>
+        Number.isFinite(a.width) && Number.isFinite(a.height) &&
+        Number.isFinite(b.width) && Number.isFinite(b.height) &&
+        Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x) > 0 &&
+        Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y) > 0;
+      const inside = (bounds, item) => {
+        const { body } = item;
+        const { frame } = body;
+        return (
+          bounds.x >= body.x - 0.5 &&
+          bounds.y >= body.y - 0.5 &&
+          bounds.x + bounds.width <= body.x + body.width + 0.5 &&
+          bounds.y + bounds.height <= body.y + body.height + 0.5 &&
+          bounds.x >= frame.x - 0.5 &&
+          bounds.y >= frame.y - 0.5 &&
+          bounds.x + bounds.width <= frame.x + frame.width + 0.5 &&
+          bounds.y + bounds.height <= frame.y + frame.height + 0.5
+        );
+      };
       const byFrame = new Map();
       for (const item of prepared) {
-        const skeletons = sizeFromConvertedBounds(item);
-        const converted = api
-          .convertToExcalidrawElements(skeletons, { regenerateIds: false })
-          .map((element) => ({
-            ...element,
-            frameId: item.body.frameId,
-            boundElements: element.boundElements ?? [],
-            customData: { ...(element.customData ?? {}), beautidrawComposition: true, lane: item.entry.lane },
-          }));
+        const annotationSkeletons = item.skeletons.filter((skeleton) => skeleton.customData?.beautidrawAnnotation === true);
+        const familySkeletons = item.skeletons.filter((skeleton) => skeleton.customData?.beautidrawAnnotation !== true);
+        const familySized = sizeFromConvertedBounds(item, familySkeletons);
+        const familyConverted = api.convertToExcalidrawElements(familySized, { regenerateIds: false });
+        const familyCollisionElements = familyConverted.filter(
+          (element) => element && element.customData?.beautidrawCompositionKind !== "surface" &&
+            !["line", "arrow"].includes(element.type),
+        );
+        const placedAnnotationBounds = [];
+        const annotationConverted = [];
+        for (const skeleton of annotationSkeletons) {
+          const requested = [
+            (skeleton.x - item.body.x) / item.body.width,
+            (skeleton.y - item.body.y) / item.body.height,
+          ];
+          const candidates = [requested, ...annotationCandidates].filter(([x, y], index, all) =>
+            Number.isFinite(x) && Number.isFinite(y) && x >= 0 && x <= 1 && y >= 0 && y <= 1 &&
+            all.findIndex(([otherX, otherY]) => otherX === x && otherY === y) === index,
+          );
+          let placed = null;
+          for (const [x, y] of candidates) {
+            const candidateSkeleton = {
+              ...skeleton,
+              x: item.body.x + item.body.width * x,
+              y: item.body.y + item.body.height * y,
+            };
+            try {
+              const sized = sizeFromConvertedBounds(item, [candidateSkeleton]);
+              const [candidateBounds] = sized;
+              if (!candidateBounds) continue;
+              if (!inside(candidateBounds, item)) {
+                continue;
+              }
+              if ([...familyCollisionElements, ...placedAnnotationBounds].filter(Boolean).some((element) => annotationOverlaps(candidateBounds, element))) {
+                continue;
+              }
+              placed = { sized, candidateBounds };
+              break;
+            } catch {
+              // A measured candidate that cannot fit is rejected like any other
+              // collision; the field-addressed error below is the only output.
+            }
+          }
+          if (!placed) {
+            const field = skeleton.customData?.beautidrawAnnotationField ?? `band ${item.entry.band} ${skeleton.id}`;
+            throw new Error(`${field}: annotation has no collision-free placement inside its frame/body`);
+          }
+          placedAnnotationBounds.push(placed.candidateBounds);
+          annotationConverted.push(...api.convertToExcalidrawElements(placed.sized, { regenerateIds: false }));
+        }
+        const converted = [...familyConverted, ...annotationConverted].map((element) => ({
+          ...element,
+          frameId: item.body.frameId,
+          boundElements: element.boundElements ?? [],
+          customData: { ...(element.customData ?? {}), beautidrawComposition: true, lane: item.entry.lane },
+        }));
         byFrame.set(item.body.frameId, converted);
       }
 
