@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build appendix-illustrated deck: narrative frames + one labeled scene frame per command.
 
-Embeds optimized display derivatives (1200x675 JPEG q82) so the file stays openable.
+Embeds optimized 1600x900 JPEG q83 caption derivatives so the file stays openable.
 Size gate: refuses to write a deck larger than MAX_MB.
 Idempotent: removes any previous appendix elements before appending.
 """
@@ -35,7 +35,7 @@ def main():
 
     os.makedirs(LIB, exist_ok=True)
     elements = deck['elements']
-    files = dict(deck.get('files', {}))
+    files = dict(deck.get('files') or {})
     # strip previous appendix
     elements = [e for e in elements if not str(e.get('id', '')).startswith('apx-')]
     kept_fids = {e.get('fileId') for e in elements if e.get('type') == 'image'}
@@ -128,7 +128,7 @@ def main():
                          "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid", "roughness": 1,
                          "opacity": 100, "groupIds": [], "frameId": frame_id, "roundness": None,
                          "seed": 4, "version": 1, "versionNonce": 5, "isDeleted": False,
-                         "boundElements": None, "updated": 1, "link": None, "locked": False,
+                         "boundElements": [], "crop": None, "updated": 1, "link": None, "locked": False,
                          "fileId": fid, "status": "saved", "scale": [1, 1]})
     deck['elements'] = elements
     deck['files'] = files

@@ -456,13 +456,13 @@ async function illustration(meta) {
   const side = meta.image.side === "right" ? "right" : "left";
   const x = side === "left" ? 0.03 : 0.97 - width;
   const y = (1 - height) / 2;
-  const textX = side === "left" ? Math.max(0.56, x + width + 0.05) : 0.05;
+  const textX = side === "left" ? Math.max(0.56, x + width + 0.02) : 0.05;
   const callouts = meta.callouts.length ? meta.callouts : meta.nodes.slice(0, 2).map((node) => ({ label: node.label, note: node.note }));
   const hasLongCallout = callouts.some((callout) => callout.note.length > 80);
   const calloutStart = 0.14;
-  const calloutStep = hasLongCallout ? 0.40 : 0.28;
-  const illustrationInspectY = hasLongCallout ? 0.74 : 0.62;
-  const illustrationExplanationY = hasLongCallout ? 0.84 : 0.72;
+  const calloutStep = hasLongCallout ? 0.45 : 0.28;
+  const illustrationInspectY = hasLongCallout ? 0.81 : 0.62;
+  const illustrationExplanationY = hasLongCallout ? 0.865 : 0.72;
   const textColor = meta.dark ? darkText : lightText;
   const mutedText = meta.dark ? "#cbd5e1" : "#475569";
   const elements = [

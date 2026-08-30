@@ -20,5 +20,5 @@ decks/*/out/
 
 # Blackboard library: images/*.png ship via git-lfs (nondeterministic image_gen
 # output; manifest.json {file,sha1,bytes} is the provenance record). The captioned
-derivatives below are rebuild outputs of build-appendix.py and stay out of git.
+# derivatives below are rebuild outputs of build-appendix.py and stay out of git.
 decks/command-blackboard-library/images-captioned/

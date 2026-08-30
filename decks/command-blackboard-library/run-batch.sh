@@ -43,7 +43,10 @@ gen_one() { # name motif -> emits 'ok' or 'fail'
 n=0
 total=$(grep -vc 'SAME-IMAGE-AS' "$BATCH")
 while IFS=$'\t' read -r -u 3 name motif what; do
-  [[ "$motif" == SAME-IMAGE-AS* ]] && continue
+  [[ "$motif" == SAME-IMAGE-AS* ]] && {
+    [[ "$motif" == SAME-IMAGE-AS:* ]] || { echo "REFUSED: malformed alias row for $name (expected SAME-IMAGE-AS:<target>): '$motif'"; exit 1; }
+    continue
+  }
   n=$((n+1))
   if [[ -f /tmp/bb-raw/$name.png && $(stat -f%z /tmp/bb-raw/$name.png 2>/dev/null || echo 0) -gt 50000 ]]; then
     echo "$name ok (cached)"

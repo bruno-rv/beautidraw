@@ -16,9 +16,13 @@ reproducible visual system, not a loose request for "something hand-drawn".
 
 ## Canonical visual contract
 
-- Output one self-contained **16:9** image at **1536 × 864**.
+- Output one self-contained **16:9** image at **1536 × 864** (the batch runner requests 1536×864;
+  generators occasionally return near-16:9 sizes such as 1672 × 941. The caption-bake builder
+  resizes to its own 1600 × 900 derivative, so the small aspect delta is absorbed downstream —
+  do not ship letterboxed duplicates to force an exact size).
 - Use a dark charcoal-green chalkboard ground, never a white canvas or a photographic scene.
-- Use lightly dusty, imperfect chalk linework with clear silhouettes and generous margins.
+- Use lightly dusty, imperfect chalk linework with clear silhouettes; compose edge to edge
+  (see the canonical prefix below — “generous margins” wording is rejected for the same reason).
 - Use restrained chalk colors: powder blue, mint green, lavender violet, warm amber, coral red,
   and off-white. Keep the background dark and the linework brighter than the board.
 - Compose one coherent visual thesis that matches the band’s argument. Use a left-to-right
@@ -44,10 +48,17 @@ Start every image prompt with this exact style direction, then append only the s
 > Create a cohesive presentation illustration in a colored-blackboard drawing style: dark
 > charcoal-green chalkboard background, subtle chalk dust and hand-drawn texture, bright
 > restrained chalk marks in powder blue, mint green, lavender violet, warm amber, coral red,
-> and off-white. Use simple clean hand-drawn line art, generous margins, no photorealism, no
-> logos, no interface screenshots, no readable words, no letters, no numbers. The illustration
-> should feel practical, intelligent, friendly, and human-centred. Keep the drawing well inside
-> the frame and make it legible as a 16:9 card.
+> and off-white. Use simple clean hand-drawn line art, no photorealism, no logos, no interface
+> screenshots, no readable words, no letters, no numbers. The illustration should feel
+> practical, intelligent, friendly, and human-centred. Compose the scene edge to edge —
+> layered foreground, midground, and background filling the whole board, with only a slim
+> crop-safe border, never a lone object centered on empty board with wide empty margins.
+>
+> Do not use the phrases “generous margins”, “well inside the frame”, or “16:9 card” in any
+> prompt: they push the model toward boxed, minor-content compositions (see the rejection
+> criteria in the repo `SKILL.md`). The full prompt pattern lives in
+> `decks/command-blackboard-library/run-batch.sh` (PREFIX + Subject); this file kept an
+> earlier wording that those rules explicitly reject, so the script is authoritative.
 
 The prefix carries the style and nothing else — the deck's domain belongs in the subject line
 below it, never in the prefix. A prefix that names one deck's subject silently reframes every
@@ -101,7 +112,9 @@ default.
 2. View every candidate before wiring it into the deck. Reject it if the background is not a
    chalkboard, the linework becomes polished vector art, the colors drift, the subject is
    clipped, or readable text appears.
-3. Normalize standalone copies to 1536 × 864; normalize frame-native copies to the exact target
+3. Normalize standalone copies to 1536 × 864 (or keep the generator's near-16:9 output when the
+   consumer resizes downstream, as the caption-bake builder does — record actual dimensions in the
+   manifest); normalize frame-native copies to the exact target
    frame or side-zone dimensions. Keep the PNGs beside the handoff deck in the requested output
    folder (or in the deck's `assets/` directory when the generator owns the output folder).
    Record the final pixel dimensions and placement mode in the manifest.
