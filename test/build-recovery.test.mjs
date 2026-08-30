@@ -150,3 +150,21 @@ test("a missing final artifact preserves the previous output", { timeout: 120_00
   const siblings = await readdir(dirname(output));
   assert.equal(siblings.some((name) => name.includes("stage-") || name.includes("backup-")), false);
 });
+
+test("evidence band with three nodes composes without nodeText crash", { timeout: 120_000 }, async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), "beautidraw-evidence3-"));
+  const spec = JSON.parse(await readFile(claudeSpecPath, "utf8"));
+  const evidenceBand = spec.bands.find((band) => band.visual?.family === "evidence");
+  assert.ok(evidenceBand, "fixture must contain an evidence band");
+  evidenceBand.visual.nodes = evidenceBand.visual.nodes.slice(0, 3);
+  const specPath = join(tempRoot, "evidence3.json");
+  await writeFile(specPath, JSON.stringify(spec));
+  await cp(join(dirname(claudeSpecPath), "assets"), join(tempRoot, "assets"), { recursive: true });
+  const output = join(tempRoot, "out");
+  const result = spawnSync(process.execPath, [resolve(root, "scripts/build-deck.mjs"), specPath, output], {
+    cwd: root,
+    encoding: "utf8",
+    timeout: 110_000,
+  });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+});

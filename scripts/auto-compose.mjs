@@ -403,10 +403,11 @@ function evidence(meta) {
   // spotlight: the left column sits inside the footer's x-range.
   const positions = [[0.05, 0.16], [0.71, 0.16], [0.05, 0.48], [0.71, 0.48]];
   const sources = meta.nodes.slice(0, 4);
-  positions.forEach(([x, y], index) => {
+  sources.forEach((source, index) => {
+    const [x, y] = positions[index];
     const colors = colorFor(meta, index + 1, meta.dark);
     if (meta.dark) colors.fill = colors.dark;
-    elements.push(shape(`evidence-${index + 1}`, "rectangle", x, y, 0.23, 0.14, nodeText(sources[index]), colors, RAMP.note));
+    elements.push(shape(`evidence-${index + 1}`, "rectangle", x, y, 0.23, 0.14, nodeText(source), colors, RAMP.note));
   });
   if (sources.length >= 2) {
     // From the left column's centroid (between its top and bottom sources)
