@@ -20,5 +20,4 @@ decks/*/out/
 
 # Blackboard scene library: regenerable from shards + run-batch.sh + assemble.py (530 MB).
 # The manifest.json IS the provenance record and stays tracked.
-decks/command-blackboard-library/images/*.png
 decks/command-blackboard-library/images-captioned/
