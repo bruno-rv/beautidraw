@@ -1,0 +1,656 @@
+{
+ "add-dir": {
+  "what": "Add a working directory for file access during the current session. Type a partial path to see matching directory suggestions; press `Tab` to accept one.",
+  "when": "Give Claude access to another checkout without leaving this session.",
+  "example": "/add-dir ~/work/shared \u2192 this session can read and edit that tree too.",
+  "tier": "Skip list"
+ },
+ "advisor": {
+  "what": "Enable or disable the advisor tool, which consults a second model for guidance at key moments during a task. Accepts `fable`, `opus`, `sonnet`, or a full model ID.",
+  "when": "When you want a second model consulted at key decisions.",
+  "example": "/advisor enable opus \u2192 a second model weighs in at key moments.",
+  "tier": "Skip list"
+ },
+ "agents": {
+  "what": "As of v2.1.198, running `/agents` prints a reminder to ask Claude to create or manage subagents, or to edit `.claude/agents/` or `~/.claude/agents/` directly.",
+  "when": "When you need to create or manage subagents.",
+  "example": "/agents \u2192 reminder to ask Claude to create or manage subagents.",
+  "tier": "Skip list"
+ },
+ "artifacts": {
+  "what": "List the artifacts you own or that are shared with you, then attach one to the session, open it in your browser, or copy its link. Available where artifacts are.",
+  "when": "When a shared artifact should join the current session.",
+  "example": "/artifacts \u2192 pick one from the list and attach it to this session.",
+  "tier": "Skip list"
+ },
+ "auto-mode-setup": {
+  "what": "Draft `autoMode.environment` entries from your project and recent sessions, then review the draft and save it to your user settings.",
+  "when": "When you want auto-mode rules drafted from real session history.",
+  "example": "/auto-mode-setup \u2192 drafts entries, you review, then it saves.",
+  "tier": "Skip list"
+ },
+ "autocompact": {
+  "what": "Set the auto-compact window: how full the context window gets before Claude Code compacts automatically.",
+  "when": "When you want auto-compact to trigger later or earlier than the default.",
+  "example": "/autocompact 80 \u2192 auto-compact triggers at 80% full instead.",
+  "tier": "Skip list"
+ },
+ "autofix-pr": {
+  "what": "Spawn a Claude Code on the web session that watches the current branch's PR and pushes fixes when CI fails or reviewers leave comments.",
+  "when": "When CI keeps failing on a PR while you work elsewhere.",
+  "example": "/autofix-pr \u2192 a web session watches the PR and pushes CI fixes.",
+  "tier": "Skip list"
+ },
+ "background": {
+  "what": "Detaches the session to run as a background agent, freeing your terminal.",
+  "when": "Use for long runs you don't need to watch.",
+  "example": "/background \u201cfinish the migration\u201d \u2014 monitor with claude agents.",
+  "tier": "Essential 20"
+ },
+ "batch": {
+  "what": "Decomposes a large change into 5\u201330 independent units, each in its own git worktree with its own PR.",
+  "when": "Use for big refactors that would otherwise be one giant, risky change.",
+  "example": "/batch migrate src/ from JavaScript to TypeScript.",
+  "tier": "Essential 20"
+ },
+ "branch": {
+  "what": "Creates a branch of the conversation at this point and switches into it.",
+  "when": "Use to try a different direction without losing the original.",
+  "example": "/branch \u201ctry the simpler approach\u201d \u2014 return with /resume.",
+  "tier": "Useful, but niche"
+ },
+ "btw": {
+  "what": "Asks a side question that does not enter the conversation history.",
+  "when": "Use for quick clarifications that shouldn't pollute the task context.",
+  "example": "/btw what's the difference between X and Y?",
+  "tier": "Essential 20"
+ },
+ "bug": {
+  "what": "Report a bug or share your conversation. You choose how much session history to include and confirm on a consent screen before anything is sent.",
+  "when": "When something is broken and you want it off your machine.",
+  "example": "/bug \u2192 choose how much history to include, then confirm send.",
+  "tier": "Skip list"
+ },
+ "cd": {
+  "what": "Change the current working directory; relative paths resolve from there. Press `Tab` to accept path suggestions.",
+  "when": "When the work moves to another checkout mid-conversation.",
+  "example": "/cd ~/other-repo \u2192 same conversation, new working directory.",
+  "tier": "Skip list"
+ },
+ "chrome": {
+  "what": "Configure Claude in Chrome settings",
+  "when": "When tuning the Chrome integration.",
+  "example": "/chrome \u2192 configure Claude in Chrome from the terminal.",
+  "tier": "Skip list"
+ },
+ "claude-api": {
+  "what": "**Skill.** Load Claude API and Managed Agents reference material for your project's language.",
+  "when": "When writing code against the Claude API.",
+  "example": "/claude-api \u2192 loads API reference material for your language.",
+  "tier": "Skip list"
+ },
+ "clear": {
+  "what": "Starts a new conversation with empty context, keeping project memory.",
+  "when": "Use between tasks; label the old one for /resume.",
+  "example": "/clear \u201cnext task\u201d names the previous session in the picker.",
+  "tier": "Useful, but niche"
+ },
+ "code-review": {
+  "what": "Reviews the current diff (or a PR number, branch, or path) for correctness bugs; --fix applies findings.",
+  "when": "Use before merge \u2014 the correctness gate.",
+  "example": "/code-review high 1234 reviews PR #1234; /code-review --fix applies findings.",
+  "tier": "Essential 20"
+ },
+ "color": {
+  "what": "Set the prompt bar color for the current session. Available colors: `red`, `blue`, `green`, `yellow`, `purple`, `orange`, `pink`, `cyan`.",
+  "when": "When you want the prompt bar color to match a mood or project.",
+  "example": "/color blue \u2192 prompt bar turns blue for this session.",
+  "tier": "Skip list"
+ },
+ "compact": {
+  "what": "Summarizes the conversation so far to free context while keeping the thread.",
+  "when": "Use when the window is full but the task isn't done.",
+  "example": "/compact \u201ckeep the auth requirements\u201d focuses the summary.",
+  "tier": "Essential 20"
+ },
+ "config": {
+  "what": "Opens the Settings interface, or sets settings directly with key=value pairs.",
+  "when": "Use for theme, model, output style, and other preferences.",
+  "example": "/config theme=dark or /config thinking=false.",
+  "tier": "Worth knowing"
+ },
+ "context": {
+  "what": "Visualizes context usage as a colored grid with optimization suggestions.",
+  "when": "Run it when responses start degrading or you're unsure what's eating the window.",
+  "example": "/context shows the grid; /context all expands the per-item breakdown.",
+  "tier": "Essential 20"
+ },
+ "copy": {
+  "what": "Copy the last assistant response to clipboard. Pass a number `N` to copy the Nth-latest response: `/copy 2` copies the second-to-last.",
+  "when": "When a response belongs in a ticket, doc, or message.",
+  "example": "/copy 2 \u2192 copies the second-latest response to the clipboard.",
+  "tier": "Skip list"
+ },
+ "cost": {
+  "what": "Alias for /usage \u2014 session cost and plan limits.",
+  "when": "Use interchangeably with /usage.",
+  "example": "/cost \u2261 /usage.",
+  "tier": "Alias of /usage"
+ },
+ "dataviz": {
+  "what": "**Skill.** Design guidance for charts, graphs, and dashboards.",
+  "when": "When building charts, graphs, or dashboards.",
+  "example": "/dataviz \u2192 chart and dashboard design guidance loads into context.",
+  "tier": "Skip list"
+ },
+ "debug": {
+  "what": "Enables session debug logging and troubleshoots by reading the session debug log.",
+  "when": "Use when something is failing and you need the log.",
+  "example": "/debug \u201cwhy is the tool failing\u201d starts capturing from that point.",
+  "tier": "Worth knowing"
+ },
+ "deep-research": {
+  "what": "Fans out web searches on a question, cross-checks sources, and synthesizes a cited report.",
+  "when": "Use for questions that need current, sourced answers.",
+  "example": "/deep-research \u201cRAG vs graph databases 2026\u201d.",
+  "tier": "Useful, but niche"
+ },
+ "design-login": {
+  "what": "Authorize design-system access for `/design-sync` with your claude.ai account",
+  "when": "Before /design-sync needs claude.ai authorization.",
+  "example": "/design-login \u2192 opens the claude.ai authorization flow for design access.",
+  "tier": "Skip list"
+ },
+ "design-sync": {
+  "what": "**Skill.** Convert your repo's React design system and upload it to Claude Design, so designs it produces use your real components.",
+  "when": "When the repo is the source of truth for components.",
+  "example": "/design-sync \u2192 uploads the repo React design system to Claude Design.",
+  "tier": "Skip list"
+ },
+ "desktop": {
+  "what": "Continue the current session in the Claude Code Desktop app. Requires macOS or x64 Windows and a Claude subscription. Alias: `/app`",
+  "when": "When the terminal session is easier to drive from the desktop app.",
+  "example": "/desktop \u2192 the session continues in the desktop app.",
+  "tier": "Skip list"
+ },
+ "diff": {
+  "what": "Opens an interactive diff viewer of uncommitted changes and per-turn diffs.",
+  "when": "Use before committing to see exactly what changed.",
+  "example": "/diff \u2192 arrow through files, Enter to inspect, Esc to return.",
+  "tier": "Essential 20"
+ },
+ "doctor": {
+  "what": "Runs a setup checkup that diagnoses installation and configuration issues and can fix them.",
+  "when": "Use when things feel broken: PATH, duplicates, stale settings.",
+  "example": "/doctor reports findings first, then asks before changing anything.",
+  "tier": "Useful, but niche"
+ },
+ "effort": {
+  "what": "Sets reasoning effort from low to xhigh (or auto/status).",
+  "when": "Low = fast and cheap; xhigh = deep. Dial it per task.",
+  "example": "/effort high before a concurrency review; /effort low for mechanical edits.",
+  "tier": "Essential 20"
+ },
+ "exit": {
+  "what": "Exit the CLI. In an attached background session, this detaches and the session keeps running. Alias: `/quit`",
+  "when": "When you are done, or detaching a background session.",
+  "example": "/exit \u2192 leaves the CLI; an attached background session keeps running.",
+  "tier": "Skip list"
+ },
+ "export": {
+  "what": "Exports the current conversation as plain text.",
+  "when": "Use to save a session for later or share it.",
+  "example": "/export notes.md writes the file directly.",
+  "tier": "Useful, but niche"
+ },
+ "fast": {
+  "what": "Toggle fast mode on or off. Availability in non-interactive mode with `-p` is limited; see Toggle fast mode. Requires Claude Code v2.1.205 or later",
+  "when": "When speed matters more than depth.",
+  "example": "/fast \u2192 toggles fast mode for snappier, lighter responses.",
+  "tier": "Skip list"
+ },
+ "feedback": {
+  "what": "Send product feedback about Claude Code. Opens the same dialog as `/bug`, with the same consent step, sending rules, and mid-turn behavior.",
+  "when": "When you have product feedback to send.",
+  "example": "/feedback \u2192 opens the same consent-first dialog as /bug.",
+  "tier": "Skip list"
+ },
+ "fewer-permission-prompts": {
+  "what": "Scans transcripts for common read-only tool calls and builds a prioritized allowlist.",
+  "when": "Use when permission prompts are slowing you down.",
+  "example": "/fewer-permission-prompts \u2192 review the draft, save to settings.",
+  "tier": "Useful, but niche"
+ },
+ "focus": {
+  "what": "Toggle the focus view, which shows only your last prompt, a one-line tool-call summary with edit diffstats, and the final response.",
+  "when": "When you only need the last exchange, not the scroll.",
+  "example": "/focus \u2192 only your last prompt and one-line tool summaries.",
+  "tier": "Skip list"
+ },
+ "fork": {
+  "what": "Copies the conversation into a new background session while you keep working here.",
+  "when": "Use to spin off research or a parallel track.",
+  "example": "/fork \u201ccontinue this research\u201d starts the copy immediately.",
+  "tier": "Useful, but niche"
+ },
+ "goal": {
+  "what": "Sets a condition Claude keeps working toward across turns.",
+  "when": "Use for long-running objectives that span many prompts.",
+  "example": "/goal \u201call tests pass\u201d \u2014 Claude keeps going until green.",
+  "tier": "Essential 20"
+ },
+ "heapdump": {
+  "what": "Write a JavaScript heap snapshot and a memory breakdown to `~/Desktop`, or your home directory on Linux without a Desktop folder, for diagnosing high memory usage.",
+  "when": "When debugging memory growth in sessions or tools.",
+  "example": "/heapdump \u2192 JS heap snapshot + memory breakdown on your Desktop.",
+  "tier": "Skip list"
+ },
+ "help": {
+  "what": "Shows help and every available command \u2014 the catalog's own index.",
+  "when": "Use whenever you forget a command; it's the deck's promise.",
+  "example": "/help lists everything, filterable as you type.",
+  "tier": "Worth knowing"
+ },
+ "hooks": {
+  "what": "Views hook configurations for tool events.",
+  "when": "Use to see what runs automatically around tool calls.",
+  "example": "/hooks shows PreToolUse/PostToolUse and more.",
+  "tier": "Worth knowing"
+ },
+ "ide": {
+  "what": "Manage IDE integrations and show status",
+  "when": "When wiring Claude Code into your editor.",
+  "example": "/ide \u2192 manage integrations, show connection status.",
+  "tier": "Skip list"
+ },
+ "import": {
+  "what": "Bring configuration from other coding agents on this machine \u2014 currently OpenAI Codex \u2014 into your Claude Code setup.",
+  "when": "When migrating from another coding agent.",
+  "example": "/import \u2192 pulls config from Codex or Gemini CLI on this machine.",
+  "tier": "Skip list"
+ },
+ "init": {
+  "what": "Generates a starter CLAUDE.md so Claude knows your project's conventions from the first prompt.",
+  "when": "Run it once per repo \u2014 it turns a generic assistant into one that knows your build, test, and style commands.",
+  "example": "/init in a fresh checkout writes CLAUDE.md with your project's structure and commands.",
+  "tier": "Essential 20"
+ },
+ "insights": {
+  "what": "Generate an HTML report analyzing your recent sessions on this machine: which projects you work in, how you use Claude Code, where things go wrong, and features to try.",
+  "when": "When you want a data view of your own usage.",
+  "example": "/insights \u2192 HTML report of which projects and workflows you use most.",
+  "tier": "Skip list"
+ },
+ "install-github-app": {
+  "what": "Install the Claude GitHub App for a repository, with an optional step to set up GitHub Actions workflows and secrets.",
+  "when": "When wiring repo automation to Claude.",
+  "example": "/install-github-app my-org/my-repo \u2192 app + optional Actions setup.",
+  "tier": "Skip list"
+ },
+ "install-slack-app": {
+  "what": "Install the Claude Slack app. Opens a browser to complete the OAuth flow",
+  "when": "When adding Claude to a workspace.",
+  "example": "/install-slack-app \u2192 browser OAuth flow installs it.",
+  "tier": "Skip list"
+ },
+ "keybindings": {
+  "what": "Open your keyboard shortcuts file",
+  "when": "When a default shortcut fights your muscle memory.",
+  "example": "/keybindings \u2192 opens your shortcuts file for editing.",
+  "tier": "Skip list"
+ },
+ "list-agents": {
+  "what": "List the subagents, agent team teammates, and other Claude Code sessions Claude can message, with the name to use for each. See cross-session messaging.",
+  "when": "When you want to see who Claude can reach and message.",
+  "example": "/list-agents \u2192 subagents, teammates, sessions it can message, with status.",
+  "tier": "Skip list"
+ },
+ "login": {
+  "what": "Sign in to your Anthropic account",
+  "when": "When credentials are missing or expired.",
+  "example": "/login \u2192 opens the sign-in flow for your Anthropic account.",
+  "tier": "Skip list"
+ },
+ "logout": {
+  "what": "Sign out from your Anthropic account",
+  "when": "When switching accounts or deprovisioning.",
+  "example": "/logout \u2192 clears the Anthropic credentials from this CLI.",
+  "tier": "Skip list"
+ },
+ "loop": {
+  "what": "**Skill.** Run a prompt repeatedly while the session stays open. Omit the interval and, where available, Claude self-paces between iterations.",
+  "when": "When a check should repeat without you retyping it.",
+  "example": "/loop check CI every 5m \u2192 the prompt re-runs while the session is open.",
+  "tier": "Skip list"
+ },
+ "mcp": {
+  "what": "Manages MCP server connections and OAuth authentication.",
+  "when": "Use to connect external tools and data servers.",
+  "example": "/mcp reconnect my-server, or /mcp enable all.",
+  "tier": "Worth knowing"
+ },
+ "memory": {
+  "what": "Edits CLAUDE.md files, toggles auto memory, and shows auto-memory entries.",
+  "when": "Use it to refine what Claude remembers about you and the project across sessions.",
+  "example": "/memory to add \u201calways run pnpm test before pushing\u201d to project memory.",
+  "tier": "Essential 20"
+ },
+ "mobile": {
+  "what": "Show QR code to download the Claude mobile app. Aliases: `/ios`, `/android`",
+  "when": "When installing the mobile app.",
+  "example": "/mobile \u2192 prints the QR code for the Claude mobile app.",
+  "tier": "Skip list"
+ },
+ "model": {
+  "what": "Switches the AI model mid-session and saves it as your default.",
+  "when": "Use when a task needs a stronger model or a cheaper, faster one.",
+  "example": "/model sonnet, or /model to open the picker.",
+  "tier": "Essential 20"
+ },
+ "passes": {
+  "what": "Share a free week of Claude Code with friends. Only visible if your account is eligible",
+  "when": "When your account is eligible to share a free week.",
+  "example": "/passes \u2192 share a free week, if your account is eligible.",
+  "tier": "Skip list"
+ },
+ "permissions": {
+  "what": "Manages allow, ask, and deny rules for tool permissions.",
+  "when": "Set it once per project so read-only commands run without prompts while destructive ones still ask.",
+  "example": "/permissions \u2192 allow git status, ask for rm -rf.",
+  "tier": "Essential 20"
+ },
+ "plan": {
+  "what": "Enters plan mode: Claude researches and proposes before editing anything.",
+  "when": "Use before large changes so the approach is agreed before code moves.",
+  "example": "/plan fix the auth bug \u2192 Claude investigates, proposes, you approve.",
+  "tier": "Essential 20"
+ },
+ "plugin": {
+  "what": "Manages Claude Code plugins: list, install, enable, disable.",
+  "when": "Use to extend the CLI with marketplace plugins.",
+  "example": "/plugin install, /plugin list.",
+  "tier": "Worth knowing"
+ },
+ "powerup": {
+  "what": "Discover Claude Code features through quick interactive lessons with animated demos",
+  "when": "When learning Claude Code features by doing.",
+  "example": "/powerup \u2192 quick interactive lessons with animated demos.",
+  "tier": "Skip list"
+ },
+ "pr-comments": {
+  "what": "Removed in v2.1.91 \u2014 ask Claude directly to view PR comments instead.",
+  "when": "Don't type it; it's gone.",
+  "example": "Ask: \u201cwhat comments are on this PR?\u201d",
+  "tier": "Removed"
+ },
+ "privacy-settings": {
+  "what": "View and update your privacy settings. Only available for Pro and Max plan subscribers",
+  "when": "When reviewing what data leaves your machine.",
+  "example": "/privacy-settings \u2192 view and update (Pro/Max plans).",
+  "tier": "Skip list"
+ },
+ "radio": {
+  "what": "Open Claude FM lo-fi radio in your browser. Prints the stream URL when no browser is available.",
+  "when": "When a little lo-fi helps the long grind.",
+  "example": "/radio \u2192 lo-fi stream opens in your browser; URL printed if not.",
+  "tier": "Skip list"
+ },
+ "rate-limit-options": {
+  "what": "Show ways to keep working when a claude.ai usage limit blocks a request: wait and continue automatically when the limit resets, add usage credits, or upgrade your plan.",
+  "when": "When claude.ai shows a usage limit block.",
+  "example": "/rate-limit-options \u2192 ways to keep working when a limit hits.",
+  "tier": "Skip list"
+ },
+ "recap": {
+  "what": "Generate a one-line summary of the current session on demand. See Session recap for the automatic recap that appears after you've been away",
+  "when": "When someone asks what this session did.",
+  "example": "/recap \u2192 one-line summary of the session so far, on demand.",
+  "tier": "Skip list"
+ },
+ "release-notes": {
+  "what": "View the changelog in an interactive version picker. Select a specific version to see its release notes, or choose to show all versions.",
+  "when": "When checking what changed in a version.",
+  "example": "/release-notes 2.1.198 \u2192 shows that version's release notes.",
+  "tier": "Skip list"
+ },
+ "reload-plugins": {
+  "what": "Reload all active plugins to apply pending changes without restarting. Reports counts for each reloaded component and flags any load errors.",
+  "when": "After adding or editing a plugin mid-session.",
+  "example": "/reload-plugins applies pending changes without a restart.",
+  "tier": "Skip list"
+ },
+ "reload-skills": {
+  "what": "Re-scan skill and command directories so skills added or changed on disk during the session become available without restarting.",
+  "when": "After dropping a new skill into a directory.",
+  "example": "/reload-skills \u2192 re-scans skill dirs; new skills become live.",
+  "tier": "Skip list"
+ },
+ "remote-control": {
+  "what": "Make this session available for Remote Control from claude.ai.",
+  "when": "When you want to drive this terminal from claude.ai.",
+  "example": "/remote-control \u2192 this session becomes controllable from claude.ai.",
+  "tier": "Skip list"
+ },
+ "remote-env": {
+  "what": "Choose the default environment for cloud agents",
+  "when": "When cloud agents should start in the right environment.",
+  "example": "/remote-env \u2192 pick the default environment for cloud agents.",
+  "tier": "Skip list"
+ },
+ "rename": {
+  "what": "Rename the current session and show the name on the prompt bar. Without a name, auto-generates one from conversation history. Also available in non-interactive mode (`-p`);",
+  "when": "When finding this session in the picker later matters.",
+  "example": "/rename auth-migration \u2192 names the session on the prompt bar.",
+  "tier": "Skip list"
+ },
+ "resume": {
+  "what": "Reopens a conversation by ID or name from the session picker.",
+  "when": "Use to continue interrupted work with full context.",
+  "example": "/resume \u2192 pick \u201cfix auth bug\u201d from the list.",
+  "tier": "Essential 20"
+ },
+ "review": {
+  "what": "Alias for /code-review \u2014 same effort levels and flags.",
+  "when": "Use whichever you remember.",
+  "example": "/review 1234 \u2261 /code-review 1234.",
+  "tier": "Alias of /code-review"
+ },
+ "rewind": {
+  "what": "Rolls the conversation and/or code back to a checkpoint, or summarizes from a selected message.",
+  "when": "The undo for both the chat and the files.",
+  "example": "/rewind \u2192 pick checkpoint 3, files and conversation restore.",
+  "tier": "Essential 20"
+ },
+ "run": {
+  "what": "Launches and drives your project's app to see a change working.",
+  "when": "Use to smoke-test real behavior, not just tests.",
+  "example": "/run starts the app and exercises the changed flow.",
+  "tier": "Useful, but niche"
+ },
+ "run-skill-generator": {
+  "what": "**Skill.** Teach `/run` and `/verify` how to build, launch, and drive your project's app from a clean environment by writing a per-project skill",
+  "when": "When /run or /verify mis-launches your bespoke stack.",
+  "example": "/run-skill-generator \u2192 teaches /run and /verify your app's launch recipe.",
+  "tier": "Skip list"
+ },
+ "sandbox": {
+  "what": "Toggle sandbox mode. Available on supported platforms only",
+  "when": "When running untrusted code with containment.",
+  "example": "/sandbox \u2192 toggles sandbox mode where the platform supports it.",
+  "tier": "Skip list"
+ },
+ "schedule": {
+  "what": "Create, update, list, or run routines, which execute in the cloud. Claude walks you through the setup conversationally. You can also ask about a routine's recent runs.",
+  "when": "When a task should run in the cloud without you.",
+  "example": "/schedule nightly dependency scan \u2192 cloud routine, wizard-led.",
+  "tier": "Skip list"
+ },
+ "scroll-speed": {
+  "what": "Adjust mouse wheel scroll speed interactively, with a ruler you can scroll while the dialog is open to preview the change.",
+  "when": "When wheel scrolling feels wrong.",
+  "example": "/scroll-speed \u2192 interactive ruler to set wheel speed.",
+  "tier": "Skip list"
+ },
+ "security-review": {
+  "what": "Analyzes the branch diff for injection, auth, and data-exposure risks.",
+  "when": "Use before merge on anything touching user input or secrets.",
+  "example": "/security-review on a branch that adds an API endpoint.",
+  "tier": "Essential 20"
+ },
+ "setup-bedrock": {
+  "what": "Configure Amazon Bedrock authentication, region, and model pins through an interactive wizard. Hidden from the command menu until `CLAUDE_CODE_USE_BEDROCK=1` is set;",
+  "when": "When routing Claude through Amazon Bedrock.",
+  "example": "/setup-bedrock \u2192 auth, region, and model pins via wizard.",
+  "tier": "Skip list"
+ },
+ "setup-vertex": {
+  "what": "Configure Google Cloud's Agent Platform authentication, project, region, and model pins through an interactive wizard.",
+  "when": "When routing Claude through Google Cloud.",
+  "example": "/setup-vertex \u2192 auth, project, region via wizard; hidden by default.",
+  "tier": "Skip list"
+ },
+ "simplify": {
+  "what": "Runs four parallel review agents for cleanup: reuse, simplification, efficiency, abstraction level.",
+  "when": "Use after a feature lands to pay down cruft.",
+  "example": "/simplify after merging a feature branch.",
+  "tier": "Essential 20"
+ },
+ "skills": {
+  "what": "Lists available skills, filterable and sortable by token count.",
+  "when": "Use to see what skills are loaded and how much context they cost.",
+  "example": "/skills \u2192 press t to sort by tokens.",
+  "tier": "Worth knowing"
+ },
+ "stats": {
+  "what": "Alias for /usage, opening on the Stats tab.",
+  "when": "Use interchangeably with /usage.",
+  "example": "/stats \u2261 /usage.",
+  "tier": "Alias of /usage"
+ },
+ "status": {
+  "what": "Open the Settings interface on the Status tab, showing version, model, account, and connectivity.",
+  "when": "When checking version, account, and connectivity health.",
+  "example": "/status \u2192 shows version, model, account, and connectivity at a glance.",
+  "tier": "Skip list"
+ },
+ "statusline": {
+  "what": "Configure Claude Code's status line. Describe what you want, or run without arguments to auto-configure from your shell prompt",
+  "when": "When the bottom line should show what you care about.",
+  "example": "/statusline show model + git branch \u2192 configures the bottom line.",
+  "tier": "Skip list"
+ },
+ "stickers": {
+  "what": "Order Claude Code stickers",
+  "when": "When the laptop needs more stickers.",
+  "example": "/stickers \u2192 order Claude Code stickers.",
+  "tier": "Skip list"
+ },
+ "stop": {
+  "what": "Stop the current background session. Only available while attached to a background session; the transcript and any worktree are kept.",
+  "when": "When the background session should halt now.",
+  "example": "/stop \u2192 halts the background session you are attached to.",
+  "tier": "Skip list"
+ },
+ "subtask": {
+  "what": "Spawns a forked subagent that inherits the full conversation and reports back.",
+  "when": "Use to hand off a side task without losing context.",
+  "example": "/subtask write tests for the new parser.",
+  "tier": "Essential 20"
+ },
+ "tasks": {
+  "what": "Lists background work in the session, including finished subagents.",
+  "when": "Use to check on parallel work without losing your place.",
+  "example": "/tasks shows each subagent's status and results.",
+  "tier": "Essential 20"
+ },
+ "team-onboarding": {
+  "what": "Generate a team onboarding guide from your Claude Code usage history.",
+  "when": "When a teammate needs the working patterns, not the manual.",
+  "example": "/team-onboarding \u2192 guide generated from usage history.",
+  "tier": "Skip list"
+ },
+ "teleport": {
+  "what": "Pull a Claude Code on the web session into this terminal. Opens a picker, then fetches the branch and conversation. Also available as `/tp`. Requires a claude.ai subscription",
+  "when": "When a web session should continue in your terminal.",
+  "example": "/teleport \u2192 pick a web session; branch and state arrive here.",
+  "tier": "Skip list"
+ },
+ "terminal-setup": {
+  "what": "Configure terminal keybindings for Shift+Enter and other shortcuts. Only visible in terminals that need it, like VS Code, Cursor, Devin Desktop, Alacritty, or Zed",
+  "when": "When multiline keyboards shortcuts need custom keys.",
+  "example": "/terminal-setup \u2192 binds Shift+Enter for multiline prompts.",
+  "tier": "Skip list"
+ },
+ "theme": {
+  "what": "Change the color theme, including `auto` (matches your terminal background), light, dark, and colorblind-accessible variants.",
+  "when": "When the terminal colors clash (or the room lights change).",
+  "example": "/theme dark \u2192 switches the session palette (auto follows the terminal).",
+  "tier": "Skip list"
+ },
+ "tui": {
+  "what": "Set the terminal UI renderer and relaunch into it with your conversation intact. `fullscreen` enables the flicker-free alt-screen renderer.",
+  "when": "When the renderer should match the terminal better.",
+  "example": "/tui fullscreen \u2192 relaunches with the fullscreen renderer.",
+  "tier": "Skip list"
+ },
+ "ultraplan": {
+  "what": "Removed \u2014 use plan mode instead.",
+  "when": "Plan mode does the research-then-propose loop now.",
+  "example": "/plan \u201cdesign the migration\u201d.",
+  "tier": "Removed"
+ },
+ "ultrareview": {
+  "what": "Alias for /code-review ultra \u2014 deep multi-agent cloud review.",
+  "when": "Use for the heaviest review; 3 free runs on Pro/Max.",
+  "example": "/ultrareview \u2261 /code-review ultra.",
+  "tier": "Alias of /code-review"
+ },
+ "upgrade": {
+  "what": "Open the upgrade page in your browser to switch to a higher plan tier. When the browser fails to open, the command shows a sign-in prompt without printing the URL",
+  "when": "When the plan tier is the bottleneck.",
+  "example": "/upgrade \u2192 opens the plan page in your browser.",
+  "tier": "Skip list"
+ },
+ "usage": {
+  "what": "Shows session cost, plan usage limits, and activity stats.",
+  "when": "Use to keep an eye on spend.",
+  "example": "/usage \u2014 /cost and /stats are aliases.",
+  "tier": "Useful, but niche"
+ },
+ "usage-credits": {
+  "what": "Configure usage credits, or request them from your admin, when you hit a limit.",
+  "when": "When credits run out before the month does.",
+  "example": "/usage-credits \u2192 configure credits or request them from admin.",
+  "tier": "Skip list"
+ },
+ "verify": {
+  "what": "Confirms a change works by building the app, running it, and observing the result.",
+  "when": "Use instead of trusting tests alone \u2014 proof, not type checks.",
+  "example": "/verify launches the app and drives the changed path.",
+  "tier": "Worth knowing"
+ },
+ "vim": {
+  "what": "Removed in v2.1.92 \u2014 toggle Vim mode via /config \u2192 Editor mode.",
+  "when": "Don't type it; it's gone.",
+  "example": "/config \u2192 Editor mode.",
+  "tier": "Removed"
+ },
+ "voice": {
+  "what": "Toggle voice dictation, or enable it in a specific mode. Requires a Claude.ai account",
+  "when": "When dictation beats typing.",
+  "example": "/voice \u2192 toggles dictation (requires a Claude.ai account).",
+  "tier": "Skip list"
+ },
+ "web-setup": {
+  "what": "Connect your GitHub account to Claude Code on the web using your local `gh` CLI credentials. `/schedule` prompts for this automatically if GitHub isn't connected",
+  "when": "When configuring Claude Code on the web from local gh.",
+  "example": "/web-setup \u2192 connects GitHub via local gh credentials.",
+  "tier": "Skip list"
+ },
+ "workflows": {
+  "what": "Open the workflow progress view to watch, pause, resume, or save running and completed workflows",
+  "when": "When watching or pausing running workflow progress.",
+  "example": "/workflows \u2192 open the progress view; pause or resume a run from there.",
+  "tier": "Skip list"
+ }
+}

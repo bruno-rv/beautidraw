@@ -1,0 +1,775 @@
+{
+  "title": "Claude Code Commands",
+  "subtitle": "109 commands ship with Claude Code — this deck shows you the 20 that matter, and makes the other 89 safe to ignore.",
+  "footer": "Twenty commands cover the whole job — the other eighty-nine are one /help away.",
+  "bands": [
+    {
+      "heading": "Claude Code Commands",
+      "deck": "A tour of a well-organized toolbox: 20 essentials first, the full catalog mapped honestly.",
+      "pattern": "canvas",
+      "accent": "violet",
+      "height": 850,
+      "visual": {
+        "family": "illustration",
+        "focus": "The palette fans out into your workflow",
+        "callouts": [
+          {
+            "kind": "example",
+            "label": "The Essential 20",
+            "note": "setup to recovery in six moments"
+          },
+          {
+            "kind": "inspect",
+            "label": "/help",
+            "note": "the full catalog, on demand"
+          }
+        ],
+        "image": {
+          "file": "assets/title-hero.png",
+          "side": "left",
+          "use": "Shows Claude Code at the centre fanning command groups out into six workflow slots, with one /help loop returning labelled one-away",
+          "description": "Hand-drawn fan-out diagram: a central Claude Code box radiating six command slots, one green loop arrow labelled one-away"
+        },
+        "explanation": "Most sessions live in a handful of the 109 commands and never map the rest to the daily workflow.",
+        "example": "You run /init and /code-review already.",
+        "tradeoff": "Learn the workflow; /help carries the catalog.",
+        "inspect": "/help lists every command",
+        "caption": "The map is the workflow, not the alphabet."
+      }
+    },
+    {
+      "heading": "The promise, then the proof",
+      "deck": "Productivity is workflow mastery, not catalog recall.",
+      "pattern": "canvas",
+      "accent": "amber",
+      "height": 560,
+      "visual": {
+        "family": "threshold",
+        "focus": "What separates fluent sessions from stalled ones",
+        "left": "Twenty commands",
+        "middle": "covers the whole job",
+        "right": "One /help away",
+        "nodes": [
+          {
+            "label": "inside the line",
+            "note": "The 20 essentials cover setup → work → parallel → ship → recovery"
+          },
+          {
+            "label": "the edge",
+            "note": "/help — the boundary you cross on demand, never store"
+          }
+        ],
+        "explanation": "Twenty commands cover the whole job; the other eighty-nine stay one /help away.",
+        "example": "A teammate fluent in twenty outworks one who skimmed 109 once.",
+        "tradeoff": "Catalog recall spends memory the workflow needs.",
+        "inspect": "/help lists the catalog",
+        "caption": "The line is drawn on purpose."
+      }
+    },
+    {
+      "heading": "Act 1 — The Essential 20 in workflow order",
+      "deck": "Six moments every session walks through; each owns its commands.",
+      "pattern": "canvas",
+      "accent": "blue",
+      "height": 640,
+      "visual": {
+        "family": "map",
+        "focus": "Six moments",
+        "nodes": [
+          {
+            "label": "Setup",
+            "note": "/init · /memory · /permissions"
+          },
+          {
+            "label": "Steering",
+            "note": "/plan · /model · /effort"
+          },
+          {
+            "label": "Context",
+            "note": "/context · /compact · /btw"
+          },
+          {
+            "label": "Parallel",
+            "note": "/tasks · /batch · /background"
+          }
+        ],
+        "explanation": "Recovery rides at the loop's end: /resume returns, /rewind rolls back. Four of the six moments sit in this map; the deck walks the rest in order.",
+        "example": "Shipping (/diff, /code-review) and Recovery close the loop after the fork.",
+        "tradeoff": "Alphabetical sorting hides this loop's shape.",
+        "inspect": "/help shows all 109",
+        "caption": "Six moments, twenty commands, one loop."
+      }
+    },
+    {
+      "heading": "First session in a repo",
+      "deck": "Three commands turn a blank repo into a guided workspace.",
+      "pattern": "comparison",
+      "accent": "blue",
+      "nodes": [
+        {
+          "label": "/init",
+          "items": [
+            "Generates a starter CLAUDE.md",
+            "Claude knows project conventions from the first prompt",
+            "Run it once in any repo you actually work in"
+          ]
+        },
+        {
+          "label": "/memory",
+          "items": [
+            "Refines CLAUDE.md and memory files",
+            "Manages auto memory captures",
+            "Durable facts survive across sessions"
+          ]
+        },
+        {
+          "label": "/permissions",
+          "items": [
+            "Sets allow / ask / deny rules per tool",
+            "The trust boundary of the session",
+            "Fewer prompts, predictable autonomy"
+          ]
+        }
+      ]
+    },
+    {
+      "heading": "Steering the work",
+      "deck": "A control panel: what to do, which engine, how hard it thinks.",
+      "pattern": "canvas",
+      "accent": "violet",
+      "height": 560,
+      "visual": {
+        "family": "field",
+        "focus": "The session control panel",
+        "axisX": "act now ↔ plan ahead",
+        "axisY": "shallow ↔ deep",
+        "nodes": [
+          {
+            "label": "/plan",
+            "note": "propose before editing"
+          },
+          {
+            "label": "/model",
+            "note": "switch engine mid-session"
+          },
+          {
+            "label": "/effort",
+            "note": "depth low to xhigh"
+          }
+        ],
+        "explanation": "Three independent levers: they set the order of work, the engine that runs it, and how deep each turn of reasoning goes.",
+        "example": "Enter /plan before the big refactor, then /effort xhigh for the security review pass.",
+        "tradeoff": "These steer the task; they never change the task itself.",
+        "inspect": "/effort xhigh",
+        "caption": "What, who, and how hard — set independently."
+      }
+    },
+    {
+      "heading": "Managing the context window",
+      "deck": "The window is the session's memory — four commands keep it honest.",
+      "pattern": "canvas",
+      "accent": "green",
+      "height": 620,
+      "visual": {
+        "family": "orbit",
+        "focus": "The context window",
+        "nodes": [
+          {
+            "label": "/context",
+            "note": "see the spend as a grid"
+          },
+          {
+            "label": "/compact",
+            "note": "summarize to free space"
+          },
+          {
+            "label": "/btw",
+            "note": "side questions skip history"
+          },
+          {
+            "label": "/goal",
+            "note": "one condition across turns"
+          }
+        ],
+        "explanation": "Four levers manage one budget: see the spend, free space, stay clean, aim.",
+        "example": "/context all expands the per-item breakdown.",
+        "tradeoff": "Compacting loses verbatim detail; choose what survives.",
+        "inspect": "/context all",
+        "caption": "Every lever protects the same budget.",
+        "callouts": [
+          {
+            "kind": "inspect",
+            "label": "/context",
+            "note": "see the per-item breakdown before you compact anything"
+          }
+        ]
+      }
+    },
+    {
+      "heading": "Run work in parallel",
+      "deck": "Four commands turn one session into a fleet.",
+      "pattern": "canvas",
+      "accent": "amber",
+      "height": 850,
+      "visual": {
+        "family": "illustration",
+        "focus": "One session fans out into a fleet",
+        "callouts": [
+          {
+            "kind": "example",
+            "label": "/batch",
+            "note": "5-30 units, own worktree and PR each"
+          },
+          {
+            "kind": "boundary",
+            "label": "one merge train",
+            "note": "/tasks tracks every run"
+          }
+        ],
+        "image": {
+          "file": "assets/fleet.png",
+          "side": "left",
+          "use": "Shows one session splitting into four worktree workers that converge into a merge — the shape /batch and /tasks create",
+          "description": "Hand-drawn fan-out diagram: one session box splitting into four worker boxes converging into a merge box"
+        },
+        "explanation": "Subagents run the work; /tasks, /batch, /background and /subtask fan it out.",
+        "example": "/background “finish the migration” frees the terminal.",
+        "tradeoff": "Parallel output faces review before merge.",
+        "inspect": "/tasks lists background work",
+        "caption": "The capability most people discover last."
+      }
+    },
+    {
+      "heading": "Before you ship",
+      "deck": "Four lenses between you and a merge.",
+      "pattern": "canvas",
+      "accent": "green",
+      "height": 620,
+      "visual": {
+        "family": "evidence",
+        "focus": "The diff is the claim",
+        "nodes": [
+          {
+            "label": "/diff",
+            "note": "Interactive viewer of uncommitted changes and per-turn diffs"
+          },
+          {
+            "label": "/code-review",
+            "note": "Finds correctness bugs; --fix applies findings"
+          },
+          {
+            "label": "/security-review",
+            "note": "Scans the branch diff for injection, auth, data exposure"
+          },
+          {
+            "label": "/simplify",
+            "note": "Four parallel review agents apply cleanup opportunities"
+          }
+        ],
+        "evidence": [
+          "/code-review high 1234 reviews PR #1234; /code-review --fix applies what it finds."
+        ],
+        "explanation": "Correctness, security, and cleanliness are three different questions asked of the same diff.",
+        "example": "/code-review high 1234; --fix applies findings.",
+        "tradeoff": "Review costs minutes; an escape costs the release.",
+        "inspect": "/code-review --fix",
+        "caption": "Three questions, one diff, no excuses."
+      }
+    },
+    {
+      "heading": "Between sessions",
+      "deck": "Sessions end — these two make sure nothing ends with them.",
+      "pattern": "canvas",
+      "accent": "red",
+      "height": 560,
+      "visual": {
+        "family": "threshold",
+        "focus": "Crossing the session boundary",
+        "left": "Work day ends",
+        "middle": "checkpoint",
+        "right": "Nothing is lost",
+        "nodes": [
+          {
+            "label": "/resume",
+            "note": "reopen the thread from the picker"
+          },
+          {
+            "label": "/rewind",
+            "note": "roll chat and code to a checkpoint"
+          }
+        ],
+        "explanation": "The checkpoint is the pivot that lets a session end without losing anything.",
+        "example": "/branch to try a direction; /resume to return.",
+        "tradeoff": "Without checkpoints, abandoning costs context.",
+        "inspect": "/resume reopens the session",
+        "caption": "Sessions cheap to start, safe to abandon.",
+        "callouts": [
+          {
+            "kind": "inspect",
+            "label": "/rewind",
+            "note": "roll both the conversation and the files back"
+          }
+        ]
+      }
+    },
+    {
+      "heading": "Act 2 — The full catalog, honestly sorted",
+      "deck": "The other 89 commands, four buckets — each in its place.",
+      "pattern": "canvas",
+      "accent": "violet",
+      "height": 640,
+      "visual": {
+        "family": "orbit",
+        "focus": "/help",
+        "nodes": [
+          {
+            "label": "Worth knowing — 8",
+            "note": "useful, not daily"
+          },
+          {
+            "label": "Useful, but niche — 9",
+            "note": "moment tools"
+          },
+          {
+            "label": "Aliases & removed — 7",
+            "note": "four aliases, three ghosts"
+          },
+          {
+            "label": "The skip list — 65",
+            "note": "safely ignored"
+          }
+        ],
+        "explanation": "Eighty-nine commands sort into four honest buckets; ignoring them is now deliberate.",
+        "example": "/cost aliases /usage; /vim is gone from the CLI.",
+        "tradeoff": "Without the sorting, all 109 look equally important.",
+        "inspect": "/help lists all commands",
+        "caption": "Sorted so you can safely ignore most of it.",
+        "callouts": [
+          {
+            "kind": "example",
+            "label": "/loop",
+            "note": "the scheduled family: recurring chores outside the loop"
+          }
+        ]
+      }
+    },
+    {
+      "heading": "Worth knowing — eight that earn their place",
+      "deck": "Configuration and extension surfaces, one command each.",
+      "pattern": "tree",
+      "accent": "blue",
+      "nodes": [
+        {
+          "label": "Configure the tool",
+          "children": [
+            {
+              "label": "/config — opens Settings; accepts key=value pairs (theme, model, editor mode)"
+            },
+            {
+              "label": "/hooks — views hook configurations for tool events"
+            },
+            {
+              "label": "/mcp — manages MCP server connections and OAuth"
+            },
+            {
+              "label": "/plugin — manages plugins with subcommands like list and install"
+            }
+          ]
+        },
+        {
+          "label": "Check & verify",
+          "children": [
+            {
+              "label": "/debug — enables session debug logging and reads the debug log"
+            },
+            {
+              "label": "/help — shows all available commands; the catalog's own index"
+            },
+            {
+              "label": "/skills — lists available skills with token counts"
+            },
+            {
+              "label": "/verify — confirms a change works by building and running the app"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "heading": "Useful, but niche — nine for specific moments",
+      "deck": "Each shines exactly once in a while — and then it shines.",
+      "pattern": "canvas",
+      "accent": "green",
+      "height": 620,
+      "visual": {
+        "family": "constellation",
+        "focus": "A neighborhood of moments",
+        "nodes": [
+          {
+            "label": "/clear",
+            "note": "fresh talk, memory kept"
+          },
+          {
+            "label": "/doctor",
+            "note": "fixes installation"
+          },
+          {
+            "label": "/usage",
+            "note": "cost and plan limits"
+          },
+          {
+            "label": "/fork",
+            "note": "background copy of the thread"
+          },
+          {
+            "label": "/branch",
+            "note": "try a direction, return later"
+          },
+          {
+            "label": "/run",
+            "note": "drive the app to verify"
+          }
+        ],
+        "explanation": "Nine commands cluster around specific moments rather than roles, each exactly right when its moment arrives.",
+        "example": "/fork copies the thread into a background session.",
+        "tradeoff": "None is routine; timing the reach is the skill.",
+        "inspect": "/usage shows session cost",
+        "caption": "Know they exist; reach when the moment calls.",
+        "callouts": [
+          {
+            "kind": "inspect",
+            "label": "/help",
+            "note": "the index every forgotten name resolves through"
+          }
+        ]
+      }
+    },
+    {
+      "heading": "Aliases & the removed",
+      "deck": "Four aliases, three ghosts — know them so they never confuse you.",
+      "pattern": "canvas",
+      "accent": "red",
+      "height": 600,
+      "visual": {
+        "family": "matrix",
+        "focus": "Dead names resolve — or vanish",
+        "left": "/cost · /stats · /review · /ultrareview",
+        "middle": "aliases resolve",
+        "right": "removed names",
+        "nodes": [
+          {
+            "label": "/cost · /stats",
+            "note": "alias of /usage"
+          },
+          {
+            "label": "/review · /ultrareview",
+            "note": "alias of /code-review"
+          },
+          {
+            "label": "/pr-comments · /ultraplan",
+            "note": "removed from the CLI"
+          },
+          {
+            "label": "/vim",
+            "note": "removed; use /config"
+          }
+        ],
+        "explanation": "Four names resolve twice; three names are gone from the CLI entirely.",
+        "example": "Typing /ultrareview routes to /code-review; typing /vim fails outright.",
+        "tradeoff": "Treating aliases as distinct commands doubles the catalog for nothing.",
+        "inspect": "/code-review covers all review aliases",
+        "caption": "The catalog's history in one frame.",
+        "axisX": "Typed name still works ← → name is gone",
+        "axisY": "Same command ↑ ↓ gone from CLI",
+        "callouts": [
+          {
+            "kind": "example",
+            "label": "/clear",
+            "note": "fresh conversation between tasks; memory stays"
+          }
+        ]
+      }
+    },
+    {
+      "heading": "The skip list — session & setup",
+      "deck": "Thirty-three commands that sound useful and mostly aren't.",
+      "pattern": "checklist",
+      "accent": "slate",
+      "nodes": [
+        {
+          "label": "/add-dir — add a working directory",
+          "note": "file access beyond the session root"
+        },
+        {
+          "label": "/autocompact",
+          "note": "sets how full the window gets before auto-compact"
+        },
+        {
+          "label": "/cd",
+          "note": "move the session to a new working directory"
+        },
+        {
+          "label": "/copy",
+          "note": "copy the last response to clipboard"
+        },
+        {
+          "label": "/exit",
+          "note": "leave the session"
+        },
+        {
+          "label": "/fast",
+          "note": "quick mode toggle"
+        },
+        {
+          "label": "/focus",
+          "note": "focus mode"
+        },
+        {
+          "label": "/recap",
+          "note": "recap the session"
+        },
+        {
+          "label": "/remote-control",
+          "note": "remote control session"
+        },
+        {
+          "label": "/rename",
+          "note": "rename the session"
+        },
+        {
+          "label": "/status",
+          "note": "print session status"
+        },
+        {
+          "label": "/stop",
+          "note": "stop the current turn"
+        },
+        {
+          "label": "/teleport",
+          "note": "teleport session state"
+        },
+        {
+          "label": "/tui",
+          "note": "toggle TUI mode"
+        },
+        {
+          "label": "/voice",
+          "note": "voice input"
+        },
+        {
+          "label": "/agents",
+          "note": "prints a reminder to ask Claude to manage subagents"
+        },
+        {
+          "label": "/artifacts",
+          "note": "list and attach artifacts"
+        },
+        {
+          "label": "/auto-mode-setup",
+          "note": "draft autoMode.environment entries"
+        },
+        {
+          "label": "/autofix-pr",
+          "note": "spawn a web session that watches the PR"
+        },
+        {
+          "label": "/color",
+          "note": "set the prompt bar color for this session"
+        },
+        {
+          "label": "/ide",
+          "note": "IDE integration status"
+        },
+        {
+          "label": "/import",
+          "note": "import configuration from Codex/Gemini"
+        },
+        {
+          "label": "/keybindings",
+          "note": "show keybindings"
+        },
+        {
+          "label": "/list-agents",
+          "note": "list available agents"
+        },
+        {
+          "label": "/login · /logout",
+          "note": "account entry and exit"
+        },
+        {
+          "label": "/reload-plugins · /reload-skills",
+          "note": "reload extensions"
+        },
+        {
+          "label": "/sandbox",
+          "note": "sandbox settings"
+        },
+        {
+          "label": "/scroll-speed",
+          "note": "scroll speed"
+        },
+        {
+          "label": "/statusline",
+          "note": "statusline configuration"
+        },
+        {
+          "label": "/terminal-setup",
+          "note": "terminal integration installer"
+        },
+        {
+          "label": "/theme",
+          "note": "color theme"
+        }
+      ]
+    },
+    {
+      "heading": "The skip list — platform, feedback, scheduled",
+      "deck": "The remaining thirty-two, same verdict.",
+      "pattern": "row-of-stages",
+      "accent": "slate",
+      "nodes": [
+        {
+          "label": "Platform — 23",
+          "note": "/advisor · /chrome · /claude-api · /dataviz · /design-login · /design-sync · /desktop · /heapdump · /install-github-app · /install-slack-app · /mobile · /passes · /powerup · /privacy-settings · /radio · /rate-limit-options · /remote-env · /setup-bedrock · /setup-vertex · /stickers · /upgrade · /usage-credits · /web-setup"
+        },
+        {
+          "label": "Feedback & shipping — 6",
+          "note": "/bug · /feedback · /insights · /release-notes · /run-skill-generator · /team-onboarding"
+        },
+        {
+          "label": "Scheduled & parallel — 3",
+          "note": "/loop · /schedule · /workflows"
+        }
+      ]
+    },
+    {
+      "heading": "The skip list on two axes",
+      "deck": "One-off chores vs platform commitment — neither is a session habit.",
+      "pattern": "canvas",
+      "accent": "slate",
+      "height": 560,
+      "visual": {
+        "family": "field",
+        "focus": "One-off chore ↔ platform commitment",
+        "axisX": "set-once ↔ rarely",
+        "axisY": "shallow ↔ deep",
+        "nodes": [
+          {
+            "label": "Platform installs",
+            "note": "installs, once"
+          },
+          {
+            "label": "Tweaks",
+            "note": "tweaks"
+          },
+          {
+            "label": "Scheduled loops",
+            "note": "scheduled elsewhere"
+          },
+          {
+            "label": "Telemetry & feedback",
+            "note": "as needed"
+          }
+        ],
+        "explanation": "The skip list plots habit against reach: set-once config, rare plumbing.",
+        "example": "/setup-bedrock configures a provider once.",
+        "tradeoff": "What you need will announce itself.",
+        "inspect": "/help lists the catalog",
+        "caption": "Habit against reach separates work from plumbing.",
+        "callouts": [
+          {
+            "kind": "warning",
+            "label": "dead names",
+            "note": "typing /vim fails; /config Editor mode replaced it"
+          }
+        ]
+      }
+    },
+    {
+      "heading": "Why 20 is enough",
+      "deck": "Six moments × three to four commands — the rest is one /help away.",
+      "pattern": "canvas",
+      "accent": "amber",
+      "height": 850,
+      "visual": {
+        "family": "illustration",
+        "focus": "109 commands, twenty that matter",
+        "callouts": [
+          {
+            "kind": "example",
+            "label": "20 essentials",
+            "note": "six moments, three to four each"
+          },
+          {
+            "kind": "boundary",
+            "label": "89 more",
+            "note": "sorted into honest buckets"
+          }
+        ],
+        "image": {
+          "file": "assets/catalog.png",
+          "side": "left",
+          "use": "Shows the 109-command catalog bar decomposing into proportional honest tiers with the twenty at the front",
+          "description": "Hand-drawn bar decomposition: a long bar labelled 109 commands breaking into six proportional segments with counts"
+        },
+        "explanation": "The workflow is learned once; the catalog is an index /help replays.",
+        "example": "3+3+4+4+4+2: twenty commands, whole loop.",
+        "tradeoff": "The loop is earned; the index is on demand.",
+        "inspect": "/help lists all 109",
+        "caption": "Six moments, twenty commands, complete."
+      }
+    },
+    {
+      "heading": "Try this week",
+      "deck": "Four experiments, one week — each a testable pass condition.",
+      "pattern": "checklist",
+      "accent": "violet",
+      "nodes": [
+        {
+          "label": "/init",
+          "note": "passes when a CLAUDE.md appears in a repo you actually work in"
+        },
+        {
+          "label": "/plan",
+          "note": "passes when you enter plan mode before a large change and approve a proposal"
+        },
+        {
+          "label": "/batch",
+          "note": "passes when a multi-file task decomposes into parallel worktree units"
+        },
+        {
+          "label": "/code-review",
+          "note": "passes when a diff gets reviewed — with --fix applied — before a merge"
+        }
+      ]
+    },
+    {
+      "heading": "Twenty commands cover the whole job",
+      "deck": "Same words as the opening — now they mean something different.",
+      "pattern": "canvas",
+      "accent": "blue",
+      "height": 560,
+      "visual": {
+        "family": "spotlight",
+        "focus": "Twenty commands cover the whole job",
+        "callouts": [
+          {
+            "kind": "inspect",
+            "label": "/help",
+            "note": "all 109 indexed"
+          },
+          {
+            "kind": "example",
+            "label": "The verified map",
+            "note": "the essentials cover the whole loop"
+          }
+        ],
+        "explanation": "The promise opened the deck; the verified map closes it.",
+        "example": "Monday /init; /code-review before every merge.",
+        "tradeoff": "Reading all 109 wastes the map you verified.",
+        "inspect": "/code-review --fix",
+        "caption": "The anchor returns with weight."
+      }
+    }
+  ]
+}
