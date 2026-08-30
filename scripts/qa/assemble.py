@@ -8,7 +8,7 @@ Generic form for any deck topic:
 - <raw-dir>:    staging area the batch runner wrote PNGs into (e.g. /tmp/bb-raw)
 - <images-dir>: the library the caption builder reads (e.g. decks/<slug>/images)
 - [shard-glob]: optional, e.g. "decks/<slug>/shards/batch-*.txt". When given,
-  `SAME-IMAGE-AS <target>` alias rows are materialized by copying the target's
+  `SAME-IMAGE-AS:<target>` alias rows (colon, no space) are materialized by copying the target's
   bytes (missing target or alias cycle = hard error), so the library is complete
   without anyone hand-copying alias files into the staging dir.
 

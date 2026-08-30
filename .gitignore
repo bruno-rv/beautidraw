@@ -18,6 +18,7 @@ decks/*/out/
 # Python virtualenvs (uv-managed; e.g. scripts/qa/.venv — 144 MB Playwright/Pillow env)
 .venv/
 
-# Blackboard scene library: regenerable from shards + run-batch.sh + assemble.py (530 MB).
-# The manifest.json IS the provenance record and stays tracked.
+# Blackboard library: images/*.png ship via git-lfs (nondeterministic image_gen
+# output; manifest.json {file,sha1,bytes} is the provenance record). The captioned
+derivatives below are rebuild outputs of build-appendix.py and stay out of git.
 decks/command-blackboard-library/images-captioned/
