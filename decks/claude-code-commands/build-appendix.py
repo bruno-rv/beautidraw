@@ -33,6 +33,7 @@ def main():
     names = sorted(d.keys())
     details = d
 
+    os.makedirs(LIB, exist_ok=True)
     elements = deck['elements']
     files = dict(deck.get('files', {}))
     # strip previous appendix
