@@ -14,3 +14,11 @@ scripts/vendor/
 
 # Generated deck output. The spec is the source; everything under out/ is derived.
 decks/*/out/
+
+# Python virtualenvs (uv-managed; e.g. scripts/qa/.venv — 144 MB Playwright/Pillow env)
+.venv/
+
+# Blackboard scene library: regenerable from shards + run-batch.sh + assemble.py (530 MB).
+# The manifest.json IS the provenance record and stays tracked.
+decks/command-blackboard-library/images/*.png
+decks/command-blackboard-library/images-captioned/

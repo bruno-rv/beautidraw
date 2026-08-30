@@ -17,6 +17,19 @@ const POSIX_PATH_RE = /(?<![A-Za-z0-9_.~-])\/[A-Za-z0-9_.~-]+(?:\/[A-Za-z0-9_.~:
 const HOME_PATH_RE = /(?:^|[\s(])~(?:[^/\s]*)\/[A-Za-z0-9_.~:-]+(?:\/[A-Za-z0-9_.~:-]+)*/;
 const SLASH_COMMANDS = new Set([
   "compact", "context", "deploy", "hooks", "memory", "name", "review-invoice", "status", "tasks",
+  // Claude Code CLI command vocabulary (single-segment names, not filesystem paths):
+  "add-dir", "agents", "artifacts", "auto-mode-setup", "autocompact", "autofix-pr", "advisor", "background",
+  "batch", "branch", "bug", "btw", "cd", "chrome", "claude-api", "clear", "code-review", "color", "config",
+  "copy", "cost", "dataviz", "debug", "deep-research", "desktop", "diff", "doctor", "effort", "exit", "export",
+  "fast", "feedback", "fewer-permission-prompts", "focus", "fork", "goal", "heapdump", "help", "ide", "import",
+  "insights", "install-github-app", "install-slack-app", "invoice", "keybindings", "list-agents", "login",
+  "logout", "loop", "mobile", "mcp", "model", "passes", "plan", "plugin", "powerup", "pr-comments", "privacy-settings",
+  "radio", "rate-limit-options", "recap", "release-notes", "reload-plugins", "reload-skills", "remote-control",
+  "remote-env", "rename", "research", "resume", "rewind", "rules", "run", "run-skill-generator", "sandbox",
+  "schedule", "scroll-speed", "security-review", "settings", "setup-bedrock", "setup-vertex", "simplify",
+  "skills", "stickers", "stop", "stats", "statusline", "subtask", "team-onboarding", "teleport", "terminal-setup",
+  "theme", "tui", "ultraplan", "ultrareview", "upgrade", "usage", "usage-credits", "verify", "vim", "voice",
+  "web", "web-setup", "workflows", "init", "permissions", "review", "design-login", "design-sync",
 ]);
 
 function hasAbsolutePath(value) {

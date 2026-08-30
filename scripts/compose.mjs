@@ -389,7 +389,7 @@ const result = await withHarness(async ({ page }) =>
           }], { regenerateIds: false });
           const height = wrappedContainer.height;
           if (y + height > item.body.y + item.body.height + 0.5) {
-            throw new Error(`${skeleton.id}: converter-derived text bounds exceed the composition body; shorten or reposition the authored text`);
+            throw new Error(`${skeleton.id}: converter-derived text bounds exceed the composition body (y=${y.toFixed(1)}, height=${height.toFixed(1)}, bodyBottom=${(item.body.y + item.body.height).toFixed(1)}, fontSize=${skeleton.fontSize}, ff=${fontFamily}); shorten or reposition the authored text`);
           }
           return {
             id: skeleton.id,

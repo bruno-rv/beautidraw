@@ -26,6 +26,10 @@ reproducible visual system, not a loose request for "something hand-drawn".
   for a trade-off; a hub-and-spoke or network for an ecosystem; a central human decision for a
   judgement call; or a staged path for time. Do not force every concept into the same pipeline
   metaphor.
+- Compose a complete scene, never a lone object: fill the frame edge to edge with an environment
+  (ground, sky, walls, furniture, or landscape) and at least 3–5 interacting elements around the
+  focal metaphor. Reject sparse centred objects with wide empty margins, and do not prompt for
+  “generous margins” or “16:9 card” framing — that wording produces boxed, minor-content images.
 - Keep the main objects inside a 5% safe margin and make the drawing readable when reduced to
   roughly 320 × 180 px.
 - Use symbols, cards, arrows, checkmarks, grids, documents, charts, folders, locks, and simple
@@ -106,6 +110,14 @@ default.
 
 5. Use the raw-byte SHA-1 as the Excalidraw `fileId` and `files` key. The file entry must
    contain the matching `id`, `mimeType: "image/png"`, and a `dataURL`.
+   **Appendix derivative exception (illustrated decks):** when a deck post-processes many
+   frame-native images into one bulk-embedded appendix (the caption-bake builder pattern),
+   embed display derivatives as **JPEG q82** with content-derived fileIds
+   (`apximg-<sha1(name + JPEG bytes)[:16]>` and `mimeType: "image/jpeg"`). The raw-byte
+   SHA-1 PNG contract above still governs base-deck illustration bands and the asset
+   manifest. Two reasons force the exception: 100+ embedded PNGs exceed the file-size gate
+   (≈90 MB vs ≈42 MB), and a stable fileId across rebuilds lets viewer image caches serve
+   stale art — hashing the actual bytes rotates ids on every rebake.
 6. Put the image element inside the intended frame with a unique id, `status: "saved"`,
    `scale: [1, 1]`, `crop: null`, `boundElements: []`, and the full standard Excalidraw base
    properties. In scene mode, place the image before its direct annotations and keep the focal

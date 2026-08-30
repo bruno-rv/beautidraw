@@ -204,6 +204,37 @@ thesis and target aspect ratio are known. Integrate a small number of direct Exc
 callouts, arrows, highlights, or source notes around the focal objects. Do not place the scene behind
 a centred stack of generic cards.
 
+### Illustrate by default, not as a last resort
+
+Every deck should lean on generated imagery well beyond the minimum two raster frames. Default to
+one metaphor-bearing illustration per major idea the deck introduces — a mechanism, a threshold, a
+trade-off, a persona, a lifecycle stage — not merely one per deck. Use visuals to carry meaning
+that prose would otherwise state: a brain filling past a line for a context budget, a knot
+unwinding into one line for a simplification pass, a forked road for an alternative path. If a
+band's explanation contains a "like" or "imagine", that simile is the image brief.
+
+Keep the budget honest: an illustration must argue the band's point (see the rejection criteria in
+`references/blackboard-images.md`), not decorate it. Never restate the heading as an image. When in
+doubt between a fourth card row and a first illustration, choose the illustration.
+
+### Compose scenes, not icons
+
+An illustration must be a complete **scene**, never a lone object floating on an empty board. A
+single floating object (a rocket, a microphone, a dial alone, a mouse next to a ruler) reads as a
+box with minor contents — the exact failure user review rejects. Require:
+
+- **An environment**: ground, sky, walls, furniture, or landscape that fills the frame edge to
+  edge (layered foreground, midground, background) — not a centred object with wide empty margins;
+- **Several interacting elements** (at least 3–5) around the focal metaphor: secondary actors,
+  props, terrain, atmosphere — the metaphor is one element inside a lived-in world;
+- **A reason the elements are together**: the environment should carry the band's claim (a harbor
+  for parallel shipping lanes, a canyon fork for a branching choice, a war-room table for a
+  second opinion), not just decorate around the object.
+
+Brief-check before generating any image: if the subject line names one object and nothing else,
+expand it into the scene that object lives in. Also reject "generous margins" and "16:9 card"
+wording in prompts — they push the model toward sparse centred compositions.
+
 Use Excalidraw’s browser conversion and restoration APIs for custom elements, then validate the
 finished frame. Coordinates may be produced by deterministic composition code or derived from the
 known frame geometry; they must not be guessed and left unverified.

@@ -429,8 +429,9 @@ function threshold(meta) {
   elements.push(shape("left-zone", "ellipse", 0.08, 0.32, 0.22, 0.18, meta.left, leftColors, RAMP.note));
   elements.push(shape("threshold", "diamond", 0.40, 0.39, 0.20, 0.22, meta.middle, centerColors, 24));
   elements.push(shape("right-zone", "ellipse", 0.70, 0.32, 0.22, 0.18, meta.right, rightColors, RAMP.note));
-  elements.push(text("threshold-left", 0.08, 0.62, meta.nodes[0]?.note ?? "", RAMP.note, textColor));
-  elements.push(text("threshold-right", 0.70, 0.62, meta.nodes[2]?.note ?? "", RAMP.note, textColor));
+  const rightNote = meta.nodes[2]?.note ?? meta.nodes[1]?.note ?? "";
+  if (meta.nodes[0]?.note) elements.push(text("threshold-left", 0.08, 0.62, meta.nodes[0].note, RAMP.note, textColor));
+  if (rightNote) elements.push(text("threshold-right", 0.70, 0.62, rightNote, RAMP.note, textColor));
   return finish(meta, elements);
 }
 
