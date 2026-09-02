@@ -42,12 +42,29 @@ export async function measureDirectoryBytes(dir) {
   return total;
 }
 
+export async function defaultExecuteStage({ name, command, args, cwd }) {
+  const t0 = performance.now();
+  const res = spawnSync("/usr/bin/time", ["-l", command, ...args], {
+    cwd,
+    encoding: "utf8",
+    timeout: 120_000,
+  });
+  const elapsedMs = performance.now() - t0;
+  return {
+    status: res.status,
+    stdout: res.stdout,
+    stderr: res.stderr,
+    elapsedMs,
+  };
+}
+
 export async function runBenchmark({
   specPath,
   samples = 3,
   warmups = 1,
   outputPath = null,
   tempDirFactory = () => mkdtemp(join(tmpdir(), "beautidraw-bench-")),
+  executeStage = defaultExecuteStage,
 } = {}) {
   if (process.platform !== "darwin") {
     throw new CliError({
@@ -91,65 +108,85 @@ export async function runBenchmark({
     excalidraw: "0.18.1",
   };
 
-  const stageResults = {
-    setup: { samplesMs: [], maxRssBytes: [] },
-    audit: { samplesMs: [], maxRssBytes: [] },
-    generation: { samplesMs: [], maxRssBytes: [], artifactBytes: [] },
-    composition: { samplesMs: [], maxRssBytes: [], artifactBytes: [] },
-    fullBuild: { samplesMs: [], maxRssBytes: [], artifactBytes: [] },
-    offline: { samplesMs: [], maxRssBytes: [] },
-  };
+  const stageDefs = [
+    {
+      name: "setup",
+      command: "node scripts/setup.mjs",
+      resolveArgs: () => [resolve(root, "scripts/setup.mjs")],
+      getOutDir: null,
+    },
+    {
+      name: "audit",
+      command: `node scripts/audit-deck-spec.mjs ${specPath}`,
+      resolveArgs: () => [resolve(root, "scripts/audit-deck-spec.mjs"), resolvedSpec],
+      getOutDir: null,
+    },
+    {
+      name: "generation",
+      command: `node scripts/generate.mjs ${specPath} <sample>/generate`,
+      resolveArgs: (genOut) => [resolve(root, "scripts/generate.mjs"), resolvedSpec, genOut],
+      getOutDir: (workDir) => join(workDir, "generate"),
+    },
+    {
+      name: "composition",
+      command: `node scripts/auto-compose.mjs ${specPath} <sample>/generate`,
+      resolveArgs: (genOut) => [resolve(root, "scripts/auto-compose.mjs"), resolvedSpec, genOut],
+      getOutDir: (workDir) => join(workDir, "generate"),
+    },
+    {
+      name: "fullBuild",
+      command: `node scripts/build-deck.mjs ${specPath} <sample>/build`,
+      resolveArgs: (buildOut) => [resolve(root, "scripts/build-deck.mjs"), resolvedSpec, buildOut],
+      getOutDir: (workDir) => join(workDir, "build"),
+    },
+    {
+      name: "offline",
+      command: "node scripts/spike/run-all.mjs",
+      resolveArgs: () => [resolve(root, "scripts/spike/run-all.mjs")],
+      getOutDir: null,
+    },
+  ];
+
+  const stageResults = {};
+  for (const st of stageDefs) {
+    stageResults[st.name] = {
+      command: st.command,
+      samplesMs: [],
+      maxRssBytes: [],
+      artifactBytes: st.getOutDir ? [] : undefined,
+    };
+  }
 
   const totalRuns = warmups + samples;
 
   for (let runIndex = 0; runIndex < totalRuns; runIndex += 1) {
     const isWarmup = runIndex < warmups;
     const workDir = await tempDirFactory();
+    
+    // Assert workDir is initially empty
+    const initialEntries = await readdir(workDir);
+    if (initialEntries.length > 0) {
+      throw new Error(`workDir ${workDir} is not initially empty (found ${initialEntries.length} items)`);
+    }
+
     try {
       const genOut = join(workDir, "generate");
       const buildOut = join(workDir, "build");
 
-      const stages = [
-        {
-          name: "setup",
-          args: [resolve(root, "scripts/setup.mjs")],
-          outDir: null,
-        },
-        {
-          name: "audit",
-          args: [resolve(root, "scripts/audit-deck-spec.mjs"), resolvedSpec],
-          outDir: null,
-        },
-        {
-          name: "generation",
-          args: [resolve(root, "scripts/generate.mjs"), resolvedSpec, genOut],
-          outDir: genOut,
-        },
-        {
-          name: "composition",
-          args: [resolve(root, "scripts/auto-compose.mjs"), resolvedSpec, genOut],
-          outDir: genOut,
-        },
-        {
-          name: "fullBuild",
-          args: [resolve(root, "scripts/build-deck.mjs"), resolvedSpec, buildOut],
-          outDir: buildOut,
-        },
-        {
-          name: "offline",
-          args: [resolve(root, "scripts/spike/run-all.mjs")],
-          outDir: null,
-        },
-      ];
+      for (const st of stageDefs) {
+        const outDir = st.getOutDir ? st.getOutDir(workDir) : null;
+        const args = st.name === "generation" || st.name === "composition" ? st.resolveArgs(genOut) :
+                     st.name === "fullBuild" ? st.resolveArgs(buildOut) :
+                     st.resolveArgs();
 
-      for (const st of stages) {
-        const t0 = performance.now();
-        const res = spawnSync("/usr/bin/time", ["-l", process.execPath, ...st.args], {
+        const res = await executeStage({
+          name: st.name,
+          command: process.execPath,
+          args,
           cwd: root,
-          encoding: "utf8",
-          timeout: 120_000,
+          workDir,
+          outDir,
         });
-        const elapsed = performance.now() - t0;
 
         if (res.status !== 0) {
           throw new CliError({
@@ -161,12 +198,13 @@ export async function runBenchmark({
         }
 
         const { maxRssBytes } = parseTimeOutput(res.stderr);
+        const elapsed = typeof res.elapsedMs === "number" ? res.elapsedMs : 0;
 
         if (!isWarmup) {
           stageResults[st.name].samplesMs.push(Math.round(elapsed * 100) / 100);
           stageResults[st.name].maxRssBytes.push(maxRssBytes ?? 0);
-          if (st.outDir) {
-            const bytes = await measureDirectoryBytes(st.outDir);
+          if (outDir) {
+            const bytes = await measureDirectoryBytes(outDir);
             stageResults[st.name].artifactBytes.push(bytes);
           }
         }
@@ -187,7 +225,11 @@ export async function runBenchmark({
     fullBuildMs: { statistic: "median", value: median(stageResults.fullBuild.samplesMs) },
     offlineMs: { statistic: "median", value: median(stageResults.offline.samplesMs) },
     maxRssBytes: { maximum: maxRssBytesTotal },
-    artifactBytes: { fullBuild: median(stageResults.fullBuild.artifactBytes) },
+    artifactBytes: {
+      generation: median(stageResults.generation.artifactBytes),
+      composition: median(stageResults.composition.artifactBytes),
+      fullBuild: median(stageResults.fullBuild.artifactBytes),
+    },
   };
 
   const guardrails = {
@@ -201,6 +243,21 @@ export async function runBenchmark({
   };
   guardrails.allPassed = Object.values(guardrails).every(Boolean);
 
+  const stages = {};
+  for (const [stName, stData] of Object.entries(stageResults)) {
+    stages[stName] = {
+      command: stData.command,
+      samplesMs: stData.samplesMs,
+      medianMs: median(stData.samplesMs),
+      maxRssBytes: stData.maxRssBytes,
+      maxRssBytesMaximum: stData.maxRssBytes.length ? Math.max(...stData.maxRssBytes) : 0,
+      ...(stData.artifactBytes ? {
+        artifactBytes: stData.artifactBytes,
+        medianArtifactBytes: median(stData.artifactBytes),
+      } : {}),
+    };
+  }
+
   const report = {
     schemaVersion: 1,
     machine,
@@ -209,6 +266,9 @@ export async function runBenchmark({
       canvasBandCount,
       totalBandCount,
     },
+    warmups,
+    sampleCount: samples,
+    stages,
     samples: {
       setupMs: stageResults.setup.samplesMs,
       auditMs: stageResults.audit.samplesMs,
@@ -216,6 +276,17 @@ export async function runBenchmark({
       compositionMs: stageResults.composition.samplesMs,
       fullBuildMs: stageResults.fullBuild.samplesMs,
       offlineMs: stageResults.offline.samplesMs,
+      generationArtifactBytes: stageResults.generation.artifactBytes,
+      compositionArtifactBytes: stageResults.composition.artifactBytes,
+      fullBuildArtifactBytes: stageResults.fullBuild.artifactBytes,
+      perStageMaxRssBytes: {
+        setup: stageResults.setup.maxRssBytes,
+        audit: stageResults.audit.maxRssBytes,
+        generation: stageResults.generation.maxRssBytes,
+        composition: stageResults.composition.maxRssBytes,
+        fullBuild: stageResults.fullBuild.maxRssBytes,
+        offline: stageResults.offline.maxRssBytes,
+      },
       maxRssBytes: stageResults.fullBuild.maxRssBytes,
     },
     summary,
@@ -231,7 +302,7 @@ export async function runBenchmark({
   return report;
 }
 
-function normalizeArgv(rawArgs) {
+export function normalizeArgv(rawArgs) {
   const normalized = [];
   const optionsWithValues = new Set(["--samples", "--warmups", "--output"]);
   for (let i = 0; i < rawArgs.length; i += 1) {
