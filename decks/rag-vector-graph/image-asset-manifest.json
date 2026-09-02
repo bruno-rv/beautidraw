@@ -1,0 +1,62 @@
+{
+  "tool": "built-in ImageGen",
+  "generatedAt": "2026-08-24",
+  "assets": [
+    {
+      "source": "assets/evidence-selection.png",
+      "file": "assets/evidence-selection.png",
+      "sha1": "ce8b0873440738c7bd8a21efca8c8b52c50e3085",
+      "pixelWidth": 1536,
+      "pixelHeight": 864,
+      "dimensions": {
+        "width": 1536,
+        "height": 864
+      },
+      "suggestedBand": 1,
+      "use": "Show a user question moving through an evidence space to select a grounded context for generation.",
+      "description": "A query enters an evidence collection, filters irrelevant material, and selects a compact context bundle to support generation."
+    },
+    {
+      "source": "assets/vector-meaning-space.png",
+      "file": "assets/vector-meaning-space.png",
+      "sha1": "87c32b7e05a90b0a94a8be38e6f42b1f3e0d3556",
+      "pixelWidth": 1536,
+      "pixelHeight": 864,
+      "dimensions": {
+        "width": 1536,
+        "height": 864
+      },
+      "suggestedBand": 5,
+      "use": "Show documents placed by semantic proximity in vector space, with a query revealing its neighborhood.",
+      "description": "Documents are positioned by semantic meaning rather than spelling, with one query vector locating nearest neighbors."
+    },
+    {
+      "source": "assets/graph-traversal.png",
+      "file": "assets/graph-traversal.png",
+      "sha1": "c226f534a895d4a3aee7d2578e3b0f9773fe729f",
+      "pixelWidth": 1536,
+      "pixelHeight": 864,
+      "dimensions": {
+        "width": 1536,
+        "height": 864
+      },
+      "suggestedBand": 9,
+      "use": "Show a question following named relationships across entities in a knowledge graph to reach connected evidence.",
+      "description": "A query navigates directed relationships between entities in a knowledge graph, linking concepts across multi-hop paths."
+    },
+    {
+      "source": "assets/retriever-fanout.png",
+      "file": "assets/retriever-fanout.png",
+      "sha1": "8fe2e5fcd82608a327b6ede234e22f615444d2d7",
+      "pixelWidth": 1536,
+      "pixelHeight": 864,
+      "dimensions": {
+        "width": 1536,
+        "height": 864
+      },
+      "suggestedBand": 10,
+      "use": "Show a question routing across vector, graph, keyword, and current-state retrievers into one reconciled bundle.",
+      "description": "A query fans out across specialized retrieval strategies before candidate hits are deduplicated and merged."
+    }
+  ]
+}

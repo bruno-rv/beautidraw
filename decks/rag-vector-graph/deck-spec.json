@@ -1,264 +1,636 @@
 {
   "title": "RAG, Vectors & Graphs",
   "subtitle": "How systems find evidence, connect facts, and ground answers",
-  "footer": "Recorded-class synthesis + expanded notes • class numbers omitted",
+  "footer": "Use frame navigation to follow the retrieval mechanism. The outline.md file is the reading surface on smaller screens.",
   "bands": [
     {
       "heading": "RAG means relevance-selected evidence",
       "deck": "A generation architecture, not a synonym for every external tool call",
-      "pattern": "flow",
+      "pattern": "canvas",
       "accent": "blue",
-      "nodes": [
-        { "label": "User question", "note": "Ask for an explanation, policy, procedure, or other knowledge" },
-        { "label": "Candidate space", "note": "There may be thousands of documents, chunks, nodes, or passages" },
-        { "label": "Relevance step", "note": "Rank, filter, or traverse to choose evidence for this query" },
-        { "label": "Context assembly", "note": "Place selected evidence beside the question and instructions" },
-        { "label": "Grounded answer", "note": "Generate from that bundle, cite it, or say evidence is missing" }
-      ]
+      "relation": "causal",
+      "height": 780,
+      "visual": {
+        "family": "illustration",
+        "surface": "light",
+        "thesis": "RAG is an architecture for relevance-selected evidence, not a synonym for every tool call.",
+        "focus": "Question → candidate space → selected evidence → grounded answer",
+        "caption": "A query filters a large collection down to a compact context bundle.",
+        "explanation": "RAG ranks a large candidate space by relevance, then places selected passages beside the question so generation is constrained by evidence.",
+        "example": "Rank handbook sections for a PTO question and cite the matching passage instead of guessing.",
+        "tradeoff": "A keyed lookup or action tool can return text without ranking evidence.",
+        "inspect": "rank(query, corpus) then cite selected ids",
+        "nodes": [
+          {
+            "label": "User question",
+            "note": "Ask for an explanation, policy, procedure, or knowledge"
+          },
+          {
+            "label": "Candidate space",
+            "note": "Thousands of documents, chunks, nodes, or passages"
+          },
+          {
+            "label": "Relevance step",
+            "note": "Rank, filter, or traverse to choose evidence"
+          },
+          {
+            "label": "Context assembly",
+            "note": "Place selected evidence beside the question"
+          },
+          {
+            "label": "Grounded answer",
+            "note": "Generate from that bundle or admit a miss"
+          }
+        ],
+        "callouts": [
+          {
+            "kind": "boundary",
+            "label": "Not every tool call",
+            "note": "Lookup is not ranking."
+          },
+          {
+            "kind": "inspect",
+            "label": "Trace ids",
+            "note": "check selected chunks"
+          }
+        ],
+        "image": {
+          "file": "assets/evidence-selection.png",
+          "side": "left",
+          "use": "Show a user question moving through an evidence space to select a grounded context for generation.",
+          "description": "A query enters an evidence collection, filters irrelevant material, and selects a compact context bundle to support generation."
+        }
+      }
     },
     {
       "heading": "RAG versus a generic tool call",
       "deck": "The same call-and-return mechanics can serve different architectural roles",
-      "pattern": "comparison",
-      "accent": "red",
-      "nodes": [
-        {
-          "label": "RAG retrieval",
-          "tone": "green",
-          "items": ["Search a large knowledge space", "Select by similarity, ranking, or traversal", "Place evidence into context", "Answer with a source trail"]
-        },
-        {
-          "label": "Known lookup",
-          "tone": "amber",
-          "items": ["The key or record is already known", "Fetch one current value or state", "There is little relevance selection", "Return the value to the model"]
-        },
-        {
-          "label": "Action tool",
-          "tone": "red",
-          "items": ["Invoke a known capability", "Create, update, or trigger something", "Validate permissions and side effects", "Not RAG just because text returns"]
-        }
-      ]
+      "pattern": "canvas",
+      "accent": "amber",
+      "height": 760,
+      "visual": {
+        "family": "threshold",
+        "surface": "light",
+        "thesis": "Shared plumbing is not the architecture; only relevance search selects evidence.",
+        "focus": "Lookup, relevance search, and action sit on different roles",
+        "caption": "Only the middle path chooses evidence from a large candidate space.",
+        "left": "Known lookup",
+        "middle": "Relevance search",
+        "right": "Action tool",
+        "axisX": "fixed key → large candidate space",
+        "axisY": "relevance selection effort ↑",
+        "nodes": [
+          {
+            "label": "Known lookup",
+            "note": "Fetch one current value by a known key"
+          },
+          {
+            "label": "Relevance search",
+            "note": "Rank a large space and keep the best evidence"
+          },
+          {
+            "label": "Action tool",
+            "note": "Create, update, or trigger a side effect"
+          }
+        ],
+        "explanation": "A retrieval step is RAG when it searches a large knowledge space, selects by relevance, and grounds generation. Fetching a known row or invoking a capability is a different role.",
+        "example": "Employee 4821's vacation balance is a keyed lookup; which PTO rule applies is a relevance search.",
+        "tradeoff": "Returning text from a tool does not make the call RAG if no ranking occurred.",
+        "inspect": "classify(call): lookup | retrieve | action"
+      }
     },
     {
       "heading": "Three questions that look alike",
       "deck": "The user's wording does not tell you the architecture; the retrieval role does",
       "pattern": "comparison",
-      "accent": "violet",
+      "accent": "red",
       "nodes": [
         {
           "label": "Policy question",
           "tone": "green",
-          "items": ["Many sections could match", "Rank the relevant passages", "Use those passages to explain", "Cite the policy source"]
+          "items": [
+            "Many sections could match",
+            "Rank the relevant passages",
+            "Use those passages to explain",
+            "Cite the policy source"
+          ]
         },
         {
           "label": "Dependency question",
           "tone": "violet",
-          "items": ["Start from a known entity", "Traverse linked systems or owners", "Return the relevant subgraph", "Explain the path and impact"]
+          "items": [
+            "Start from a known entity",
+            "Traverse linked systems or owners",
+            "Return the relevant subgraph",
+            "Explain the path and impact"
+          ]
         },
         {
           "label": "Current balance",
           "tone": "amber",
-          "items": ["The employee record is known", "Read one current field", "No corpus ranking is needed", "This is lookup, not RAG"]
+          "items": [
+            "The employee record is known",
+            "Read one current field",
+            "No corpus ranking is needed",
+            "This is lookup, not RAG"
+          ]
         }
       ]
     },
     {
       "heading": "Two pipelines, one handoff",
       "deck": "Offline preparation shapes what the online answer can recover",
-      "pattern": "flow",
+      "pattern": "canvas",
       "accent": "green",
-      "nodes": [
-        { "label": "Load sources", "note": "Bring in PDFs, notes, pages, tables, or other approved material" },
-        { "label": "Split ideas", "note": "Create focused chunks without cutting the meaning in half" },
-        { "label": "Embed + store", "note": "Save vectors beside chunk text, source identity, and metadata" },
-        { "label": "Embed the question", "note": "Represent the live query in the same semantic space" },
-        { "label": "Retrieve + generate", "note": "Select evidence, assemble context, and produce a grounded answer" }
-      ]
+      "relation": "causal",
+      "height": 780,
+      "visual": {
+        "family": "pipeline",
+        "surface": "light",
+        "thesis": "Offline preparation decides what the live question can recover later.",
+        "focus": "Load → split → embed → query → retrieve",
+        "caption": "Indexing work and live retrieval meet at one evidence handoff.",
+        "explanation": "Sources are split and stored as vectors with metadata. At query time the question is embedded in the same space, then selected evidence is assembled for generation.",
+        "example": "A policy PDF is chunked overnight; a morning question retrieves those chunks instead of rereading the file.",
+        "tradeoff": "Bad splits or stale embeddings cannot be repaired by a clever prompt at answer time.",
+        "inspect": "inspect index.chunks then query.embed()",
+        "nodes": [
+          {
+            "label": "Load sources",
+            "note": "Bring in approved PDFs, notes, pages, or tables"
+          },
+          {
+            "label": "Split ideas",
+            "note": "Create focused chunks without cutting meaning in half"
+          },
+          {
+            "label": "Embed + store",
+            "note": "Save vectors beside text, source identity, and metadata"
+          },
+          {
+            "label": "Embed the question",
+            "note": "Represent the live query in the same semantic space"
+          },
+          {
+            "label": "Retrieve + generate",
+            "note": "Select evidence, assemble context, and ground the answer"
+          }
+        ]
+      }
     },
     {
       "heading": "A vector is a point in meaning space",
       "deck": "Text becomes geometry so related ideas can be found without matching words",
-      "pattern": "row-of-stages",
+      "pattern": "canvas",
       "accent": "violet",
-      "nodes": [
-        { "label": "Text", "note": "A sentence, paragraph, or question" },
-        { "label": "Chunk", "note": "The smallest useful unit we want to recover" },
-        { "label": "Embedding", "note": "A numeric position that represents the chunk's meaning" },
-        { "label": "Similarity", "note": "Compare directions and distance in semantic space" },
-        { "label": "Top K", "note": "Keep the few candidates that best fit the query" }
-      ]
+      "height": 780,
+      "visual": {
+        "family": "illustration",
+        "surface": "light",
+        "thesis": "A vector is a learned position so nearby text can match without shared wording.",
+        "focus": "Text → chunk → embedding → neighborhood → top K",
+        "caption": "Documents sit by semantic proximity; the query reveals its nearest neighbors.",
+        "explanation": "Each chunk is mapped to a numeric position that represents meaning, so paraphrases can rank above unrelated exact wording.",
+        "example": "A leftover-vacation query can retrieve a PTO accrual paragraph that never says leftover.",
+        "tradeoff": "Geometry is learned; rare identifiers still need lexical backup.",
+        "inspect": "cosine(query_vec, chunk_vec) for top-k",
+        "nodes": [
+          {
+            "label": "Text",
+            "note": "A sentence, paragraph, or question"
+          },
+          {
+            "label": "Chunk",
+            "note": "The smallest useful unit we want to recover"
+          },
+          {
+            "label": "Embedding",
+            "note": "A numeric position that represents meaning"
+          },
+          {
+            "label": "Similarity",
+            "note": "Compare direction and distance in semantic space"
+          },
+          {
+            "label": "Top K",
+            "note": "Keep the few candidates that best fit the query"
+          }
+        ],
+        "callouts": [
+          {
+            "kind": "example",
+            "label": "Neighbors by meaning",
+            "note": "Leave and PTO can sit nearby."
+          }
+        ],
+        "image": {
+          "file": "assets/vector-meaning-space.png",
+          "side": "left",
+          "use": "Show documents placed by semantic proximity in vector space, with a query revealing its neighborhood.",
+          "description": "Documents are positioned by semantic meaning rather than spelling, with one query vector locating nearest neighbors."
+        }
+      }
     },
     {
       "heading": "Chunking controls signal quality",
       "deck": "The chunk is the unit of retrieval, context, cost, and possible confusion",
-      "pattern": "comparison",
-      "accent": "amber",
-      "nodes": [
-        {
-          "label": "Too small",
-          "tone": "amber",
-          "items": ["Precise signal, missing surrounding meaning", "More fragments to combine", "References can become orphaned", "Answer may lose the why"]
-        },
-        {
-          "label": "Too large",
-          "tone": "red",
-          "items": ["More context, weaker focus", "Mixed topics dilute the vector", "Noise consumes the context window", "Hallucination risk can rise"]
-        },
-        {
-          "label": "Balanced start",
-          "tone": "green",
-          "items": ["Begin near 800 characters", "Overlap roughly 120 characters", "Respect headings and idea boundaries", "Tune against real retrieval tests"]
-        }
-      ]
+      "pattern": "canvas",
+      "accent": "blue",
+      "height": 760,
+      "visual": {
+        "family": "tension",
+        "surface": "light",
+        "thesis": "The chunk is the unit of retrieval, context cost, and possible confusion.",
+        "focus": "Too small versus too large, with a balanced start",
+        "caption": "Split size decides whether a hit carries enough meaning without mixing topics.",
+        "left": "Too small",
+        "middle": "Balanced start",
+        "right": "Too large",
+        "decision": "Tune on real retrieval tests",
+        "nodes": [
+          {
+            "label": "Too small",
+            "note": "Precise signal, missing surrounding meaning"
+          },
+          {
+            "label": "Balanced start",
+            "note": "Near 800 characters with overlap and heading respect"
+          },
+          {
+            "label": "Too large",
+            "note": "More context, weaker focus, mixed topics"
+          },
+          {
+            "label": "Tune",
+            "note": "Judge splits against real retrieval tests"
+          }
+        ],
+        "explanation": "Tiny chunks orphan the why; huge chunks mix topics and dilute the vector. Start near 800 characters with overlap, then tune against retrieval tests.",
+        "example": "A 120-character fragment citing see section 4 cannot explain the policy; a 4-page chunk buries the clause.",
+        "tradeoff": "Overlap helps continuity but multiplies storage and near-duplicate hits.",
+        "inspect": "compare chunk sizes against retrieval hits"
+      }
     },
     {
       "heading": "Retrieval has several quality dials",
       "deck": "A good answer depends on both the search space and the amount of evidence returned",
-      "pattern": "flow",
-      "accent": "red",
-      "nodes": [
-        { "label": "Embed query", "note": "Turn the question into the same kind of vector as stored chunks" },
-        { "label": "Filter metadata", "note": "Limit by source, type, date, tenant, or other trusted attributes" },
-        { "label": "Compare candidates", "note": "Use cosine similarity, lexical ranking, graph paths, or a mix" },
-        { "label": "Choose Top K", "note": "Too few misses context; too many dilute attention with noise" },
-        { "label": "Rerank + inspect", "note": "Reorder candidates, reject weak evidence, and check the fit" }
-      ]
+      "pattern": "canvas",
+      "accent": "amber",
+      "height": 760,
+      "visual": {
+        "family": "matrix",
+        "surface": "light",
+        "focus": "Quality dials",
+        "caption": "Metadata filters, similarity, top-k, and rerank are independent controls.",
+        "axisX": "narrow → wide pool",
+        "axisY": "rank effort ↑",
+        "nodes": [
+          {
+            "label": "Embed query",
+            "note": "same vector space"
+          },
+          {
+            "label": "Filter metadata",
+            "note": "source, date, tenant"
+          },
+          {
+            "label": "Choose Top K",
+            "note": "too few or too many"
+          },
+          {
+            "label": "Rerank",
+            "note": "drop weak evidence"
+          }
+        ],
+        "explanation": "Embedding the question is only the start. Metadata filters shrink the candidate set, top-k sizes context, and reranking prefers similar, useful passages.",
+        "example": "A tenant filter removes another team's docs; raising k from 4 to 20 can bury the right clause.",
+        "tradeoff": "Wide recall without rerank floods the window; tight filters can hide the only source.",
+        "inspect": "log(k, filters, rerank_scores) per query"
+      }
     },
     {
       "heading": "Where vector search lives",
       "deck": "The same database can support RAG or lookup depending on the query's purpose",
       "pattern": "comparison",
-      "accent": "blue",
+      "accent": "violet",
       "nodes": [
         {
           "label": "Postgres + pgvector",
           "tone": "blue",
-          "items": ["Familiar SQL tables and joins", "Vectors beside normal columns", "Useful when relational data already dominates"]
+          "items": [
+            "Familiar SQL tables and joins",
+            "Vectors beside normal columns",
+            "Useful when relational data already dominates"
+          ]
         },
         {
           "label": "Qdrant",
           "tone": "violet",
-          "items": ["Purpose-built vector search", "Payload filters beside embeddings", "Good fit for chunk retrieval at scale"]
+          "items": [
+            "Purpose-built vector search",
+            "Payload filters beside embeddings",
+            "Good fit for chunk retrieval at scale"
+          ]
         },
         {
           "label": "SQL boundary",
           "tone": "amber",
-          "items": ["Rank relevant evidence → RAG-capable", "Fetch one known row → lookup", "Same storage technology, different purpose"]
+          "items": [
+            "Rank relevant evidence → RAG-capable",
+            "Fetch one known row → lookup",
+            "Same storage technology, different purpose"
+          ]
         }
       ]
     },
     {
       "heading": "Graph databases model connections directly",
       "deck": "The answer may depend on a path through entities, not on the nearest paragraph",
-      "pattern": "flow",
-      "accent": "violet",
-      "nodes": [
-        { "label": "Entity", "note": "Represent a person, product, table, pipeline, incident, or team" },
-        { "label": "Relationship", "note": "Store an explicit link with direction, type, and meaning" },
-        { "label": "Properties", "note": "Keep useful facts on nodes and relationships, not only in prose" },
-        { "label": "Traverse", "note": "Follow several links to answer a connected question" },
-        { "label": "Impact path", "note": "Explain lineage, dependencies, and the radius of a failure" }
-      ]
+      "pattern": "canvas",
+      "accent": "green",
+      "height": 780,
+      "visual": {
+        "family": "illustration",
+        "surface": "light",
+        "thesis": "Some answers live on named paths between entities, not in nearest paragraphs.",
+        "focus": "Entity → relationship → properties → traverse → impact path",
+        "caption": "A question follows directed links to connected evidence across hops.",
+        "explanation": "Graph retrieval stores entities and typed links. A question starts at a known node and walks those links, so the answer can be a path rather than a nearby paragraph.",
+        "example": "Which services fail if billing-db dies? is answered by traversing depends_on links.",
+        "tradeoff": "If the relationship is missing, traversal cannot invent the path prose might mention.",
+        "inspect": "MATCH (n)-[r]->(m) RETURN path LIMIT 8",
+        "nodes": [
+          {
+            "label": "Entity",
+            "note": "A person, product, table, pipeline, or team"
+          },
+          {
+            "label": "Relationship",
+            "note": "An explicit link with direction, type, and meaning"
+          },
+          {
+            "label": "Properties",
+            "note": "Facts on nodes and edges, not only in prose"
+          },
+          {
+            "label": "Traverse",
+            "note": "Follow several links to answer a connected question"
+          },
+          {
+            "label": "Impact path",
+            "note": "Explain lineage, owners, and failure radius"
+          }
+        ],
+        "callouts": [
+          {
+            "kind": "example",
+            "label": "Named relationship",
+            "note": "depends_on carries the path."
+          }
+        ],
+        "image": {
+          "file": "assets/graph-traversal.png",
+          "side": "left",
+          "use": "Show a question following named relationships across entities in a knowledge graph to reach connected evidence.",
+          "description": "A query navigates directed relationships between entities in a knowledge graph, linking concepts across multi-hop paths."
+        }
+      }
     },
     {
       "heading": "One question can fan out across evidence types",
       "deck": "A retriever can use several paths, then return one curated context",
-      "pattern": "flow",
+      "pattern": "canvas",
       "accent": "blue",
-      "nodes": [
-        { "label": "Question", "note": "Start with the user's information need and constraints" },
-        { "label": "Retriever hub", "note": "Decide which evidence paths can answer this kind of question" },
-        { "label": "Search paths", "note": "Use semantic vectors, graph traversal, keyword ranking, or a hybrid" },
-        { "label": "Curated bundle", "note": "Keep the strongest passages, nodes, links, and supporting metadata" },
-        { "label": "Context window", "note": "Fit the evidence inside a bounded prompt with clear instructions" },
-        { "label": "Grounded answer", "note": "Generate from the bundle and preserve the trail back to sources" }
-      ]
+      "height": 780,
+      "visual": {
+        "family": "illustration",
+        "surface": "light",
+        "thesis": "One question can route across several retrievers, then return one curated bundle.",
+        "focus": "Question → hub → specialized retrievers → reconciled bundle",
+        "caption": "Vector, graph, keyword, and current-state paths merge after fan-out.",
+        "explanation": "A retriever hub chooses which evidence paths can answer this question, then merges vector, graph, keyword, and current-state hits before they occupy context.",
+        "example": "Who owns billing-db and what is replica lag? fans out to graph plus a live lookup.",
+        "tradeoff": "Fan-out raises recall and cost; without merge rules the prompt fills with overlapping fragments.",
+        "inspect": "merge(vector, graph, keyword) then dedupe",
+        "nodes": [
+          {
+            "label": "Question",
+            "note": "Start with the information need and constraints"
+          },
+          {
+            "label": "Retriever hub",
+            "note": "Decide which evidence paths can answer this kind"
+          },
+          {
+            "label": "Search paths",
+            "note": "Vector, graph, keyword, hybrid, or current state"
+          },
+          {
+            "label": "Curated bundle",
+            "note": "Keep the strongest passages, nodes, and metadata"
+          },
+          {
+            "label": "Context window",
+            "note": "Fit evidence inside a bounded prompt"
+          },
+          {
+            "label": "Grounded answer",
+            "note": "Generate from the bundle and keep the source trail"
+          }
+        ],
+        "callouts": [
+          {
+            "kind": "example",
+            "label": "Fan-out then merge",
+            "note": "Hits are reconciled before prompting."
+          }
+        ],
+        "image": {
+          "file": "assets/retriever-fanout.png",
+          "side": "left",
+          "use": "Show a question routing across vector, graph, keyword, and current-state retrievers into one reconciled bundle.",
+          "description": "A query fans out across specialized retrieval strategies before candidate hits are deduplicated and merged."
+        }
+      }
     },
     {
       "heading": "Vector, graph, keyword, hybrid",
       "deck": "Each mechanism answers a different relevance question",
-      "pattern": "comparison",
-      "accent": "slate",
-      "nodes": [
-        {
-          "label": "Vector search",
-          "tone": "blue",
-          "items": ["Find themes and paraphrases", "Recover nearby chunks by meaning", "Useful when wording varies"]
-        },
-        {
-          "label": "Graph search",
-          "tone": "violet",
-          "items": ["Find entities and dependencies", "Follow explicit paths", "Useful when relationships carry the answer"]
-        },
-        {
-          "label": "Keyword / BM25",
-          "tone": "amber",
-          "items": ["Find exact names and phrases", "Protect identifiers and rare terms", "Useful when lexical precision matters"]
-        },
-        {
-          "label": "Hybrid",
-          "tone": "green",
-          "items": ["Combine complementary signals", "Rerank the strongest candidates", "Curate before sending context"]
-        }
-      ]
+      "pattern": "canvas",
+      "accent": "violet",
+      "height": 760,
+      "visual": {
+        "family": "field",
+        "surface": "light",
+        "thesis": "Each retrieval mechanism answers a different relevance question.",
+        "focus": "Four relevance questions on one field",
+        "caption": "Meaning, path, exact wording, and blended signals occupy different regions.",
+        "axisX": "paraphrase → exact identifier",
+        "axisY": "path dependence ↑",
+        "nodes": [
+          {
+            "label": "Vector search",
+            "note": "Find themes and paraphrases by meaning"
+          },
+          {
+            "label": "Graph search",
+            "note": "Follow explicit entities and dependencies"
+          },
+          {
+            "label": "Keyword / BM25",
+            "note": "Protect identifiers and rare exact phrases"
+          },
+          {
+            "label": "Hybrid",
+            "note": "Combine signals, then rerank and curate"
+          }
+        ],
+        "explanation": "Vector search recovers paraphrases. Graph search follows typed links. Keyword ranking protects exact names. Hybrid blends those signals and reranks.",
+        "example": "A product code SKU-9F2 needs BM25; a why-did-this-break question often needs graph plus vector.",
+        "tradeoff": "One mechanism for every question either misses identifiers or wastes traversal on prose.",
+        "inspect": "score.hybrid = a*vector + b*bm25"
+      }
     },
     {
       "heading": "From raw hits to usable context",
       "deck": "Retrieval is not finished when results arrive; context still needs editorial work",
-      "pattern": "flow",
+      "pattern": "canvas",
       "accent": "green",
-      "nodes": [
-        { "label": "Candidate results", "note": "Collect passages, nodes, edges, scores, and source metadata" },
-        { "label": "Deduplicate", "note": "Remove repeated or overlapping evidence before it crowds the prompt" },
-        { "label": "Rerank", "note": "Prefer evidence that is both relevant and useful for this question" },
-        { "label": "Budget context", "note": "Fit enough coverage without burying the signal in a giant window" },
-        { "label": "Add guardrails", "note": "Require source-aware answers, clear delimiters, and an honest fallback" }
-      ]
+      "relation": "temporal",
+      "height": 780,
+      "visual": {
+        "family": "journey",
+        "surface": "light",
+        "thesis": "Hits are not context; editorial work turns candidates into a usable prompt.",
+        "focus": "candidates → dedupe → rerank → budget → guardrails",
+        "caption": "Each step removes noise and preserves a trail the answer can cite.",
+        "explanation": "Hits still contain duplicates and weak matches. Deduplicate, rerank, then add source-aware instructions and an honest fallback.",
+        "example": "Twelve near-duplicate handbook chunks collapse to two sections plus a cite-or-refuse rule.",
+        "tradeoff": "Skipping editorial work spends the window on repeats.",
+        "inspect": "dedupe(hits); rerank; fit(context_budget)",
+        "nodes": [
+          {
+            "label": "Candidates",
+            "note": "passages and scores"
+          },
+          {
+            "label": "Deduplicate",
+            "note": "drop overlap"
+          },
+          {
+            "label": "Rerank",
+            "note": "keep useful hits"
+          },
+          {
+            "label": "Guardrails",
+            "note": "cite or refuse"
+          }
+        ]
+      }
     },
     {
       "heading": "The litmus test: retrieve or look up?",
       "deck": "Ask whether the system chooses relevant evidence or fetches known state",
       "pattern": "checklist",
-      "accent": "amber",
+      "accent": "slate",
       "nodes": [
-        { "label": "Is there a large knowledge space?", "note": "Many candidate documents, chunks, nodes, or passages could answer" },
-        { "label": "Does the step select relevance?", "note": "Similarity, traversal, filtering, lexical ranking, or reranking" },
-        { "label": "Does the result ground generation?", "note": "The model should use external evidence rather than rely on memory" },
-        { "label": "Is the source trail useful?", "note": "A good RAG result lets a reader inspect where the claim came from" },
-        { "label": "Or is it known state?", "note": "Fetch a row, check a balance, read a price, or call an action" },
-        { "label": "If unsure, name the role", "note": "The mechanism can look identical; the architectural purpose decides" }
+        {
+          "label": "Is there a large knowledge space?",
+          "note": "Many candidate documents, chunks, nodes, or passages could answer"
+        },
+        {
+          "label": "Does the step select relevance?",
+          "note": "Similarity, traversal, filtering, lexical ranking, or reranking"
+        },
+        {
+          "label": "Does the result ground generation?",
+          "note": "The model should use external evidence rather than rely on memory"
+        },
+        {
+          "label": "Is the source trail useful?",
+          "note": "A good RAG result lets a reader inspect where the claim came from"
+        },
+        {
+          "label": "Or is it known state?",
+          "note": "Fetch a row, check a balance, read a price, or call an action"
+        },
+        {
+          "label": "If unsure, name the role",
+          "note": "The mechanism can look identical; the architectural purpose decides"
+        }
       ]
     },
     {
       "heading": "Choose memory by question shape",
       "deck": "Use the simplest retrieval strategy that answers the question well",
-      "pattern": "tree",
-      "accent": "amber",
-      "nodes": [
-        {
-          "label": "What kind of request is this?",
-          "children": [
-            { "label": "Document or explanation → vector or keyword retrieval" },
-            { "label": "Relationship or dependency → graph traversal" },
-            { "label": "Meaning plus structure → hybrid retrieval" },
-            { "label": "Known current value or side effect → direct lookup or tool" }
-          ]
-        }
-      ]
+      "pattern": "canvas",
+      "accent": "blue",
+      "height": 760,
+      "visual": {
+        "family": "map",
+        "surface": "light",
+        "thesis": "Pick the simplest memory that matches the question's shape.",
+        "focus": "What kind of request is this?",
+        "caption": "Document, relationship, hybrid, and lookup needs radiate from one decision hub.",
+        "explanation": "Route by question shape: explanations use vector or keyword retrieval, dependencies use graph, mixed needs use hybrid, and known values stay on lookup.",
+        "example": "Refund policy uses vector search; who owns billing-db uses graph; replica lag uses lookup.",
+        "tradeoff": "Defaulting every request to hybrid adds latency without helping a keyed status read.",
+        "inspect": "route(question) to vector | graph | lookup",
+        "nodes": [
+          {
+            "label": "Document or explanation",
+            "note": "Vector or keyword retrieval over passages"
+          },
+          {
+            "label": "Relationship or dependency",
+            "note": "Graph traversal from a known entity"
+          },
+          {
+            "label": "Meaning plus structure",
+            "note": "Hybrid retrieval, then rerank"
+          },
+          {
+            "label": "Known value or side effect",
+            "note": "Direct lookup or an action tool"
+          }
+        ]
+      }
     },
     {
       "heading": "Keep the answer honest",
       "deck": "The database is not the answer; evidence quality is the guardrail",
-      "pattern": "checklist",
-      "accent": "green",
-      "nodes": [
-        { "label": "Can the source be named?", "note": "Show the document, node, path, or record behind the claim" },
-        { "label": "Does the evidence fit?", "note": "Reject irrelevant chunks, broken links, and convenient but weak matches" },
-        { "label": "Is the question fresh?", "note": "Refresh mutable state instead of pretending a static corpus is current" },
-        { "label": "What if nothing matches?", "note": "Say what is unknown rather than filling the gap from model memory" },
-        { "label": "Is this an action boundary?", "note": "Keep side effects and permissions explicit; do not disguise them as retrieval" },
-        { "label": "Can we measure it?", "note": "Track recall, precision, latency, cost, citations, and failure cases" }
-      ]
+      "pattern": "canvas",
+      "accent": "red",
+      "height": 760,
+      "visual": {
+        "family": "evidence",
+        "surface": "light",
+        "thesis": "The store is not the answer; inspectable evidence is the honesty check.",
+        "focus": "Evidence quality is the guardrail",
+        "caption": "Name the source, test the fit, refresh mutable state, and refuse a silent gap.",
+        "explanation": "Grounding fails when a citation cannot be named, the passage does not fit, or missing evidence is filled from model memory.",
+        "example": "If no handbook chunk supports a PTO claim, say the source is missing rather than invent a number.",
+        "tradeoff": "A fluent guess from weak neighbors still misleads; refusal is the honest completion.",
+        "inspect": "require(citation) or refuse the claim",
+        "nodes": [
+          {
+            "label": "Name the source",
+            "note": "Show the document, node, path, or record"
+          },
+          {
+            "label": "Test the fit",
+            "note": "Reject irrelevant chunks and convenient weak matches"
+          },
+          {
+            "label": "Refresh mutable state",
+            "note": "Do not treat a static corpus as current"
+          },
+          {
+            "label": "Admit a miss",
+            "note": "Say what is unknown rather than filling from memory"
+          }
+        ]
+      }
     }
   ]
 }
