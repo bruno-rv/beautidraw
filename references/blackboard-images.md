@@ -3,16 +3,11 @@
 Use this reference whenever a deck needs colored-blackboard illustrations. The goal is a
 reproducible visual system, not a loose request for "something hand-drawn".
 
-> **Status: style and placement contract.** `deck-spec.json` still has no image field and
-> `generate.mjs` still writes `files: null`, so a subsequent regeneration can remove embedded
-> images. For a finished presentation handoff, post-process the generated `.excalidraw` with
-> the accepted PNGs, preserve the manifest, and render the final file before delivery. The
+> **Status: style and placement contract.** `deck-spec.json` supports semantic raster
+> illustrations directly via `visual.image` (with `file`, `use`, `description`, and `side`), and
+> `build-deck.mjs` automatically measures, places, and embeds them into `deck.excalidraw`. The
 > placement rules below are part of the visual contract: an image is not finished while it is
 > still a loose thumbnail on the canvas.
->
-> The PNGs remain useful as a separate deliverable, but when the user asks for an embedded
-> handoff, include them in the final `.excalidraw` and say that regeneration must preserve or
-> reapply the embedding step.
 
 ## Canonical visual contract
 
@@ -119,7 +114,7 @@ default.
    folder (or in the deck's `assets/` directory when the generator owns the output folder).
    Record the final pixel dimensions and placement mode in the manifest.
 4. Record `file`, raw-byte `sha1`, `suggestedBand`, and a one-sentence `use` in
-   `blackboard-asset-manifest.json`, beside the assets.
+   `image-asset-manifest.json`, beside the assets.
 
 5. Use the raw-byte SHA-1 as the Excalidraw `fileId` and `files` key. The file entry must
    contain the matching `id`, `mimeType: "image/png"`, and a `dataURL`.

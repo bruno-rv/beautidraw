@@ -217,3 +217,48 @@ test("audit and compose route invalid input through shared diagnostics", async (
   assert.match(composeOutput, /compose failed/);
   assert.doesNotMatch(composeOutput, /at .*\.mjs:/);
 });
+
+test("no tracked source references legacy embed path or blackboard manifest", async () => {
+  const gitLs = spawnSync("git", ["ls-files"], { cwd: root, encoding: "utf8" });
+  assert.equal(gitLs.status, 0);
+  const files = gitLs.stdout.trim().split("\n").filter((file) => {
+    const isDoc = file.startsWith("docs/superpowers/");
+    const isSelf = file === "test/entrypoints.test.mjs";
+    const isTokenFlowTest = file === "test/llm-token-flow.test.mjs";
+    const isRagTest = file === "test/rag-vector-graph.test.mjs";
+    const isBlackboard = file.startsWith("decks/command-blackboard-library/");
+    const isQa = file.startsWith("scripts/qa/");
+    return (!isDoc && !isSelf && !isTokenFlowTest && !isRagTest && !isBlackboard && !isQa);
+  });
+  const legacyPattern = /embed-frame-backgrounds|scene-with-backgrounds|blackboard-asset-manifest/;
+  const offending = [];
+  for (const file of files) {
+    if (file.endsWith(".png") || file.endsWith(".lock") || file.endsWith(".excalidraw")) continue;
+    const content = await readFile(resolve(root, file), "utf8");
+    if (legacyPattern.test(content)) {
+      offending.push(file);
+    }
+  }
+  assert.deepEqual(offending, []);
+});
+
+test("no source manifest contains an absolute /Users/ path", async () => {
+  const gitLs = spawnSync("git", ["ls-files", "decks/*-manifest.json", "decks/**/*-manifest.json"], { cwd: root, encoding: "utf8" });
+  assert.equal(gitLs.status, 0);
+  const files = gitLs.stdout.trim().split("\n").filter(Boolean);
+  assert.ok(files.length >= 2, `expected at least 2 manifests, found ${files.length}`);
+  for (const file of files) {
+    const content = await readFile(resolve(root, file), "utf8");
+    assert.doesNotMatch(content, /\/Users\//);
+  }
+});
+
+test("README offline probe count matches the spike runner", async () => {
+  const { readdir } = await import("node:fs/promises");
+  const readme = await readFile(resolve(root, "README.md"), "utf8");
+  const spikeDir = resolve(root, "scripts/spike");
+  const probeFiles = (await readdir(spikeDir)).filter((f) => /^probe-\d+-.*\.mjs$/.test(f) && !f.includes("viewer-parity"));
+  const match = readme.match(/#\s*(\d+)\s+offline probes/);
+  assert.ok(match, "README must mention offline probe count");
+  assert.equal(Number(match[1]), probeFiles.length, `README states ${match[1]} probes but spike runner has ${probeFiles.length}`);
+});

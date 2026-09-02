@@ -183,16 +183,15 @@ a `visual` object with:
   "tradeoff": "boundary, tension, or decision consequence",
   "inspect": "the command or file that lets the viewer verify the claim",
   "callouts": [{ "label": "short label", "note": "why this callout matters" }],
-  "image": { "file": "assets/topic-scene.png", "side": "left", "use": "what the scene explains" },
+  "image": { "file": "assets/topic-scene.png", "side": "left", "use": "what the scene explains", "description": "detailed description of the visual scene" },
   "caption": "one sentence that explains the relationship",
   "surface": "light | dark"
 }
 ```
 
-The automatic composer owns all coordinates, spacing, shape selection, colour rotation, and
-connector geometry. Do not hand-author `composition-spec.json` for ordinary decks. Use the manual
-composer only when a source-specific raster image or an exceptional custom element is genuinely
-required.
+The automatic composer owns all coordinates, spacing, shape selection, colour rotation,
+connector geometry, and image embedding directly from `visual.image`. Do not hand-author
+`composition-spec.json`; the build pipeline computes layout deterministically.
 
 For `illustration` bands, use the raster `imagegen` workflow and request a text-free, topic-specific
 scene with one coherent visual thesis. The composer reads the PNG dimensions and computes the image
@@ -249,10 +248,9 @@ Give each part a deliberate zone. The illustration must not be a low-opacity ful
 the band genuinely benefits from that treatment. Foreground content should occupy the space it
 needs, not default to the same centre column.
 
-### 6. Generate and assemble
+### 6. Generate and publish
 
-Run the presentation audit before `generate.mjs`. It is intentionally separate from geometry
-validation so a deck cannot pass by being merely well laid out:
+Run the presentation audit before generation:
 
 ```bash
 node scripts/audit-deck-spec.mjs decks/<slug>/deck-spec.json
@@ -264,37 +262,35 @@ Then run the single automatic build command:
 node scripts/build-deck.mjs decks/<slug>/deck-spec.json decks/<slug>/out
 ```
 
-The build runs the audit, deterministic base layout, and semantic visual composer in sequence. It
-writes the derived `auto-composition-spec.json` into the output directory for inspection; that file
-is generated evidence, not authoring input.
+The build runs preflight, deterministic base layout, automatic visual composition, asset
+embedding, and accessible outline generation in a transactional sibling stage, publishes atomically,
+and prints the build receipt:
+
+```text
+BUILD DECK OK — decks/<slug>/out
+elapsed: 2403 ms
+frames: 15
+embedded assets: 4
+bytes: 27604176
+deck: decks/<slug>/out/deck.excalidraw
+scene: decks/<slug>/out/scene.png
+diagnostics: decks/<slug>/out/diagnostics.json
+manifest: decks/<slug>/out/composition-manifest.json
+outline: decks/<slug>/out/outline.md
+```
 
 Unless the user names an output directory, keep the tracked spec at
 `decks/<slug>/deck-spec.json` and generated files under `decks/<slug>/out/`.
 
 For composed and hybrid bands, the automatic composer:
 
-1. reads the semantic `visual` object;
+1. reads the semantic `visual` object and validates `use` and distinct `description` for any image;
 2. chooses the declared family and a palette variant;
 3. lays out shapes, labels, connectors, and captions in normalized frame coordinates;
 4. converts through Excalidraw's browser API and validates the finished elements;
-5. rerenders the completed `.excalidraw` after embedding.
+5. embeds referenced raster assets with content-hashed file IDs into `deck.excalidraw`.
 
-When a band genuinely needs a raster image, add it as a deliberate visual asset and use the manual
-composer only for that exceptional frame. The image still needs an explanatory visual thesis; it
-must not become wallpaper behind generated cards.
-
-Use the deterministic composer rather than hand-editing the final JSON:
-
-```bash
-node "${CLAUDE_PLUGIN_ROOT}/scripts/compose.mjs" <deck.excalidraw> <composition-spec.json> <outdir>
-```
-
-Every composed or hybrid band must be a `canvas` band in `deck-spec.json` and must have exactly one
-entry in `composition-spec.json`. The composer rejects missing, duplicate, non-canvas, out-of-bounds,
-or aspect-mismatched compositions.
-
-A regeneration can remove post-processed images and custom elements. Preserve or reapply the
-assembly step before delivery.
+The single `build-deck.mjs` command handles all composition, embedding, and outline generation.
 
 ### 7. Validate the actual presentation
 
