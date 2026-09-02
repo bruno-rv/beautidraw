@@ -34,7 +34,7 @@ await mkdir(OUT, { recursive: true });
 // writtenSceneParity and orderingParity both empty, and all four BD_NEG_* gates
 // re-confirmed biting against that same live build first. Repeat that order on the
 // next drift — prove the gate still bites, then move the constant.
-const PINNED_VIEWER_BUILD = "2026-08-04T14:31:37Z-ab0255f";
+const PINNED_VIEWER_BUILD = "2026-08-11T13:59:35Z-abeeaeb";
 
 const FAMILIES = ["Excalifont", "Nunito", "Cascadia", "Comic Shanns", "Lilita One"];
 const SIZES = [18, 23, 30, 38, 48];

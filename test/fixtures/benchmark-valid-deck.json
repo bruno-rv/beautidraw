@@ -1,0 +1,28 @@
+{
+  "title": "Valid Benchmark Deck",
+  "subtitle": "A benchmark fixture that passes audit and build",
+  "footer": "Testing benchmark runs cleanly",
+  "bands": [
+    {
+      "heading": "Structured benchmark frame",
+      "deck": "A complete valid section for benchmarking the execution pipeline",
+      "pattern": "flow",
+      "relation": "causal",
+      "accent": "blue",
+      "nodes": [
+        {
+          "label": "Input stage",
+          "note": "A source value with detailed explanatory text to ensure complete density and passing audit thresholds"
+        },
+        {
+          "label": "Processing stage",
+          "note": "A second node with sufficient technical detail and exact mechanisms to pass presentation audit requirements"
+        },
+        {
+          "label": "Output stage",
+          "note": "A third node documenting results and operational implications for verifying runtime benchmark performance"
+        }
+      ]
+    }
+  ]
+}
