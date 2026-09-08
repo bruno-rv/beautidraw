@@ -741,7 +741,7 @@ function conceptTension(meta) {
   elements.push(mark("outcome-mark", "ellipse", 0.49, 0.57, 0.04, 0.04, colorFor(meta, 3, meta.dark)));
   elements.push(text("outcome", 0.35, 0.62, meta.decision, RAMP.label, meta.dark ? darkText : lightText, "prose", { beautidrawMaxWidth: 0.30 }));
   if (meta.nodeCount > 3 && meta.decisionAuthored) {
-    elements.push(text("outcome-source", 0.68, 0.58, meta.nodes[3].label, RAMP.note, meta.dark ? darkText : lightText, "prose", { beautidrawMaxWidth: 0.24 }));
+    elements.push(text("outcome-source", 0.68, 0.50, meta.nodes[3].label, RAMP.note, meta.dark ? darkText : lightText, "prose", { beautidrawMaxWidth: 0.24 }));
     if (meta.nodes[3].note) elements.push(text("outcome-source-note", 0.68, 0.65, meta.nodes[3].note, RAMP.note, meta.dark ? "#cbd5e1" : "#475569", "prose", {
       beautidrawMaxWidth: 0.24,
       beautidrawBelowTextId: "outcome-source",

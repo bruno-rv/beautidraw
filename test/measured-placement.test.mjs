@@ -301,7 +301,7 @@ test("tension outcome source and sibling notes follow measured labels", { timeou
   const temp = await mkdtemp(join(tmpdir(), "beautidraw-tension-placement-"));
   t.after(() => rm(temp, { recursive: true, force: true }));
   const longLabel = "A measured source label keeps the decision boundary readable";
-  const sourceNote = "Source note.";
+  const sourceNote = "The source note preserves authored context below the explicit decision label while keeping the boundary inspectable.";
   const siblingNote = "Sibling note.";
   const baseVisual = {
     family: "tension",
@@ -309,11 +309,9 @@ test("tension outcome source and sibling notes follow measured labels", { timeou
     focus: "Tension focus",
     axisX: "specificity →",
     axisY: "blast radius ↑",
-    explanation: "The tension frame preserves the choice and its supporting source evidence.",
-    example: "A concrete decision keeps the boundary visible.",
-    tradeoff: "A source note must remain below its measured label.",
-    evidence: ["Measured output verifies the source and sibling note placement in the serialized frame."],
-    inspect: "inspect tension geometry",
+    explanation: "Mechanism remains visible.",
+    example: "Decision example.",
+    tradeoff: "Boundary remains explicit.",
   };
   const spec = {
     title: "Tension measured placement",
@@ -325,7 +323,7 @@ test("tension outcome source and sibling notes follow measured labels", { timeou
         deck: "An explicit decision keeps its source label and note readable.",
         pattern: "canvas",
         accent: "amber",
-        height: 900,
+        height: 800,
         visual: {
           ...baseVisual,
           decision: "Chosen boundary",
@@ -342,7 +340,7 @@ test("tension outcome source and sibling notes follow measured labels", { timeou
         deck: "A sibling outcome keeps its fallback note readable.",
         pattern: "canvas",
         accent: "violet",
-        height: 900,
+        height: 800,
         visual: {
           ...baseVisual,
           nodes: [
@@ -358,8 +356,10 @@ test("tension outcome source and sibling notes follow measured labels", { timeou
   const specPath = join(temp, "spec.json");
   const output = join(temp, "out");
   await writeFile(specPath, JSON.stringify(spec));
-  const result = runBuild(specPath, output);
-  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const generated = spawnSync(process.execPath, [resolve(root, "scripts/generate.mjs"), specPath, output], { cwd: root, encoding: "utf8", timeout: 120_000 });
+  assert.equal(generated.status, 0, `${generated.stdout}\n${generated.stderr}`);
+  const composed = spawnSync(process.execPath, [resolve(root, "scripts/auto-compose.mjs"), specPath, output], { cwd: root, encoding: "utf8", timeout: 120_000 });
+  assert.equal(composed.status, 0, `${composed.stdout}\n${composed.stderr}`);
 
   const deck = JSON.parse(await readFile(join(output, "deck.excalidraw"), "utf8"));
   for (const [bandIndex, noteId, labelId, expected] of [
