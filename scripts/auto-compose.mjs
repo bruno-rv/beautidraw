@@ -260,6 +260,7 @@ function metaForBand(band, index) {
     middle: clean(visual.middle, nodes[1]?.label),
     right: clean(visual.right, nodes[2]?.label),
     decision: clean(visual.decision, nodes[3]?.label ?? "Effective choice"),
+    decisionAuthored: typeof visual.decision === "string" && visual.decision.trim() !== "",
     axisX: clean(visual.axisX, "specificity →"),
     axisY: clean(visual.axisY, "blast radius ↑"),
     axisXAuthored: typeof visual.axisX === "string" && visual.axisX.trim() !== "",
@@ -486,13 +487,13 @@ function conceptOrbit(meta) {
   }));
   elements.push(text("focus-label", 0.38, 0.30, meta.focus, RAMP.label, meta.dark ? darkText : lightText, "prose", { beautidrawMaxWidth: 0.24 }));
   const positions = [[0.05, 0.20], [0.69, 0.20], [0.05, 0.42], [0.69, 0.42], [0.20, 0.55], [0.58, 0.55]];
-  const anchors = positions.slice(0, Math.min(meta.nodes.length, positions.length)).map(([x, y]) => nodeAnchor(x, y, 0.25, x < 0.5 ? "right" : "left"));
+  const anchors = positions.slice(0, Math.min(meta.nodeCount, positions.length)).map(([x, y]) => nodeAnchor(x, y, 0.25, x < 0.5 ? "right" : "left"));
   const maxPairs = meta.callouts.some((callout) => callout.kind === "inspect") ? 2 : anchors.length / 2;
   for (let index = 0; index < Math.min(anchors.length, maxPairs * 2); index += 2) {
     const pair = anchors.slice(index + 1, index + 2);
     elements.push(routedLine(`orbit-link-${index / 2 + 1}`, [anchors[index], [anchors[index][0], 0.46], [hub.x + 0.035, 0.46], ...(pair.length ? [[pair[0][0], 0.46], pair[0]] : [])], stroke));
   }
-  positions.slice(0, Math.min(meta.nodes.length, positions.length)).forEach(([x, y], index) => {
+  positions.slice(0, Math.min(meta.nodeCount, positions.length)).forEach(([x, y], index) => {
     elements.push(...nodeBlock(`node-${index + 1}`, meta.nodes[index], meta, { x, y, width: 0.25, index, markerSide: x < 0.5 ? "right" : "left" }));
   });
   return finish(meta, elements);
@@ -508,7 +509,7 @@ function conceptField(meta) {
   elements.push(text("field-y-label", 0.05, 0.11, meta.axisY, RAMP.note, textColor, "prose", { beautidrawMaxWidth: 0.22 }));
   elements.push(text("field-focus", 0.36, 0.12, meta.focus, RAMP.note, textColor, "prose", { beautidrawMaxWidth: 0.28 }));
   const positions = [[0.08, 0.20], [0.59, 0.20], [0.10, 0.36], [0.60, 0.36], [0.20, 0.55], [0.61, 0.55]];
-  positions.slice(0, Math.min(meta.nodes.length, positions.length)).forEach(([x, y], index) => {
+  positions.slice(0, Math.min(meta.nodeCount, positions.length)).forEach(([x, y], index) => {
     elements.push(...nodeBlock(`field-${index + 1}`, meta.nodes[index], meta, { x, y, width: 0.28, index }));
   });
   return finish(meta, elements);
@@ -525,7 +526,7 @@ function conceptSpotlight(meta) {
   const positions = [[0.05, 0.14], [0.66, 0.14], [0.05, 0.44], [0.66, 0.44]];
   const callouts = meta.callouts.length
     ? meta.callouts.slice(0, positions.length)
-    : meta.nodes.slice(0, positions.length).map((node) => ({ kind: "example", label: node.label, note: node.note }));
+    : meta.nodes.slice(0, Math.min(meta.nodeCount, positions.length)).map((node) => ({ kind: "example", label: node.label, note: node.note }));
   const connectorBudget = Math.max(0, 3 - callouts.filter((callout) => callout.kind === "inspect").length);
   callouts.forEach((callout, index) => {
     const [x, y] = positions[index];
@@ -544,7 +545,7 @@ function conceptConstellation(meta) {
   const stroke = meta.dark ? "#94a3b8" : "#64748b";
   elements.push(text("constellation-focus", 0.36, meta.thesis ? 0.12 : 0.04, meta.focus, RAMP.note, meta.dark ? darkText : lightText, "prose", { beautidrawMaxWidth: 0.30 }));
   const positions = [[0.08, 0.21], [0.38, 0.17], [0.68, 0.21], [0.14, 0.50], [0.48, 0.45], [0.76, 0.51]];
-  const nodes = meta.nodes.slice(0, positions.length);
+  const nodes = meta.nodes.slice(0, Math.min(meta.nodeCount, positions.length));
   const links = [[0, 1], [1, 2], [0, 3], [1, 4], [2, 5], [3, 4], [4, 5]];
   const maxLinks = meta.callouts.some((callout) => callout.kind === "inspect") ? 2 : 3;
   links.filter(([a, b]) => a < nodes.length && b < nodes.length).slice(0, maxLinks).forEach(([a, b], index) => {
@@ -638,7 +639,7 @@ async function conceptIllustration(meta) {
   const mutedText = meta.dark ? "#cbd5e1" : "#475569";
   const callouts = meta.callouts.length
     ? meta.callouts
-    : meta.nodes.slice(0, 2).map((node) => ({ kind: "example", label: node.label, note: node.note }));
+    : meta.nodes.slice(0, Math.min(meta.nodeCount, 2)).map((node) => ({ kind: "example", label: node.label, note: node.note }));
   const dataViewport = dataMode ? {
     x: side === "left" ? textX : dataViewportMargin,
     y: 0.07,
@@ -672,7 +673,7 @@ async function conceptIllustration(meta) {
     const boundaryParts = [
       meta.tradeoff ? `Boundary — ${meta.tradeoff}` : "",
       ...meta.evidence.map((item) => `Evidence — ${item}`),
-      ...meta.callouts.filter((callout) => callout.note).map((callout) => `Callout — ${callout.label}: ${callout.note}`),
+      ...callouts.filter((callout) => callout.note).map((callout) => `Callout — ${callout.label}: ${callout.note}`),
     ].filter(Boolean).join("  •  ");
     if (explanationParts) elements.push(text("explanation", 0.03, 0.84, explanationParts, 26, mutedText, "prose", { beautidrawMaxWidth: 0.46 }));
     if (boundaryParts) elements.push(text("boundary", 0.52, 0.76, boundaryParts, 23, mutedText, "prose", { beautidrawMaxWidth: 0.44 }));
@@ -696,7 +697,7 @@ async function conceptIllustration(meta) {
 function conceptPipeline(meta) {
   const elements = thesisLine(meta);
   elements.push(text("pipeline-focus", 0.05, 0.13, meta.focus, RAMP.note, meta.dark ? darkText : lightText, "prose", { beautidrawMaxWidth: 0.90 }));
-  const nodes = meta.nodes.slice(0, 6);
+  const nodes = meta.nodes.slice(0, Math.min(meta.nodeCount, 6));
   const stepWidth = nodes.length > 5 ? 0.145 : 0.17;
   const stepGap = nodes.length > 5 ? 0.165 : 0.20;
   nodes.forEach((node, index) => {
@@ -719,12 +720,12 @@ function conceptMap(meta) {
   if (meta.axisYAuthored) elements.push(text("map-axis-y", 0.68, 0.10, meta.axisY, RAMP.note, meta.dark ? darkText : lightText, "prose", { beautidrawMaxWidth: 0.27 }));
   elements.push(text("hub-label", 0.37, 0.30, meta.focus, RAMP.label, meta.dark ? darkText : lightText, "prose", { beautidrawMaxWidth: 0.25 }));
   const positions = [[0.04, 0.19], [0.68, 0.19], [0.04, 0.48], [0.68, 0.48], [0.35, 0.58], [0.35, 0.16]];
-  const anchors = positions.slice(0, Math.min(meta.nodes.length, positions.length)).map(([x, y]) => nodeAnchor(x, y, 0.28, x < 0.5 ? "right" : "left"));
+  const anchors = positions.slice(0, Math.min(meta.nodeCount, positions.length)).map(([x, y]) => nodeAnchor(x, y, 0.28, x < 0.5 ? "right" : "left"));
   for (let index = 0; index < anchors.length; index += 2) {
     const pair = anchors.slice(index + 1, index + 2);
     elements.push(routedLine(`map-link-${index / 2 + 1}`, [anchors[index], [anchors[index][0], hubRail[1]], hubRail, ...(pair.length ? [[pair[0][0], hubRail[1]], pair[0]] : [])], stroke));
   }
-  positions.slice(0, Math.min(meta.nodes.length, positions.length)).forEach(([x, y], index) => {
+  positions.slice(0, Math.min(meta.nodeCount, positions.length)).forEach(([x, y], index) => {
     elements.push(...nodeBlock(`satellite-${index + 1}`, meta.nodes[index], meta, { x, y, width: 0.28, index, markerSide: x < 0.5 ? "right" : "left" }));
   });
   return finish(meta, elements);
@@ -735,7 +736,7 @@ function conceptJourney(meta) {
   const axisColor = meta.dark ? "#94a3b8" : "#64748b";
   elements.push(text("journey-focus", 0.36, 0.12, meta.focus, RAMP.note, meta.dark ? darkText : lightText, "prose", { beautidrawMaxWidth: 0.30 }));
   elements.push(line("journey-axis", 0.07, 0.44, 0.86, 0.01, [[0, 0.5], [1, 0.5]], axisColor));
-  const nodes = meta.nodes.slice(0, 6);
+  const nodes = meta.nodes.slice(0, Math.min(meta.nodeCount, 6));
   nodes.forEach((node, index) => {
     const x = 0.08 + index * (0.84 / Math.max(nodes.length - 1, 1));
     const y = index % 2 ? 0.50 : 0.20;
@@ -760,7 +761,12 @@ function conceptTension(meta) {
   elements.push(...nodeBlock("right", meta.nodes[2], meta, { x: 0.61, y: 0.30, width: 0.31, index: 2, marker: "rectangle" }));
   elements.push(mark("outcome-mark", "ellipse", 0.49, 0.57, 0.04, 0.04, colorFor(meta, 3, meta.dark)));
   elements.push(text("outcome", 0.35, 0.62, meta.decision, RAMP.label, meta.dark ? darkText : lightText, "prose", { beautidrawMaxWidth: 0.30 }));
-  if (meta.nodes[3]?.note) elements.push(text("outcome-note", 0.35, 0.68, meta.nodes[3].note, RAMP.note, meta.dark ? "#cbd5e1" : "#475569", "prose", { beautidrawMaxWidth: 0.30 }));
+  if (meta.nodeCount > 3 && meta.decisionAuthored) {
+    elements.push(text("outcome-source", 0.68, 0.58, meta.nodes[3].label, RAMP.note, meta.dark ? darkText : lightText, "prose", { beautidrawMaxWidth: 0.24 }));
+    if (meta.nodes[3].note) elements.push(text("outcome-source-note", 0.68, 0.65, meta.nodes[3].note, RAMP.note, meta.dark ? "#cbd5e1" : "#475569", "prose", { beautidrawMaxWidth: 0.24 }));
+  } else if (meta.nodes[3]?.note) {
+    elements.push(text("outcome-note", 0.35, 0.68, meta.nodes[3].note, RAMP.note, meta.dark ? "#cbd5e1" : "#475569", "prose", { beautidrawMaxWidth: 0.30 }));
+  }
   return finish(meta, elements);
 }
 
@@ -782,7 +788,7 @@ function conceptMatrix(meta) {
       ["matrix-right-heading", meta.right, 0.68, 0.25],
     ]) elements.push(text(id, x, 0.16, label, RAMP.note, labelColor, "prose", { beautidrawMaxWidth: width }));
   }
-  meta.nodes.slice(0, 4).forEach((node, index) => elements.push(...nodeBlock(`quadrant-${index + 1}`, node, meta, {
+  meta.nodes.slice(0, Math.min(meta.nodeCount, 4)).forEach((node, index) => elements.push(...nodeBlock(`quadrant-${index + 1}`, node, meta, {
     x: positions[index][0], y: positions[index][1], width: 0.30, index,
   })));
   elements.push(mark("marker", "ellipse", 0.49, 0.43, 0.04, 0.04, { stroke: "#047857", fill: "transparent" }));

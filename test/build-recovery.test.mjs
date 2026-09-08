@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { access, cp, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -149,6 +149,100 @@ test("a missing final artifact preserves the previous output", { timeout: 120_00
   assert.equal(await readFile(join(output, "sentinel.txt"), "utf8"), "last good build");
   const siblings = await readdir(dirname(output));
   assert.equal(siblings.some((name) => name.includes("stage-") || name.includes("backup-")), false);
+});
+
+test("illustration fallback nodes preserve notes without padded phantom labels", { timeout: 300_000 }, async (t) => {
+  const tempRoot = await mkdtemp(join(tmpdir(), "beautidraw-illustration-fallback-notes-"));
+  t.after(() => rm(tempRoot, { recursive: true, force: true }));
+  const fixtures = [
+    {
+      name: "illustration",
+      specPath: resolve(root, "decks/claude-code-artifacts/deck-spec.json"),
+      assetDir: join(root, "decks/claude-code-artifacts/assets"),
+      find: (band) => band.visual?.family === "illustration" && !band.visual?.data,
+    },
+    {
+      name: "spotlight",
+      specPath: resolve(root, "decks/claude-code-artifacts/deck-spec.json"),
+      assetDir: join(root, "decks/claude-code-artifacts/assets"),
+      find: (band) => band.visual?.family === "spotlight",
+    },
+    {
+      name: "data",
+      specPath: resolve(root, "decks/llm-token-flow/deck-spec.json"),
+      assetDir: join(root, "decks/llm-token-flow/assets"),
+      find: (band) => band.visual?.data?.kind === "distribution",
+    },
+  ];
+  for (const fixture of fixtures) {
+    for (const count of [1, 2]) {
+      const fixtureRoot = join(tempRoot, `${fixture.name}-${count}`);
+      const spec = JSON.parse(await readFile(fixture.specPath, "utf8"));
+      const bandIndex = spec.bands.findIndex(fixture.find);
+      const band = spec.bands[bandIndex];
+      assert.ok(band, `${fixture.name}: fixture band must exist`);
+      band.visual.nodes = band.visual.nodes.slice(0, count);
+      delete band.visual.callouts;
+      const specPath = join(fixtureRoot, "spec.json");
+      const output = join(fixtureRoot, "out");
+      await mkdir(fixtureRoot, { recursive: true });
+      await writeFile(specPath, JSON.stringify(spec));
+      await cp(fixture.assetDir, join(fixtureRoot, "assets"), { recursive: true });
+      const result = spawnSync(process.execPath, [resolve(root, "scripts/build-deck.mjs"), specPath, output], {
+        cwd: root,
+        encoding: "utf8",
+        timeout: 120_000,
+      });
+      assert.equal(result.status, 0, `${fixture.name}-${count}: ${result.stdout}\n${result.stderr}`);
+      const composition = JSON.parse(await readFile(join(output, "auto-composition-spec.json"), "utf8"));
+      const entry = composition.bands.find((candidate) => candidate.band === bandIndex);
+      assert.ok(entry, `${fixture.name}-${count}: composition entry must exist`);
+      const visible = entry.elements.filter((element) => element.type === "text").map((element) => String(element.text ?? "")).join(" ").replace(/\s+/g, " ");
+      for (const node of band.visual.nodes) {
+        assert.match(visible, new RegExp(node.label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+        assert.match(visible, new RegExp(node.note.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+      }
+      assert.doesNotMatch(visible, /\b(?:Context|Decision|Result)\b/);
+      const outline = await readFile(join(output, "outline.md"), "utf8");
+      for (const node of band.visual.nodes) assert.match(outline, new RegExp(node.note.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    }
+  }
+});
+
+test("tension preserves a fourth node beside an authored decision", { timeout: 300_000 }, async (t) => {
+  const tempRoot = await mkdtemp(join(tmpdir(), "beautidraw-tension-fourth-node-"));
+  t.after(() => rm(tempRoot, { recursive: true, force: true }));
+  for (const variant of ["four-with-decision", "three-with-decision", "four-without-decision"]) {
+    const spec = JSON.parse(await readFile(resolve(root, "decks/rag-vector-graph/deck-spec.json"), "utf8"));
+    const bandIndex = spec.bands.findIndex((band) => band.visual?.family === "tension");
+    const band = spec.bands[bandIndex];
+    assert.ok(band, "tension fixture must exist");
+    const fourth = { label: "Measured chunk size", note: "Validate the tradeoff against retrieval evidence" };
+    if (variant.startsWith("four")) band.visual.nodes = [...band.visual.nodes.slice(0, 3), fourth];
+    else band.visual.nodes = band.visual.nodes.slice(0, 3);
+    if (variant === "four-with-decision" || variant === "three-with-decision") band.visual.decision = "Choose the tested balance";
+    else delete band.visual.decision;
+    const fixtureRoot = join(tempRoot, variant);
+    const specPath = join(fixtureRoot, "spec.json");
+    const output = join(fixtureRoot, "out");
+    await mkdir(fixtureRoot, { recursive: true });
+    await writeFile(specPath, JSON.stringify(spec));
+    await cp(join(root, "decks/rag-vector-graph/assets"), join(fixtureRoot, "assets"), { recursive: true });
+    const result = spawnSync(process.execPath, [resolve(root, "scripts/build-deck.mjs"), specPath, output], {
+      cwd: root,
+      encoding: "utf8",
+      timeout: 120_000,
+    });
+    assert.equal(result.status, 0, `${variant}: ${result.stdout}\n${result.stderr}`);
+    const composition = JSON.parse(await readFile(join(output, "auto-composition-spec.json"), "utf8"));
+    const entry = composition.bands.find((candidate) => candidate.band === bandIndex);
+    const visible = entry.elements.filter((element) => element.type === "text").map((element) => String(element.text ?? "")).join(" ").replace(/\s+/g, " ");
+    if (variant !== "four-without-decision") assert.match(visible, /Choose the tested balance/);
+    if (variant.startsWith("four")) {
+      assert.match(visible, /Measured chunk size/);
+      assert.match(visible, /Validate the tradeoff against retrieval evidence/);
+    }
+  }
 });
 
 test("evidence composition links only authored nodes from one through four", { timeout: 300_000 }, async (t) => {
