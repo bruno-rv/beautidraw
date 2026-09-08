@@ -354,8 +354,11 @@ const result = await withHarness(async ({ page }) =>
           }], { regenerateIds: false });
           const x = skeleton.textAlign === "right" ? skeleton.x - measured.width : skeleton.x;
           const y = skeleton.y;
+          const horizontalAvailable = skeleton.textAlign === "right"
+            ? skeleton.x - item.body.x
+            : item.body.x + item.body.width - x;
           const availableWidth = Math.min(
-            item.body.x + item.body.width - (skeleton.textAlign === "right" ? skeleton.x : x),
+            horizontalAvailable,
             Number.isFinite(skeleton.customData?.beautidrawMaxWidth)
               ? skeleton.customData.beautidrawMaxWidth * item.body.width
               : Number.POSITIVE_INFINITY,
