@@ -197,6 +197,13 @@ test("data illustration header content stays clear of left and right images", { 
     assertInsideBody(members, body, side);
     const image = members.find((element) => element.id === `b${bandIndex}-composition-image`);
     assert.ok(image, `${side}: raster image must survive composition`);
+    const composition = JSON.parse(await readFile(join(output, "auto-composition-spec.json"), "utf8"));
+    const entry = composition.bands.find((candidate) => candidate.band === bandIndex);
+    assert.ok(entry?.image, `${side}: auto-composition image entry must survive`);
+    const expectedX = body.x + body.width * entry.image.x;
+    const expectedRight = body.x + body.width * (entry.image.x + entry.image.width);
+    if (side === "left") assert.ok(Math.abs(image.x - expectedX) <= 0.5, `${side}: image left anchor must remain authored`);
+    else assert.ok(Math.abs(image.x + image.width - expectedRight) <= 0.5, `${side}: image right anchor must remain authored`);
     const textMembers = members.filter((element) => element.type === "text" || element.containerId);
     assert.equal(textMembers.some((element) => overlaps(element, image)), false, `${side}: text must not overlap the image`);
     const visible = members.map(elementText).join(" ");

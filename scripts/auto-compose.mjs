@@ -662,7 +662,7 @@ async function conceptIllustration(meta) {
   return { lane: "composed", surfaceColor: meta.dark ? darkSurface : lightSurface, image: {
     file: meta.image.file, path: meta.image.path, mode: "side", use: clean(meta.image.use, meta.caption),
     description: clean(meta.image.description, ""), x, y, width, height, opacity: 100,
-    ...(dataMode ? { anchorBelow: "data-header" } : {}),
+    ...(dataMode ? { anchorBelow: "data-header", side } : {}),
   }, elements };
 }
 
