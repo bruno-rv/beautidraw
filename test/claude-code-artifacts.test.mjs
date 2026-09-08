@@ -132,9 +132,42 @@ test("Claude Code exemplar satisfies its mixed-media contract", { timeout: 300_0
   const inspectLabelId = semanticInspect.customData.semanticLabelId;
   const inspectLabel = elements.find((element) => element.id === inspectLabelId || element.customData?.semanticLabelFor === semanticInspect.id);
   assert.ok(inspectLabel?.text?.trim(), "inspect icon must have a visible label");
+
+  const countOccurrences = (haystack, needle) => {
+    let count = 0;
+    let offset = 0;
+    while (needle) {
+      const next = haystack.indexOf(needle, offset);
+      if (next < 0) break;
+      count += 1;
+      offset = next + needle.length;
+    }
+    return count;
+  };
+  for (const [bandIndex, band] of spec.bands.entries()) {
+    const frameText = elements
+      .filter((element) => element.frameId === `b${bandIndex}-frame`)
+      .map((element) => element.text)
+      .filter((value) => typeof value === "string")
+      .join(" ")
+      .replace(/\s+/g, " ");
+    for (const callout of band.visual?.callouts ?? []) {
+      const specialized = !band.visual?.data && ["illustration", "spotlight"].includes(band.visual?.family);
+      const labelMarker = specialized
+        ? `${callout.kind[0].toUpperCase()}${callout.kind.slice(1)}: ${callout.label}`
+        : `Callout — ${callout.label}`;
+      const renderedCallout = `${labelMarker}${callout.note && !specialized ? `: ${callout.note}` : ""}`;
+      assert.equal(countOccurrences(frameText, renderedCallout), 1, `${band.visual.family} callout content must render exactly once: ${callout.label}`);
+      if (specialized && callout.note) assert.equal(countOccurrences(frameText, callout.note), 1, `${band.visual.family} callout note must render exactly once: ${callout.label}`);
+    }
+  }
+
   const semanticElements = elements.filter((element) => element.customData?.semanticKind);
-  assert.equal(semanticElements.length, callouts.length, "every authored callout must survive composition as one semantic element");
-  for (const callout of callouts) {
+  const specializedCallouts = spec.bands
+    .filter((band) => !band.visual?.data && ["illustration", "spotlight"].includes(band.visual?.family))
+    .flatMap((band) => band.visual?.callouts ?? []);
+  assert.equal(semanticElements.length, specializedCallouts.length, "only specialized illustration/spotlight callouts render semantic icons");
+  for (const callout of specializedCallouts) {
     const rendered = semanticElements.find((element) => {
       const label = elements.find((candidate) => candidate.type === "text" && (
         candidate.containerId === element.id || candidate.customData?.semanticLabelFor === element.id
