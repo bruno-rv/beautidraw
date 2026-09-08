@@ -74,17 +74,21 @@ test("generic composition families accept two callouts and reject a third before
   const temp = await mkdtemp(join(tmpdir(), "beautidraw-generic-callout-capacity-"));
   t.after(() => rm(temp, { recursive: true, force: true }));
   for (const family of genericFamilies) {
+    const minimumNodes = family === "pipeline" ? 3 : family === "constellation" ? 2 : 0;
+    const authoredNodes = minimumNodes
+      ? { nodes: Array.from({ length: minimumNodes }, (_, index) => node(index)) }
+      : {};
     const accepted = specFor({
       pattern: "canvas",
       height: 700,
-      visual: { family, callouts: [callout(0), callout(1)] },
+      visual: { family, ...authoredNodes, callouts: [callout(0), callout(1)] },
     });
     assert.equal((await preflightDeck({ spec: accepted })).ok, true, `${family} must accept two callouts`);
 
     const rejected = specFor({
       pattern: "canvas",
       height: 700,
-      visual: { family, callouts: [callout(0), callout(1), callout(2)] },
+      visual: { family, ...authoredNodes, callouts: [callout(0), callout(1), callout(2)] },
     });
     const preflight = await preflightDeck({ spec: rejected });
     assert.equal(preflight.ok, false, `${family} must reject three callouts`);
