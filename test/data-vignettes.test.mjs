@@ -415,6 +415,12 @@ test("token data keeps every native piece-to-ID link in final composition", { ti
       timeout: 120_000,
     });
     assert.equal(result.status, 0, `${count} token pieces: ${result.stdout}\n${result.stderr}`);
+    const composition = JSON.parse(await readFile(join(output, "auto-composition-spec.json"), "utf8"));
+    const renderedPiece = composition.bands.find((entry) => entry.band === bandIndex)?.elements.find((element) => element.id === "data-piece-1");
+    const nativePiece = renderDataVignette(band.visual.data, { idPrefix: "expected", x: 0.30, y: 0.07, width: 0.68, height: 0.76, dark: false })
+      .find((element) => element.id === "expected-piece-1");
+    assert.ok(renderedPiece && nativePiece);
+    assert.ok(Math.abs(renderedPiece.y - nativePiece.y) < 1e-9, `${count} token pieces must retain native unshifted y geometry`);
     const deck = JSON.parse(await readFile(join(output, "deck.excalidraw"), "utf8"));
     const frame = deck.elements.find((element) => element.id === `b${bandIndex}-frame`);
     const deckLine = deck.elements.find((element) => element.id === `b${bandIndex}-deck`);

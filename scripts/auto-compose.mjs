@@ -408,7 +408,7 @@ function semanticCalloutShape(id, callout, x, y, width, _height, colors, fontSiz
 function dataElements(data, viewport) {
   const elements = renderDataVignette(data, { idPrefix: "data", ...viewport })
     .filter((element) => !(data.kind === "distribution" && /data-candidate-\d+-baseline$/.test(element.id)));
-  const shift = data.kind === "distribution" ? 0 : viewport.height * 0.06;
+  const shift = data.kind === "lookup" ? viewport.height * 0.06 : 0;
   const lift = 0;
   return elements.map((element) => {
     const id = element.id;
