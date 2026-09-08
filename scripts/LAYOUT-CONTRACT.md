@@ -139,7 +139,10 @@ implemented in `scripts/data-vignettes.mjs`:
 {
   "kind": "token-sequence",
   "caption": "Synthetic illustrative example — toy IDs are not real tokenizer output.",
-  "pieces": [{ "text": "The", "id": "toy-01" }]
+  "pieces": [
+    { "text": "The", "id": "toy-01" },
+    { "text": " sky", "id": "toy-02" }
+  ]
 }
 ```
 

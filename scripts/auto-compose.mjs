@@ -435,25 +435,18 @@ function dataElements(data, viewport) {
   const lift = 0;
   return elements.map((element) => {
     const id = element.id;
-    const candidateMatch = /^data-candidate-(\d+)-/.exec(id);
-    const candidateExtra = candidateMatch && data.kind === "distribution"
-      ? viewport.height * 0.025 * (Number(candidateMatch[1]) - 1)
-      : 0;
     const move = data.kind === "lookup"
       ? /data-(?:row-\d+|selected-arrow|result-|lookup-note)/.test(id)
       : data.kind === "distribution"
         ? /data-candidate-\d+|data-selected-note/.test(id)
         : /data-(?:piece-guide|piece-|id-|alignment-note)/.test(id);
-    const selectedNoteExtra = data.kind === "distribution" && id === "data-selected-note"
-      ? viewport.height * 0.025 * (data.candidates.length - 1)
-      : 0;
     const note = /data-(?:lookup-note|selected-note|alignment-note)$/.test(id);
     const noteAdjustment = id === "data-lookup-note"
       ? -viewport.height * 0.08
       : id === "data-selected-note"
         ? viewport.height * 0.05
         : 0;
-    return move ? { ...element, y: element.y + (note ? 0 : shift) + candidateExtra + selectedNoteExtra + noteAdjustment + lift } : { ...element, y: element.y + lift };
+    return move ? { ...element, y: element.y + (note ? 0 : shift) + noteAdjustment + lift } : { ...element, y: element.y + lift };
   });
 }
 
@@ -575,15 +568,17 @@ function conceptEvidence(meta) {
   const elements = thesisLine(meta);
   const stroke = meta.dark ? "#94a3b8" : "#64748b";
   const positions = [[0.05, 0.18], [0.69, 0.18], [0.05, 0.48], [0.69, 0.48]];
-  const anchors = positions.map(([x, y]) => [x + 0.013, y + 0.018]);
+  const nodes = meta.nodes.slice(0, Math.min(meta.nodeCount, positions.length));
+  const anchors = positions.slice(0, nodes.length).map(([x, y]) => [x + 0.013, y + 0.018]);
   if (anchors.length > 0) elements.push(routedLine("evidence-link-1", [anchors[0], [anchors[0][0], 0.39], [0.49, 0.39]], stroke));
   if (anchors.length > 1) elements.push(routedLine("evidence-link-2", [anchors[1], [anchors[1][0], 0.39], [0.53, 0.39]], stroke));
-  if (anchors.length > 3) elements.push(routedLine("evidence-link-3", [anchors[2], [anchors[2][0], 0.67], [anchors[3][0], 0.67], anchors[3]], stroke));
+  if (anchors.length === 3) elements.push(routedLine("evidence-link-3", [anchors[2], [anchors[2][0], 0.67], [0.49, 0.67], [0.49, 0.39]], stroke));
+  if (anchors.length === 4) elements.push(routedLine("evidence-link-3", [anchors[2], [anchors[2][0], 0.67], [anchors[3][0], 0.67], anchors[3]], stroke));
   elements.push(mark("claim-mark", "diamond", 0.49, 0.37, 0.04, 0.04, {
     stroke: meta.dark ? "#f8fafc" : "#047857", fill: "transparent",
   }));
   elements.push(text("claim", 0.34, 0.27, meta.focus, 30, meta.dark ? darkText : lightText, "prose", { beautidrawMaxWidth: 0.32 }));
-  meta.nodes.slice(0, 4).forEach((source, index) => {
+  nodes.forEach((source, index) => {
     const [x, y] = positions[index];
     elements.push(...nodeBlock(`evidence-${index + 1}`, source, meta, { x, y, width: 0.25, index }));
   });

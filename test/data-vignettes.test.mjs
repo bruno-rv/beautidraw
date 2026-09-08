@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { spawnSync } from "node:child_process";
 
 import {
   DATA_VIGNETTE_KINDS,
@@ -12,7 +14,7 @@ import {
   renderDataVignette,
   validateDataVignette,
 } from "../scripts/data-vignettes.mjs";
-import { FONT } from "../scripts/layout.mjs";
+import { BODY_INSET, BOUND_TEXT_PADDING, DECK_BODY_GAP, FONT, FRAME_PAD_BOTTOM } from "../scripts/layout.mjs";
 import { buildOutline } from "../scripts/outline.mjs";
 import { preflightDeck } from "../scripts/preflight.mjs";
 import { withHarness } from "../scripts/harness-runner.mjs";
@@ -255,6 +257,95 @@ test("declared maximum data fits measured editor bounds in a real browser", { ti
     assert.ok(result.texts.includes("4.00e-5%"));
     assert.ok(result.texts.includes("99.99996%"));
   });
+});
+
+test("six-candidate distribution stays inside the final composed viewport", { timeout: 120_000 }, async (t) => {
+  const root = resolve(import.meta.dirname, "..");
+  const tempRoot = await mkdtemp(join(tmpdir(), "beautidraw-distribution-composition-"));
+  t.after(() => rm(tempRoot, { recursive: true, force: true }));
+  const spec = JSON.parse(await readFile(resolve(root, "decks/llm-token-flow/deck-spec.json"), "utf8"));
+  const bandIndex = spec.bands.findIndex((band) => band.visual?.data?.kind === "distribution");
+  assert.ok(bandIndex >= 0, "the fixture must contain a distribution data band");
+  const band = spec.bands[bandIndex];
+  const explanation = "Softmax converts final logits into probabilities, then sampling selects one candidate while alternatives remain visible.";
+  band.visual.data = {
+    ...band.visual.data,
+    candidates: [
+      { label: "blue", probability: 0.40 },
+      { label: "gray", probability: 0.20 },
+      { label: "clear", probability: 0.15 },
+      { label: "gold", probability: 0.10 },
+      { label: "rose", probability: 0.10 },
+      { label: "white", probability: 0.05 },
+    ],
+    selected: "gray",
+  };
+  band.visual.explanation = explanation;
+  const specPath = join(tempRoot, "spec.json");
+  const output = join(tempRoot, "out");
+  await writeFile(specPath, JSON.stringify(spec));
+  await cp(resolve(root, "decks/llm-token-flow/assets"), join(tempRoot, "assets"), { recursive: true });
+
+  const result = spawnSync(process.execPath, [resolve(root, "scripts/build-deck.mjs"), specPath, output], {
+    cwd: root,
+    encoding: "utf8",
+    timeout: 120_000,
+  });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+
+  const deck = JSON.parse(await readFile(join(output, "deck.excalidraw"), "utf8"));
+  const frame = deck.elements.find((element) => element.id === `b${bandIndex}-frame`);
+  assert.ok(frame, "the composed distribution frame must be present");
+  const deckLine = deck.elements.find((element) => element.id === `b${bandIndex}-deck`);
+  assert.ok(deckLine, "the composed distribution deck line must be present");
+  const body = {
+    x: frame.x + BODY_INSET,
+    y: deckLine.y + deckLine.height + DECK_BODY_GAP,
+    width: frame.width - 2 * BODY_INSET,
+    height: frame.y + frame.height - FRAME_PAD_BOTTOM - (deckLine.y + deckLine.height + DECK_BODY_GAP),
+  };
+  const viewport = {
+    x: body.x + body.width * 0.03,
+    y: body.y + body.height * 0.07,
+    width: body.width * 0.68,
+    height: body.height * 0.76,
+  };
+  const members = deck.elements.filter((element) => element.frameId === frame.id);
+  const dataId = new RegExp(`^b${bandIndex}-data-(?:caption|probability-heading|candidate-\\d+-(?:label|baseline|bar|value)|selected-note)$`);
+  const containerIds = new Set(members
+    .filter((element) => dataId.test(element.id))
+    .map((element) => element.id));
+  const dataElements = members.filter((element) =>
+    dataId.test(element.id)
+    || containerIds.has(element.containerId));
+  const editorialElements = members.filter((element) =>
+    new RegExp(`^b${bandIndex}-(?:explanation|boundary|inspect)$`).test(element.id));
+  const normalizedText = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
+  assert.equal(dataElements.filter((element) => new RegExp(`^b${bandIndex}-data-candidate-\\d+-label$`).test(element.id)).length, 6);
+  assert.ok(dataElements.some((element) => element.text?.includes("Selected candidate: gray")));
+  assert.ok(members.some((element) => normalizedText(element.text).includes(normalizedText(explanation))));
+
+  const outsideViewport = dataElements.filter((element) =>
+    element.x < viewport.x - 0.5 || element.y < viewport.y - 0.5
+    || element.x + element.width > viewport.x + viewport.width + 0.5
+    || element.y + element.height > viewport.y + viewport.height + 0.5,
+  );
+  assert.deepEqual(outsideViewport.map((element) => element.id), [], "all rendered data and bound labels must stay inside the allocated vignette viewport");
+  for (const element of dataElements.filter((candidate) => candidate.containerId)) {
+    const container = members.find((candidate) => candidate.id === element.containerId);
+    assert.ok(container, `${element.id} must reference a rendered data container`);
+    assert.ok(element.x >= container.x - BOUND_TEXT_PADDING);
+    assert.ok(element.y >= container.y - BOUND_TEXT_PADDING);
+    assert.ok(element.x + element.width <= container.x + container.width + BOUND_TEXT_PADDING);
+    assert.ok(element.y + element.height <= container.y + container.height + BOUND_TEXT_PADDING);
+  }
+  const overlaps = (a, b) => Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x) > 0
+    && Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y) > 0;
+  for (const dataElement of dataElements) {
+    for (const editorialElement of editorialElements) {
+      assert.equal(overlaps(dataElement, editorialElement), false, `${dataElement.id} overlaps ${editorialElement.id}`);
+    }
+  }
 });
 
 test("outline includes every data example value and preflight wires visual.data", async () => {
