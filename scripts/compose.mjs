@@ -11,7 +11,20 @@
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, normalize, resolve } from "node:path";
-import { BODY_INSET, BOUND_TEXT_PADDING, DECK_BODY_GAP, FRAME_PAD_BOTTOM, FONT, FONT_NAME, PAGE_WIDTH, RAMP, USABLE_H, USABLE_W } from "./layout.mjs";
+import {
+  BODY_INSET,
+  BOUND_TEXT_PADDING,
+  DATA_HEADER_IMAGE_GAP,
+  DATA_IMAGE_MIN_HEIGHT,
+  DECK_BODY_GAP,
+  FRAME_PAD_BOTTOM,
+  FONT,
+  FONT_NAME,
+  PAGE_WIDTH,
+  RAMP,
+  USABLE_H,
+  USABLE_W,
+} from "./layout.mjs";
 import { runCli } from "./cli.mjs";
 import { readJsonInput, resolveAssetWithinRoot } from "./preflight.mjs";
 
@@ -536,10 +549,13 @@ const result = await withHarness(async ({ page }) =>
         const [measuredHeader] = sizeFromConvertedBounds(item, [anchor]);
         const originalY = image.y;
         const originalBottom = image.y + image.height;
-        const targetY = Math.max(originalY, measuredHeader.y + measuredHeader.height + item.body.height * 0.02);
+        const targetY = Math.max(
+          originalY,
+          measuredHeader.y + measuredHeader.height + item.body.height * validationConfig.dataHeaderImageGap,
+        );
         if (targetY <= originalY + 0.5) return;
         const availableHeight = originalBottom - targetY;
-        const minimumHeight = item.body.height * 0.20;
+        const minimumHeight = item.body.height * validationConfig.dataImageMinHeight;
         if (availableHeight < minimumHeight) {
           throw new Error(`band ${item.entry.band}: data header leaves insufficient room for the illustration image; shorten the thesis/focus or grow the canvas height and rerun`);
         }
@@ -876,6 +892,8 @@ const result = await withHarness(async ({ page }) =>
         usableWidth: USABLE_W,
         usableHeight: USABLE_H,
         boundTextPadding: BOUND_TEXT_PADDING,
+        dataHeaderImageGap: DATA_HEADER_IMAGE_GAP,
+        dataImageMinHeight: DATA_IMAGE_MIN_HEIGHT,
         noteFontSize: RAMP.note,
         fontFamily: { prose: FONT.prose, mono: FONT.mono, handwritten: FONT.handwritten },
       },

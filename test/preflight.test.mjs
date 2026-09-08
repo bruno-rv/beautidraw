@@ -742,6 +742,23 @@ const validPng = () => Buffer.from(
   "base64",
 );
 
+function crc32(bytes) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) crc = (crc & 1) ? 0xedb88320 ^ (crc >>> 1) : crc >>> 1;
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function pngWithDimensions(width, height) {
+  const png = validPng();
+  png.writeUInt32BE(width, 16);
+  png.writeUInt32BE(height, 20);
+  png.writeUInt32BE(crc32(png.subarray(12, 29)), 29);
+  return png;
+}
+
 function illustrationSpec(file) {
   const spec = valid();
   spec.bands[0] = {
@@ -757,6 +774,51 @@ function illustrationSpec(file) {
   };
   return spec;
 }
+
+test("data header capacity rejects combined copy early and uses actual PNG aspect", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "beautidraw-preflight-data-header-capacity-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const makeSpec = (file, height = 780) => ({
+    ...valid(),
+    bands: [{
+      heading: "Data illustration",
+      deck: "A bounded data scene",
+      pattern: "canvas",
+      accent: "blue",
+      height,
+      visual: {
+        family: "illustration",
+        thesis: "T".repeat(120),
+        focus: "F".repeat(120),
+        data: {
+          kind: "token-sequence",
+          caption: "Synthetic illustrative example — toy data is not real output.",
+          pieces: [{ text: "The", id: "toy-01" }, { text: " sky", id: "toy-02" }],
+        },
+        image: { file, use: "Data scene", description: "A bounded data teaching image" },
+      },
+    }],
+  });
+
+  const pureFailures = collectDeckPreflightFailures(makeSpec("missing.png", 500));
+  assert.ok(pureFailures.some(({ code }) => code === "data-header-capacity"), "combined copy must fail the file-independent necessary bound");
+  assert.equal(
+    collectDeckPreflightFailures(makeSpec("missing.png", 500), { mode: "core" }).some(({ code }) => code === "data-header-capacity"),
+    false,
+    "core/manual preflight remains exempt",
+  );
+
+  await writeFile(join(root, "normal.png"), pngWithDimensions(1672, 941));
+  await writeFile(join(root, "wide.png"), pngWithDimensions(10000, 2500));
+  const fitting = await preflightDeck({ specPath: join(root, "normal.json"), spec: makeSpec("normal.png") });
+  assert.equal(fitting.ok, true, fitting.failures.map(({ reason }) => reason).join("\n"));
+  const wide = await preflightDeck({ specPath: join(root, "wide.json"), spec: makeSpec("wide.png") });
+  assert.equal(wide.ok, false);
+  assert.equal(wide.failures.filter(({ code }) => code === "data-header-capacity").length, 1);
+  assert.match(wide.failures.find(({ code }) => code === "data-header-capacity").reason, /image\/header geometry/);
+  const core = await preflightDeck({ specPath: join(root, "wide-core.json"), spec: makeSpec("wide.png"), mode: "core" });
+  assert.equal(core.failures.some(({ code }) => code === "data-header-capacity"), false);
+});
 
 test("preflight accepts a structurally valid PNG with non-empty IDAT", async () => {
   const root = await mkdtemp(join(tmpdir(), "beautidraw-preflight-valid-png-"));

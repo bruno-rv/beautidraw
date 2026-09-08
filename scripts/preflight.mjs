@@ -4,7 +4,20 @@ import { isAbsolute, relative, resolve, dirname } from "node:path";
 
 import { CliError } from "./cli.mjs";
 import { DATA_VIGNETTE_VIEWPORT, dataVignetteOutline, validateDataVignette } from "./data-vignettes.mjs";
-import { automaticEditorialLayout, automaticInspectY, BODY_INSET, BOUND_TEXT_PADDING, PAGE_WIDTH, RAMP, planDeck } from "./layout.mjs";
+import {
+  automaticEditorialLayout,
+  automaticInspectY,
+  BODY_INSET,
+  BOUND_TEXT_PADDING,
+  DATA_HEADER_FONT_SIZE,
+  DATA_HEADER_MAX_WIDTH,
+  PAGE_WIDTH,
+  dataHeaderCapacity,
+  dataHeaderCapacityUpperBound,
+  dataImageGeometry,
+  RAMP,
+  planDeck,
+} from "./layout.mjs";
 import { hasAbsolutePath } from "./outline.mjs";
 
 export const CONTENT_BUDGETS = Object.freeze({
@@ -50,6 +63,7 @@ const DATA_EDITORIAL_LINE_HEIGHT_PX = 35;
 const DATA_BOUNDARY_START = 0.76;
 const DATA_BOUNDARY_LINE_HEIGHT_PX = 32;
 const DATA_BOUND_TEXT_MARGIN_PX = 2 * BOUND_TEXT_PADDING + 1;
+const DATA_HEADER_RECOVERY = "Shorten the thesis/focus, grow the canvas height, or use an image aspect ratio that leaves the header its required clearance.";
 // Safe Nunito advances measured from the pinned font corpus at 26px and
 // rounded upward by glyphWidth(). Keeping every printable ASCII glyph in the
 // table prevents a repeated wide glyph (for example 250 "m"s) from passing an
@@ -94,6 +108,44 @@ const cleanText = (value, fallback = "") => {
   const text = String(value ?? "").trim();
   return text || fallback;
 };
+
+function dataIllustrationHeaderCapacityFailure(
+  band,
+  index,
+  { specPath, bodyWidth, bodyHeight, pixelWidth, pixelHeight, dataValidationPassed } = {},
+) {
+  if (band?.pattern !== "canvas") return null;
+  const visual = isObject(band.visual) ? band.visual : {};
+  if (cleanText(visual.family, AUTO_COMPOSE_FAMILIES[index % AUTO_COMPOSE_FAMILIES.length]) !== "illustration") return null;
+  if (!visual.data || (!dataValidationPassed && validateDataVignette(visual.data).length > 0)) return null;
+  const image = visual.image;
+  if (
+    !isObject(image) ||
+    typeof image.file !== "string" || image.file.trim() === "" ||
+    typeof image.use !== "string" || image.use.trim() === "" ||
+    typeof image.description !== "string" || image.description.trim() === "" ||
+    image.use.trim() === image.description.trim()
+  ) return null;
+  if (isAbsolute(image.file) || /^[A-Za-z]:[\\/]/.test(image.file) || image.file.split(/[\\/]/).includes("..")) return null;
+  const header = [visual.thesis, cleanText(visual.focus, band.heading)].filter((value) => String(value ?? "").trim()).join("  •  ");
+  if (!header || !(bodyWidth > 0) || !(bodyHeight > 0)) return null;
+  const headerWidth = bodyWidth * DATA_HEADER_MAX_WIDTH;
+  const lines = estimateWrappedLines(header, headerWidth, DATA_HEADER_FONT_SIZE);
+  const requiredHeight = lines * DATA_EDITORIAL_LINE_HEIGHT_PX + DATA_BOUND_TEXT_MARGIN_PX;
+  const exact = Number.isFinite(pixelWidth) && Number.isFinite(pixelHeight);
+  const allowedHeight = exact
+    ? (() => {
+      const imageGeometry = dataImageGeometry({ pixelWidth, pixelHeight, bodyHeight });
+      return dataHeaderCapacity({ imageY: imageGeometry.y, imageHeight: imageGeometry.height, bodyHeight });
+    })()
+    : dataHeaderCapacityUpperBound(bodyHeight);
+  if (requiredHeight <= allowedHeight) return null;
+  return failure(
+    `bands[${index}].visual`,
+    `data illustration header needs ${lines} wrapped lines (${requiredHeight.toFixed(1)}px) but ${exact ? "the image/header geometry" : "the universal image/header geometry bound"} allows only ${allowedHeight.toFixed(1)}px of clearance`,
+    { specPath, recovery: DATA_HEADER_RECOVERY, code: "data-header-capacity" },
+  );
+}
 
 function dataIllustrationCalloutParts(band) {
   const visual = isObject(band.visual) ? band.visual : {};
@@ -329,13 +381,14 @@ function crc32(bytes) {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
-function failure(field, reason, { specPath, recovery } = {}) {
+function failure(field, reason, { specPath, recovery, code } = {}) {
   return {
     stage: "preflight",
     field,
     input: specPath,
     reason,
     recovery: recovery ?? "Fix the reported field and run the command again.",
+    ...(code ? { code } : {}),
   };
 }
 
@@ -598,6 +651,18 @@ export function collectDeckPreflightFailures(spec, { specPath, specDir, mode = "
       }));
     }
     if (mode === "automatic" && visual.family === "illustration" && visual.data && dataValidationPassed) {
+      const bodyWidth = PAGE_WIDTH - 2 * BODY_INSET;
+      const plannedBand = plannedDeck?.bands?.[index];
+      const bodyHeight = Math.max(1, Number(plannedBand?.height) || 1);
+      if (plannedBand) {
+        const headerCapacityFailure = dataIllustrationHeaderCapacityFailure(band, index, {
+          specPath,
+          bodyWidth,
+          bodyHeight,
+          dataValidationPassed,
+        });
+        if (headerCapacityFailure) failures.push(headerCapacityFailure);
+      }
       const dataExplanationParts = [
         cleanText(visual.explanation, band.deck),
         visual.example ? `Example — ${cleanText(visual.example)}` : "",
@@ -607,9 +672,6 @@ export function collectDeckPreflightFailures(spec, { specPath, specDir, mode = "
         ...(Array.isArray(visual.evidence) ? visual.evidence : []).map((item) => `Evidence — ${cleanText(item)}`),
         ...dataIllustrationCalloutParts(band),
       ].filter(Boolean).join("  •  ");
-      const plannedBand = plannedDeck?.bands?.[index];
-      const bodyWidth = PAGE_WIDTH - 2 * BODY_INSET;
-      const bodyHeight = Math.max(1, Number(plannedBand?.height) || 1);
       failures.push(...collectDataNativeCapacityFailures(band, index, { bodyWidth, bodyHeight, specPath }));
       const explanationLines = estimateWrappedLines(dataExplanationParts, bodyWidth * 0.46, 26);
       const explanationAvailableHeight = bodyHeight * (1 - DATA_EDITORIAL_START);
@@ -672,7 +734,7 @@ export function collectDeckPreflightFailures(spec, { specPath, specDir, mode = "
   return failures;
 }
 
-async function collectAssetFailures(spec, { specPath, specDir } = {}) {
+async function collectAssetFailures(spec, { specPath, specDir, mode = "automatic" } = {}) {
   const failures = [];
   const root = resolve(specDir ?? (specPath ? dirname(resolve(specPath)) : process.cwd()));
   const bands = Array.isArray(spec?.bands) ? spec.bands : [];
@@ -744,6 +806,21 @@ async function collectAssetFailures(spec, { specPath, specDir } = {}) {
       const height = bytes.readUInt32BE(20);
       if (width <= 0 || height <= 0) {
         failures.push(failure(field, `${field} PNG dimensions must be positive (measured ${width}x${height})`, { specPath }));
+        continue;
+      }
+      if (mode === "automatic") {
+        const plannedBand = band?.height;
+        const bodyHeight = Number(plannedBand);
+        if (Number.isFinite(bodyHeight) && bodyHeight > 0) {
+          const headerCapacityFailure = dataIllustrationHeaderCapacityFailure(band, index, {
+            specPath,
+            bodyWidth: PAGE_WIDTH - 2 * BODY_INSET,
+            bodyHeight,
+            pixelWidth: width,
+            pixelHeight: height,
+          });
+          if (headerCapacityFailure) failures.push(headerCapacityFailure);
+        }
       }
     } catch (cause) {
       failures.push(failure(field, `${field} is not readable`, { specPath, recovery: "Provide a readable PNG at the deck-relative image path." }));
@@ -768,7 +845,23 @@ export async function preflightDeck({ specPath, spec, mode = "automatic" } = {})
     }
   }
   const specDir = specPath ? dirname(resolve(specPath)) : process.cwd();
-  failures.push(...collectDeckPreflightFailures(loaded, { specPath, specDir, mode }));
-  failures.push(...(await collectAssetFailures(loaded, { specPath, specDir })));
+  const structuralFailures = collectDeckPreflightFailures(loaded, { specPath, specDir, mode });
+  const assetFailures = await collectAssetFailures(loaded, { specPath, specDir, mode });
+  const assetFailureBands = new Set(
+    assetFailures
+      .filter(({ field }) => /^bands\[(\d+)\]\.visual\.image\.file$/.test(field))
+      .map(({ field }) => Number(/^bands\[(\d+)\]/.exec(field)[1])),
+  );
+  const exactHeaderFailureBands = new Set(
+    assetFailures
+      .filter(({ code }) => code === "data-header-capacity")
+      .map(({ field }) => Number(/^bands\[(\d+)\]/.exec(field)[1])),
+  );
+  failures.push(...structuralFailures.filter((item) => {
+    if (item.code !== "data-header-capacity") return true;
+    const bandIndex = Number(/^bands\[(\d+)\]/.exec(item.field)?.[1]);
+    return !assetFailureBands.has(bandIndex) && !exactHeaderFailureBands.has(bandIndex);
+  }));
+  failures.push(...assetFailures);
   return { ok: failures.length === 0, failures, spec: loaded };
 }

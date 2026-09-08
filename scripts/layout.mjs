@@ -49,6 +49,72 @@ export const FRAME_LABEL_BAND = 20.5;
 // body's available width, before wrapWidth ever sees it.
 export const BODY_INSET = 24;
 
+// Data-illustration image/header geometry is shared by automatic composition,
+// preflight, and the browser-side image adjustment. Keep these normalized
+// values together so an aspect-ratio change cannot silently drift between
+// those stages.
+export const DATA_IMAGE_MAX_HEIGHT = 0.36;
+export const DATA_IMAGE_MAX_WIDTH = 0.23;
+export const DATA_IMAGE_SIDE_MARGIN = 0.03;
+export const DATA_IMAGE_CENTER = 0.5;
+export const DATA_HEADER_Y = 0.03;
+export const DATA_HEADER_MAX_WIDTH = 0.24;
+export const DATA_HEADER_FONT_SIZE = 26;
+export const DATA_HEADER_IMAGE_GAP = 0.02;
+export const DATA_IMAGE_MIN_HEIGHT = 0.20;
+
+export function dataImageGeometry({ pixelWidth, pixelHeight, bodyHeight, side = "left" } = {}) {
+  const imageAspect = Number(pixelWidth) / Number(pixelHeight);
+  const heightValue = Number(bodyHeight);
+  if (!(imageAspect > 0) || !(heightValue > 0)) {
+    throw new Error("data image geometry requires positive PNG dimensions and body height");
+  }
+  const bodyAspect = (PAGE_WIDTH - 2 * BODY_INSET) / heightValue;
+  let height = DATA_IMAGE_MAX_HEIGHT;
+  let width = imageAspect * height / bodyAspect;
+  if (width > DATA_IMAGE_MAX_WIDTH) {
+    width = DATA_IMAGE_MAX_WIDTH;
+    height = width * bodyAspect / imageAspect;
+  }
+  return {
+    x: side === "right" ? 1 - DATA_IMAGE_SIDE_MARGIN - width : DATA_IMAGE_SIDE_MARGIN,
+    y: DATA_IMAGE_CENTER - height / 2,
+    width,
+    height,
+  };
+}
+
+export function dataHeaderGeometry({ side = "left" } = {}) {
+  return {
+    x: side === "right" ? 1 - DATA_IMAGE_SIDE_MARGIN - DATA_HEADER_MAX_WIDTH : DATA_IMAGE_SIDE_MARGIN,
+    y: DATA_HEADER_Y,
+    maxWidth: DATA_HEADER_MAX_WIDTH,
+    fontSize: DATA_HEADER_FONT_SIZE,
+  };
+}
+
+export function dataHeaderCapacity({ imageY, imageHeight, bodyHeight } = {}) {
+  const heightValue = Number(bodyHeight);
+  const imageTop = Number(imageY);
+  const imageHeightValue = Number(imageHeight);
+  if (!(heightValue > 0) || !Number.isFinite(imageTop) || !Number.isFinite(imageHeightValue)) {
+    throw new Error("data header capacity requires finite image geometry and positive body height");
+  }
+  const normalizedCapacity = Math.max(
+    imageTop - DATA_HEADER_Y - DATA_HEADER_IMAGE_GAP,
+    imageTop + imageHeightValue - DATA_IMAGE_MIN_HEIGHT - DATA_HEADER_Y - DATA_HEADER_IMAGE_GAP,
+  );
+  return normalizedCapacity * heightValue;
+}
+
+export function dataHeaderCapacityUpperBound(bodyHeight) {
+  const heightValue = Number(bodyHeight);
+  if (!(heightValue > 0)) throw new Error("data header capacity requires positive body height");
+  const imageTopCapacity = DATA_IMAGE_CENTER - DATA_HEADER_Y - DATA_HEADER_IMAGE_GAP;
+  const imageBottomCapacity = DATA_IMAGE_CENTER + DATA_IMAGE_MAX_HEIGHT / 2 - DATA_IMAGE_MIN_HEIGHT - DATA_HEADER_Y - DATA_HEADER_IMAGE_GAP;
+  return Math.max(imageTopCapacity, imageBottomCapacity) * heightValue;
+}
+
 const AUTOMATIC_TALL_EDITORIAL_FAMILIES = new Set(["tension", "matrix", "journey", "map", "evidence"]);
 
 // Shared automatic-composition footer geometry. Consumers outside the browser

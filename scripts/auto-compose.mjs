@@ -10,7 +10,16 @@ import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { BODY_INSET, PAGE_WIDTH, RAMP, automaticEditorialLayout, automaticInspectY, fontForRole } from "./layout.mjs";
+import {
+  BODY_INSET,
+  PAGE_WIDTH,
+  RAMP,
+  automaticEditorialLayout,
+  automaticInspectY,
+  dataHeaderGeometry,
+  dataImageGeometry,
+  fontForRole,
+} from "./layout.mjs";
 import { CliError, runCli } from "./cli.mjs";
 import { normalizeAnnotations } from "./outline.mjs";
 import { preflightDeck, readJsonInput, resolveAssetWithinRoot } from "./preflight.mjs";
@@ -597,18 +606,18 @@ async function conceptIllustration(meta) {
   const pixelWidth = bytes.readUInt32BE(16);
   const pixelHeight = bytes.readUInt32BE(20);
   const imageAspect = pixelWidth / pixelHeight;
-  const bodyAspect = (PAGE_WIDTH - 2 * BODY_INSET) / meta.bandHeight;
   const dataMode = Boolean(meta.data);
   const dataViewportWidth = 0.68;
   const dataViewportGutter = 0.03;
   const dataViewportMargin = 0.03;
-  const maxDataImageWidth = 1 - (2 * dataViewportMargin) - dataViewportGutter - dataViewportWidth;
-  let height = dataMode ? 0.36 : 0.50;
-  let width = imageAspect * height / bodyAspect;
-  const maxWidth = dataMode ? maxDataImageWidth : 0.52;
-  if (width > maxWidth) { width = maxWidth; height = width * bodyAspect / imageAspect; }
   const side = meta.image.side === "right" ? "right" : "left";
-  const x = side === "left" ? 0.03 : 0.97 - width;
+  const dataImage = dataMode
+    ? dataImageGeometry({ pixelWidth, pixelHeight, bodyHeight: meta.bandHeight, side })
+    : null;
+  let height = dataImage?.height ?? 0.50;
+  let width = dataImage?.width ?? imageAspect * height / ((PAGE_WIDTH - 2 * BODY_INSET) / meta.bandHeight);
+  if (!dataMode && width > 0.52) { width = 0.52; height = width * ((PAGE_WIDTH - 2 * BODY_INSET) / meta.bandHeight) / imageAspect; }
+  const x = dataImage?.x ?? (side === "left" ? 0.03 : 0.97 - width);
   const y = (1 - height) / 2;
   const textX = side === "left" ? (dataMode ? Math.max(0.30, x + width + 0.03) : Math.max(0.56, x + width + 0.02)) : 0.05;
   const textWidth = Math.min(dataMode ? dataViewportWidth : 0.40, 0.97 - textX);
@@ -631,7 +640,17 @@ async function conceptIllustration(meta) {
   }
   if (dataMode) {
     const header = [meta.thesis, meta.focus].filter(Boolean).join("  •  ");
-    if (header) elements.push(text("data-header", side === "left" ? 0.03 : 0.73, 0.03, header, 26, textColor, "prose", { beautidrawMaxWidth: 0.24 }));
+    const headerGeometry = dataHeaderGeometry({ side });
+    if (header) elements.push(text(
+      "data-header",
+      headerGeometry.x,
+      headerGeometry.y,
+      header,
+      headerGeometry.fontSize,
+      textColor,
+      "prose",
+      { beautidrawMaxWidth: headerGeometry.maxWidth },
+    ));
   }
   if (!dataMode) elements.push(...annotationElements(meta, { x: textX, y: 0.52, maxWidth: textWidth }));
   else elements.push(...annotationElements(meta, { x: side === "left" ? 0.03 : 0.73, y: 0.22, maxWidth: 0.24 }));
