@@ -9,6 +9,7 @@ import { hasAbsolutePath } from "./outline.mjs";
 
 export const CONTENT_BUDGETS = Object.freeze({
   thesisChars: 120,
+  focusChars: 120,
   footerChars: 560,
   inspectChars: 84,
   explanationWords: 140,
@@ -563,6 +564,18 @@ export function collectDeckPreflightFailures(spec, { specPath, specDir, mode = "
     const thesisChars = chars(visual.thesis);
     if (thesisChars > CONTENT_BUDGETS.thesisChars) {
       failures.push(failure(`bands[${index}].visual.thesis`, `visual.thesis is ${thesisChars} characters; it renders as one line of at most ${CONTENT_BUDGETS.thesisChars}`, { specPath }));
+    }
+    if (mode === "automatic" && band.pattern === "canvas") {
+      const focusAuthored = typeof visual.focus === "string" && visual.focus.trim() !== "";
+      const focus = focusAuthored ? visual.focus : band.heading;
+      const focusChars = chars(focus);
+      if (focusChars > CONTENT_BUDGETS.focusChars) {
+        failures.push(failure(
+          `bands[${index}].visual.focus`,
+          `automatic focus resolves to ${focusChars} characters${focusAuthored ? "" : " from the band heading"}; provide a shorter visual.focus of at most ${CONTENT_BUDGETS.focusChars} characters so the visual remains readable`,
+          { specPath, recovery: "Provide a short visual.focus override; do not truncate or silently drop the resolved focus." },
+        ));
+      }
     }
     const inspectChars = chars(visual.inspect);
     if (inspectChars > CONTENT_BUDGETS.inspectChars) {

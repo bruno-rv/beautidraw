@@ -285,6 +285,29 @@ test("content budgets report measured values without echoing large input", () =>
   assert.equal(message.includes(hugeHeading), false);
 });
 
+test("automatic focus resolves and caps the effective heading/focus text", () => {
+  const makeSpec = (visual, heading = "A bounded visual heading") => ({
+    ...valid(),
+    bands: [{
+      heading,
+      deck: "A bounded visual scene",
+      pattern: "canvas",
+      accent: "blue",
+      height: 800,
+      visual: { family: "orbit", ...visual },
+    }],
+  });
+  const wideFocus = collectDeckPreflightFailures(makeSpec({ focus: "W".repeat(500) }));
+  assert.ok(wideFocus.some(({ field, reason }) => field === "bands[0].visual.focus" && /automatic focus resolves/.test(reason)));
+  assert.ok(wideFocus.some(({ recovery }) => /short visual\.focus override/.test(recovery)));
+  const wideHeading = collectDeckPreflightFailures(makeSpec({}, "H".repeat(500)));
+  assert.ok(wideHeading.some(({ field, reason }) => field === "bands[0].visual.focus" && /from the band heading/.test(reason)));
+  const core = collectDeckPreflightFailures(makeSpec({ focus: "W".repeat(500) }), { mode: "core" });
+  assert.equal(core.some(({ field }) => field === "bands[0].visual.focus"), false);
+  const validFocus = collectDeckPreflightFailures(makeSpec({ thesis: "T".repeat(120), focus: "F".repeat(120) }));
+  assert.equal(validFocus.some(({ field }) => field === "bands[0].visual.focus"), false);
+});
+
 test("footer budget counts every rendered callout and evidence part", async () => {
   const underBudget = valid();
   underBudget.bands[0] = {

@@ -182,6 +182,9 @@ Automatic `pipeline` visuals require at least 3 authored stages and `constellati
 least 2 authored nodes so their relationship primitives remain meaningful; omitted or empty
 node arrays count as zero. These minimums are automatic-mode guards only and do not alter
 manual composition.
+Automatic visual focus resolves from `visual.focus` or the band heading and is capped at 120
+characters; an overlong resolved focus requires a short explicit override rather than silent
+truncation. Core/manual composition remains exempt.
 
 Empty or whitespace-only labels are a **hard error** — the converter returns no text element
 for an empty string (spike F7), so a container would silently render blank.
