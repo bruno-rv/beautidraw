@@ -398,6 +398,35 @@ test("native data row heights reject compressed bodies for every data kind", () 
   }
 });
 
+test("wide native captions reject the compressed caption lane for every data kind", () => {
+  const image = { file: "assets/data.png", use: "Data scene", description: "A native data teaching scene" };
+  const dataCases = [
+    { kind: "token-sequence", data: { kind: "token-sequence", caption: "", pieces: [{ text: "one", id: "toy-01" }, { text: "two", id: "toy-02" }] } },
+    { kind: "lookup", data: { kind: "lookup", caption: "", key: "toy-key", rows: [{ id: "toy-01", label: "one", vector: [0.1, 0.2] }, { id: "toy-02", label: "two", vector: [0.2, 0.3] }], selected: "toy-01" } },
+    { kind: "distribution", data: { kind: "distribution", caption: "", candidates: [{ label: "one", probability: 0.6 }, { label: "two", probability: 0.4 }], selected: "one" } },
+  ];
+  const makeSpec = (data, height) => ({
+    title: "Caption capacity",
+    subtitle: "A bounded native scene",
+    footer: "Toy values only",
+    bands: [{ heading: "Data canvas", deck: "A bounded native data scene", pattern: "canvas", accent: "blue", height, visual: { family: "illustration", data, image, explanation: "Short native data explanation." } }],
+  });
+  for (const { kind, data } of dataCases) {
+    for (const glyph of ["W", "界"]) {
+      const wideCaption = (`Synthetic illustrative example — toy ${glyph.repeat(80)}`).slice(0, 120);
+      const spec = makeSpec({ ...structuredClone(data), caption: wideCaption }, 360);
+      const failures = collectDeckPreflightFailures(spec);
+      const captionFailure = failures.find(({ field, reason }) => field.endsWith(".caption") && /caption requires/.test(reason));
+      assert.ok(captionFailure, `${kind}/${glyph}: wide caption must fail before browser work`);
+      assert.match(captionFailure.recovery, /canvas height|shorten the data caption/);
+      const core = collectDeckPreflightFailures(spec, { mode: "core" });
+      assert.equal(core.some(({ field, reason }) => field.endsWith(".caption") && /caption requires/.test(reason)), false, `${kind}/${glyph}: core/manual mode remains exempt`);
+      const valid = collectDeckPreflightFailures(makeSpec({ ...structuredClone(data), caption: "Synthetic illustrative example — toy values are not real output." }, 800));
+      assert.equal(valid.some(({ field, reason }) => field.endsWith(".caption") && /caption requires/.test(reason)), false, `${kind}: normal caption at 800px remains accepted`);
+    }
+  }
+});
+
 test("native data capacity rejects wide dense labels while ordinary fixtures remain accepted", () => {
   const image = { file: "assets/data.png", use: "Data scene", description: "A native data teaching scene" };
   const makeSpec = (data) => ({

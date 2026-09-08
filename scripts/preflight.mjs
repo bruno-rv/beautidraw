@@ -156,6 +156,7 @@ function estimateWrappedLines(value, width, fontSize) {
 
 const DATA_TOKEN_RECOVERY = "Shorten the token label, reduce token items, or split the data vignette across frames; native cells stay single-line without truncation or font shrinking.";
 const DATA_FIXED_CELL_RECOVERY = "Shorten the label or use manual composition/split the data vignette across frames; fixed native cells stay single-line without truncation or font shrinking.";
+const DATA_CAPTION_RECOVERY = "Shorten the data caption or increase the canvas height; the caption must clear the native data header lane.";
 const DATA_OUTLINE_RECOVERY = "Keep authored data values portable for the outline; use a deck-relative image path or encode the example value.";
 
 function collectDataOutlinePathFailure(data, index, { specPath }) {
@@ -178,6 +179,16 @@ function collectDataNativeCapacityFailures(band, index, { bodyWidth, bodyHeight,
   const viewportWidth = bodyWidth * DATA_VIGNETTE_VIEWPORT.minWidth;
   const viewportHeight = bodyHeight * DATA_VIGNETTE_VIEWPORT.minHeight;
   const failures = [];
+  const captionLines = estimateWrappedLines(data.caption, viewportWidth * 0.96, RAMP.note);
+  const captionAvailableHeight = viewportHeight * (0.18 - 0.03);
+  const captionRequiredHeight = captionLines * DATA_NATIVE_NOTE_HEIGHT_PX;
+  if (captionRequiredHeight > captionAvailableHeight) {
+    failures.push(failure(
+      `bands[${index}].visual.data.caption`,
+      `native data caption requires ${captionLines} lines (${captionRequiredHeight}px) but only ${captionAvailableHeight.toFixed(1)}px remains before the native header lane; increase the canvas height or shorten the caption`,
+      { specPath, recovery: DATA_CAPTION_RECOVERY },
+    ));
+  }
   const check = (field, value, width, fixedCell = false) => {
     const text = String(value ?? "");
     const lines = estimateWrappedLines(text, Math.max(1, width - 2 * BOUND_TEXT_PADDING), RAMP.note);
