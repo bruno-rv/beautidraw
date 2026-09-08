@@ -127,7 +127,7 @@ function dataIllustrationHeaderCapacityFailure(
     image.use.trim() === image.description.trim()
   ) return null;
   if (isAbsolute(image.file) || /^[A-Za-z]:[\\/]/.test(image.file) || image.file.split(/[\\/]/).includes("..")) return null;
-  const header = [visual.thesis, cleanText(visual.focus, band.heading)].filter((value) => String(value ?? "").trim()).join("  •  ");
+  const header = [cleanText(visual.thesis), cleanText(visual.focus, band.heading)].filter(Boolean).join("  •  ");
   if (!header || !(bodyWidth > 0) || !(bodyHeight > 0)) return null;
   const headerWidth = bodyWidth * DATA_HEADER_MAX_WIDTH;
   const lines = estimateWrappedLines(header, headerWidth, DATA_HEADER_FONT_SIZE);

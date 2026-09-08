@@ -863,7 +863,17 @@ test("data header capacity rejects combined copy early and uses actual PNG aspec
   assert.deepEqual(decodeTinyPng(widePng), { width: 4, height: 1 });
   await writeFile(join(root, "normal.png"), normalPng);
   await writeFile(join(root, "wide.png"), widePng);
-  const fitting = await preflightDeck({ specPath: join(root, "normal.json"), spec: makeSpec("normal.png") });
+  const normalSpec = makeSpec("normal.png");
+  const paddedThesisSpec = structuredClone(normalSpec);
+  paddedThesisSpec.bands[0].visual.thesis = `\n${normalSpec.bands[0].visual.thesis}\n`;
+  assert.equal(
+    collectDeckPreflightFailures(paddedThesisSpec).some(({ code }) => code === "data-header-capacity"),
+    collectDeckPreflightFailures(normalSpec).some(({ code }) => code === "data-header-capacity"),
+    "pure preflight must normalize thesis whitespace like auto-compose",
+  );
+  const paddedThesis = await preflightDeck({ specPath: join(root, "normal-padded.json"), spec: paddedThesisSpec });
+  assert.equal(paddedThesis.ok, true, paddedThesis.failures.map(({ reason }) => reason).join("\n"));
+  const fitting = await preflightDeck({ specPath: join(root, "normal.json"), spec: normalSpec });
   assert.equal(fitting.ok, true, fitting.failures.map(({ reason }) => reason).join("\n"));
   const wide = await preflightDeck({ specPath: join(root, "wide.json"), spec: makeSpec("wide.png") });
   assert.equal(wide.ok, false);
