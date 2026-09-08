@@ -86,6 +86,8 @@ for (const [glyphs, width] of DATA_CONVERTER_ASCII_WIDTHS) {
 // advances instead of adding an arbitrary average-width margin that would
 // reject the existing three-line examples.
 const DATA_GLYPH_SAFETY = 0.005;
+const DATA_MONO_GLYPH_WIDTH = 0.586;
+const DATA_MONO_TAB_WIDTH = DATA_MONO_GLYPH_WIDTH * 8;
 const DATA_EDITORIAL_RECOVERY = "Shorten the data illustration copy, split it across bands, or grow the canvas height and rerun.";
 const cleanText = (value, fallback = "") => {
   const text = String(value ?? "").trim();
@@ -105,7 +107,12 @@ function dataIllustrationCalloutParts(band) {
   }).filter(Boolean);
 }
 
-function glyphWidth(char, fontSize) {
+function glyphWidth(char, fontSize, role = "prose") {
+  if (role === "mono") {
+    if (char === "\t") return DATA_MONO_TAB_WIDTH * fontSize;
+    if (char.codePointAt(0) > 0x7f) return 1.05 * fontSize;
+    return (DATA_MONO_GLYPH_WIDTH + DATA_GLYPH_SAFETY) * fontSize;
+  }
   const directWidth = DATA_SAFE_ASCII_WIDTHS.get(char);
   if (directWidth !== undefined) return (directWidth + DATA_GLYPH_SAFETY) * fontSize;
   for (const [glyphs, width] of DATA_SAFE_ASCII_WIDTHS) {
@@ -114,7 +121,7 @@ function glyphWidth(char, fontSize) {
   return 1.05 * fontSize;
 }
 
-function estimateWrappedLines(value, width, fontSize) {
+function estimateWrappedLines(value, width, fontSize, role = "prose") {
   return String(value ?? "").split("\n").reduce((total, hardLine) => {
     if (hardLine === "") return total + 1;
     let lineUnits = 0;
@@ -122,17 +129,17 @@ function estimateWrappedLines(value, width, fontSize) {
     let pendingSpaceUnits = 0;
     for (const token of hardLine.match(/\s+|[^\s]+/gu) ?? []) {
       if (/^\s+$/u.test(token)) {
-        pendingSpaceUnits = [...token].reduce((sum, char) => sum + glyphWidth(char, fontSize), 0);
+        pendingSpaceUnits = [...token].reduce((sum, char) => sum + glyphWidth(char, fontSize, role), 0);
         continue;
       }
-      const tokenUnits = [...token].reduce((sum, char) => sum + glyphWidth(char, fontSize), 0);
+      const tokenUnits = [...token].reduce((sum, char) => sum + glyphWidth(char, fontSize, role), 0);
       if (tokenUnits > width) {
         if (lineUnits > 0) {
           lineCount += 1;
           lineUnits = 0;
         }
         for (const char of token) {
-          const units = glyphWidth(char, fontSize);
+          const units = glyphWidth(char, fontSize, role);
           if (lineUnits > 0 && lineUnits + units > width) {
             lineCount += 1;
             lineUnits = 0;
@@ -301,7 +308,7 @@ function collectAutomaticFooterCapacityFailures(band, index, { bodyWidth, bodyHe
     ));
   }
   if (visual.inspect) {
-    const inspectLines = estimateWrappedLines(`Inspect: ${cleanText(visual.inspect)}`, width, RAMP.note);
+    const inspectLines = estimateWrappedLines(`Inspect: ${cleanText(visual.inspect)}`, width, RAMP.note, "mono");
     const inspectRequiredHeight = inspectLines * DATA_BOUNDARY_LINE_HEIGHT_PX;
     const inspectAvailableHeight = bodyHeight * Math.max(0, 1 - inspectY);
     if (inspectRequiredHeight > inspectAvailableHeight) {
@@ -605,7 +612,7 @@ export function collectDeckPreflightFailures(spec, { specPath, specDir, mode = "
       }
       if (visual.inspect) {
         const inspectText = `Inspect — ${cleanText(visual.inspect)}`;
-        const inspectLines = estimateWrappedLines(inspectText, bodyWidth * 0.44, 23);
+        const inspectLines = estimateWrappedLines(inspectText, bodyWidth * 0.44, 23, "mono");
         const inspectAvailableHeight = bodyHeight * Math.max(0, 1 - inspectY);
         const inspectRequiredHeight = inspectLines * DATA_BOUNDARY_LINE_HEIGHT_PX;
         if (inspectRequiredHeight > inspectAvailableHeight) {

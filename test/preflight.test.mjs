@@ -316,6 +316,50 @@ test("automatic footer geometry rejects compressed generic families before brows
   }
   const adequate = collectDeckPreflightFailures(makeSpec(1000, false));
   assert.equal(adequate.some(({ reason }) => /automatic orbit (editorial|inspect) footer needs/.test(reason)), false, "adequate generic footer body remains accepted");
+  const monoFits = makeSpec(800, true);
+  monoFits.bands[0].visual.callouts = [
+    { kind: "example", label: "Example", note: "Short note" },
+    { kind: "boundary", label: "Boundary", note: "Short note" },
+  ];
+  monoFits.bands[0].visual.inspect = "i".repeat(80);
+  assert.equal(collectDeckPreflightFailures(monoFits).some(({ reason }) => /automatic orbit inspect footer needs/.test(reason)), false, "mono inspect text that fits must remain accepted");
+});
+
+test("data inspect wrapping uses mono metrics before compose", () => {
+  const makeSpec = (inspect, mode = "automatic") => ({
+    title: "Data inspect metrics",
+    subtitle: "A bounded native scene",
+    footer: "Toy values only",
+    bands: [{
+      heading: "Distribution",
+      deck: "A bounded distribution scene",
+      pattern: "canvas",
+      accent: "blue",
+      height: 800,
+      visual: {
+        family: "illustration",
+        data: {
+          kind: "distribution",
+          caption: "Synthetic illustrative example — toy values are not real output.",
+          candidates: [{ label: "one", probability: 0.6 }, { label: "two", probability: 0.4 }],
+          selected: "one",
+        },
+        image: { file: "assets/data.png", use: "Data scene", description: "A data teaching scene" },
+        explanation: "Short data explanation.",
+        inspect,
+      },
+    }],
+  });
+  const monoFailures = collectDeckPreflightFailures(makeSpec("i".repeat(80)));
+  assert.ok(monoFailures.some(({ field, reason }) => field === "bands[0].visual.inspect" && /data illustration inspect needs/.test(reason)), "Cascadia-width inspect text must reject before compose");
+  const coreFailures = collectDeckPreflightFailures(makeSpec("i".repeat(80), "core"), { mode: "core" });
+  assert.equal(coreFailures.some(({ field, reason }) => field === "bands[0].visual.inspect" && /data illustration inspect needs/.test(reason)), false, "core/manual mode remains exempt");
+  const asciiFailures = collectDeckPreflightFailures(makeSpec("run tokenizer inspect"));
+  assert.equal(asciiFailures.some(({ field, reason }) => field === "bands[0].visual.inspect" && /data illustration inspect needs/.test(reason)), false, "ordinary mono inspect command remains accepted");
+  const nearFit = collectDeckPreflightFailures(makeSpec("i".repeat(61)));
+  assert.equal(nearFit.some(({ field, reason }) => field === "bands[0].visual.inspect" && /data illustration inspect needs/.test(reason)), false, "mono text just within the measured column remains accepted");
+  const justOver = collectDeckPreflightFailures(makeSpec("i".repeat(62)));
+  assert.ok(justOver.some(({ field, reason }) => field === "bands[0].visual.inspect" && /data illustration inspect needs/.test(reason)), "mono text just beyond the measured column must fail before compose");
 });
 
 test("short data canvases reject only unrenderable editorial height", () => {
