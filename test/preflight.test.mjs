@@ -1,8 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 import { CONTENT_BUDGETS, collectDeckPreflightFailures, preflightDeck } from "../scripts/preflight.mjs";
 
@@ -60,6 +61,90 @@ test("core preflight permits unused manual canvas nodes beyond automatic family 
   const core = await preflightDeck({ spec, mode: "core" });
   assert.equal(core.ok, true);
   assert.deepEqual(core.failures, []);
+});
+
+test("automatic relationship families require meaningful authored cardinality", () => {
+  const makeSpec = (family, count) => ({
+    ...valid(),
+    bands: [{
+      heading: `${family} fixture`,
+      deck: "A bounded relationship scene",
+      pattern: "canvas",
+      accent: "blue",
+      height: 700,
+      visual: { family, nodes: Array.from({ length: count }, (_, index) => ({ label: `Node ${index + 1}` })) },
+    }],
+  });
+  for (const [family, minimum] of [["pipeline", 3], ["constellation", 2]]) {
+    for (let count = 0; count < minimum; count += 1) {
+      const spec = makeSpec(family, count);
+      const failures = collectDeckPreflightFailures(spec);
+      assert.ok(failures.some(({ field, reason }) => field === "bands[0].visual.nodes" && reason.includes(`needs at least ${minimum}`)), `${family}/${count} must fail before browser work`);
+      const core = collectDeckPreflightFailures(spec, { mode: "core" });
+      assert.equal(core.some(({ reason }) => reason.includes(`needs at least ${minimum}`)), false, `${family} core/manual mode remains exempt`);
+    }
+    const accepted = collectDeckPreflightFailures(makeSpec(family, minimum));
+    assert.equal(accepted.some(({ reason }) => reason.includes(`needs at least ${minimum}`)), false, `${family}/${minimum} authored nodes must remain accepted`);
+  }
+});
+
+test("minimum relationship cardinalities survive a real automatic build", async (t) => {
+  const temp = await mkdtemp(join(tmpdir(), "beautidraw-relationship-minimums-"));
+  t.after(() => rm(temp, { recursive: true, force: true }));
+  const spec = {
+    title: "Relationship minimums",
+    subtitle: "Three-stage pipeline and two-node constellation",
+    footer: "Automatic composition fixture",
+    bands: [
+      {
+        heading: "Pipeline",
+        deck: "A bounded pipeline with genuine stages",
+        pattern: "canvas",
+        accent: "blue",
+        height: 700,
+        visual: {
+          family: "pipeline",
+          nodes: [
+            { label: "Input", note: "A bounded source enters the stage." },
+            { label: "Transform", note: "The mechanism changes the representation." },
+            { label: "Output", note: "The result remains inspectable." },
+          ],
+          explanation: "Three genuine stages show how the mechanism transforms an input into a result.",
+          example: "A source passes through a transform before its output is inspected.",
+          tradeoff: "More stages add context but increase the reading path.",
+          inspect: "inspect pipeline stages",
+        },
+      },
+      {
+        heading: "Constellation",
+        deck: "A bounded constellation with a relationship",
+        pattern: "canvas",
+        accent: "violet",
+        height: 700,
+        visual: {
+          family: "constellation",
+          nodes: [
+            { label: "Source", note: "The first authored point." },
+            { label: "Claim", note: "The second point receives the relationship." },
+          ],
+          explanation: "Two authored points and their connector make the relationship visible.",
+          example: "A source connects directly to the claim it supports.",
+          tradeoff: "A split frame is preferable when more points would crowd the map.",
+          evidence: ["Evidence preserves the authored relationship and its visible connector."],
+          inspect: "inspect constellation links",
+        },
+      },
+    ],
+  };
+  const specPath = join(temp, "spec.json");
+  const output = join(temp, "out");
+  await writeFile(specPath, JSON.stringify(spec));
+  const projectRoot = resolve(import.meta.dirname, "..");
+  const result = spawnSync(process.execPath, [resolve(projectRoot, "scripts/build-deck.mjs"), specPath, output], { cwd: projectRoot, encoding: "utf8", timeout: 120_000 });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const deck = JSON.parse(await readFile(join(output, "deck.excalidraw"), "utf8"));
+  assert.ok(deck.elements.some((element) => element.id === "b0-frame"));
+  assert.ok(deck.elements.some((element) => element.id === "b1-frame"));
 });
 
 test("top-level malformed bands return structured failures", async () => {

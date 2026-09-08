@@ -178,6 +178,9 @@ before browser work with a split-across-frames recovery message: `illustration` 
 content only when callouts are absent; their callout capacity is always enforced. These
 automatic-mode caps keep generic callout content bounded and readable in the editorial
 surface; core/manual composition mode retains its existing exemption.
+When authored node arrays are supplied, automatic `pipeline` visuals require at least 3
+stages and `constellation` visuals at least 2 nodes so their relationship primitives remain
+meaningful. These minimums are automatic-mode guards only and do not alter manual composition.
 
 Empty or whitespace-only labels are a **hard error** — the converter returns no text element
 for an empty string (spike F7), so a container would silently render blank.
