@@ -523,19 +523,22 @@ function conceptConstellation(meta) {
   elements.push(text("constellation-focus", 0.36, meta.thesis ? 0.12 : 0.04, meta.focus, RAMP.note, meta.dark ? darkText : lightText, "prose", { beautidrawMaxWidth: 0.30 }));
   const positions = [[0.08, 0.21], [0.38, 0.17], [0.68, 0.21], [0.14, 0.50], [0.48, 0.45], [0.76, 0.51]];
   const nodes = meta.nodes.slice(0, Math.min(meta.nodeCount, positions.length));
-  const links = [[0, 1], [1, 2], [0, 3], [1, 4], [2, 5], [3, 4], [4, 5]];
-  const maxLinks = 3;
-  links.filter(([a, b]) => a < nodes.length && b < nodes.length).slice(0, maxLinks).forEach(([a, b], index) => {
-    const [ax, ay] = positions[a]; const [bx, by] = positions[b];
-    const start = nodeAnchor(ax, ay, 0.24, ax < 0.5 ? "right" : "left");
-    const end = nodeAnchor(bx, by, 0.24, bx < 0.5 ? "right" : "left");
-    const routeY = index < 2 ? 0.10 : 0.35;
-    const routeX = index < 2 ? null : 0.05;
-    const points = routeX === null
-      ? [start, [start[0], routeY], [end[0], routeY], end]
-      : [start, [routeX, routeY], [end[0], routeY], end];
-    elements.push(routedLine(`constellation-link-${index + 1}`, points, stroke));
-  });
+  const anchors = positions.slice(0, nodes.length).map(([x, y]) => nodeAnchor(x, y, 0.24, x < 0.5 ? "right" : "left"));
+  const routes = [];
+  if (anchors.length >= 2) {
+    const top = anchors.slice(0, Math.min(3, anchors.length));
+    routes.push([top[0], [top[0][0], 0.10], [top[1][0], 0.10], top[1], [top[1][0], 0.10], [top[2]?.[0] ?? top[1][0], 0.10], ...(top[2] ? [top[2]] : [])]);
+  }
+  if (anchors.length >= 4) {
+    const bottom = anchors.slice(3, Math.min(6, anchors.length));
+    routes.push([bottom[0], [bottom[0][0], 0.40], [bottom[1]?.[0] ?? bottom[0][0], 0.40], ...(bottom[1] ? [bottom[1]] : []), ...(bottom[2] ? [[bottom[1][0], 0.40], [bottom[2][0], 0.40], bottom[2]] : [])]);
+  }
+  if (anchors.length >= 4) {
+    const bridge = anchors[2] ?? anchors[1];
+    const target = anchors[5] ?? anchors[4] ?? anchors[3];
+    routes.push([bridge, [0.70, 0.28], [0.70, 0.40], target]);
+  }
+  routes.slice(0, 3).forEach((points, index) => elements.push(routedLine(`constellation-link-${index + 1}`, points, stroke)));
   nodes.forEach((node, index) => elements.push(...nodeBlock(`star-${index + 1}`, node, meta, {
     x: positions[index][0], y: positions[index][1], width: 0.24, index, markerSide: positions[index][0] < 0.5 ? "right" : "left",
   })));

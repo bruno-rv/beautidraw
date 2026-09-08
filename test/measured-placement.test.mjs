@@ -229,6 +229,59 @@ test("specialized callout labels keep notes below measured bounds", { timeout: 1
   assert.equal(visible.includes(noteText), true, "specialized note must remain complete");
 });
 
+test("constellation routes every accepted node through three native connectors", { timeout: 120_000 }, async (t) => {
+  const temp = await mkdtemp(join(tmpdir(), "beautidraw-constellation-connectivity-"));
+  t.after(() => rm(temp, { recursive: true, force: true }));
+  const nodes = (count) => Array.from({ length: count }, (_, index) => ({
+    label: `Constellation node ${index + 1}`,
+    note: `Evidence note ${index + 1}`,
+  }));
+  const bands = [2, 3, 4, 5, 6].map((count) => ({
+    heading: `Constellation ${count} nodes`,
+    deck: "Every accepted node remains part of one connected constellation.",
+    pattern: "canvas",
+    accent: "violet",
+    height: 700,
+    visual: {
+      family: "constellation",
+      thesis: "A connected neighborhood keeps every accepted node part of the same argument.",
+      focus: "Connected constellation",
+      nodes: nodes(count),
+      explanation: "The routed neighborhood connects all accepted nodes while preserving open text blocks.",
+      example: "Each node contributes a concrete part of the relationship.",
+      tradeoff: "A bounded connector budget favors meaningful routes over decorative density.",
+      evidence: ["The serialized native paths touch every accepted node anchor."],
+      inspect: "inspect constellation geometry",
+    },
+  }));
+  const spec = { title: "Constellation connectivity", subtitle: "Measured native routes", footer: "Placement fixture", bands };
+  const specPath = join(temp, "spec.json");
+  const output = join(temp, "out");
+  await writeFile(specPath, JSON.stringify(spec));
+  const result = runBuild(specPath, output);
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+
+  const deck = JSON.parse(await readFile(join(output, "deck.excalidraw"), "utf8"));
+  const positions = [[0.08, 0.21], [0.38, 0.17], [0.68, 0.21], [0.14, 0.50], [0.48, 0.45], [0.76, 0.51]];
+  for (const [bandIndex, count] of [2, 3, 4, 5, 6].entries()) {
+    const body = frameBody(deck, bandIndex);
+    const members = deck.elements.filter((element) => element.frameId === body.frame.id && element.customData?.beautidrawComposition === true);
+    const links = members.filter((element) => element.id.startsWith(`b${bandIndex}-constellation-link-`));
+    assert.ok(links.length <= 3, `${count}-node constellation must stay within the connector budget`);
+    const points = links.flatMap((element) => (element.points ?? []).map(([x, y]) => [element.x + x, element.y + y]));
+    for (let index = 0; index < count; index += 1) {
+      const [x, y] = positions[index];
+      const anchor = [
+        body.x + body.width * (x < 0.5 ? x + 0.24 - 0.011 : x + 0.011),
+        body.y + body.height * (y + 0.017),
+      ];
+      const distance = Math.min(...points.map(([px, py]) => Math.hypot(px - anchor[0], py - anchor[1])));
+      assert.ok(distance <= 12, `${count}-node constellation node ${index + 1} must touch a routed native anchor (distance=${distance.toFixed(1)})`);
+      assert.ok(members.some((element) => elementText(element).includes(`Constellation node ${index + 1}`)), `node ${index + 1} text must survive`);
+    }
+  }
+});
+
 test("data illustration header content stays clear of left and right images", { timeout: 180_000 }, async (t) => {
   const temp = await mkdtemp(join(tmpdir(), "beautidraw-measured-data-header-"));
   t.after(() => rm(temp, { recursive: true, force: true }));
