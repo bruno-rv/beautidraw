@@ -266,6 +266,53 @@ test("footer budget counts every rendered callout and evidence part", async () =
   assert.match(dataCalloutFailures.map(({ reason }) => reason).join("\n"), /footer content is/);
 });
 
+test("short data canvases reject only unrenderable editorial height", () => {
+  const spec = {
+    ...valid(),
+    bands: [{
+      heading: "Short data canvas",
+      deck: "A bounded data scene",
+      pattern: "canvas",
+      accent: "blue",
+      height: 500,
+      visual: {
+        family: "illustration",
+        data: {
+          kind: "distribution",
+          caption: "Synthetic illustrative example — toy probabilities are not real output.",
+          candidates: [{ label: "blue", probability: 0.6 }, { label: "gray", probability: 0.4 }],
+          selected: "gray",
+        },
+        image: { file: "assets/data.png", use: "Data scene", description: "A data teaching scene" },
+        explanation: "Compact data explanation stays readable.",
+      },
+    }],
+  };
+  const accepted = collectDeckPreflightFailures(spec);
+  assert.equal(accepted.some(({ reason }) => /data illustration/.test(reason)), false);
+  const explicitNewlines = structuredClone(spec);
+  explicitNewlines.bands[0].height = 700;
+  explicitNewlines.bands[0].visual.explanation = "First bounded line.\nSecond bounded line.";
+  assert.equal(collectDeckPreflightFailures(explicitNewlines).some(({ reason }) => /data illustration/.test(reason)), false);
+  const renderedTooTall = structuredClone(spec);
+  renderedTooTall.bands[0].visual.explanation = "Token IDs map each piece; context then shifts meaning with nearby pieces before scoring.";
+  renderedTooTall.bands[0].visual.example = "The sky becomes two toy IDs before attention.";
+  const renderedFailures = collectDeckPreflightFailures(renderedTooTall);
+  assert.match(renderedFailures.map(({ reason }) => reason).join("\n"), /data illustration explanation needs/, "the exact three-line browser copy must fail before compose");
+  const rejected = structuredClone(spec);
+  rejected.bands[0].visual.explanation = "B".repeat(400);
+  const failures = collectDeckPreflightFailures(rejected);
+  assert.match(failures.map(({ reason }) => reason).join("\n"), /data illustration explanation needs/);
+  assert.equal(failures.find(({ reason }) => /data illustration explanation needs/.test(reason)).recovery.includes("split it across bands"), true);
+  for (const glyphs of ["m", "w", "O", "N", "W", "界"]) {
+    const wide = structuredClone(spec);
+    wide.bands[0].height = 700;
+    wide.bands[0].visual.explanation = glyphs.repeat(250);
+    const wideFailures = collectDeckPreflightFailures(wide);
+    assert.match(wideFailures.map(({ reason }) => reason).join("\n"), /data illustration explanation needs/, `${glyphs}: wide text must not pass preflight`);
+  }
+});
+
 test("malformed visual callouts produce structured failures", () => {
   const spec = valid();
   spec.bands[0].visual = { callouts: "not-an-array" };

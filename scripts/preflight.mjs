@@ -4,7 +4,7 @@ import { isAbsolute, relative, resolve, dirname } from "node:path";
 
 import { CliError } from "./cli.mjs";
 import { validateDataVignette } from "./data-vignettes.mjs";
-import { planDeck } from "./layout.mjs";
+import { BODY_INSET, BOUND_TEXT_PADDING, PAGE_WIDTH, planDeck } from "./layout.mjs";
 
 export const CONTENT_BUDGETS = Object.freeze({
   thesisChars: 120,
@@ -43,10 +43,115 @@ const CRC_TABLE = Array.from({ length: 256 }, (_, value) => {
 
 const words = (value) => String(value ?? "").trim().split(/\s+/).filter(Boolean).length;
 const chars = (value) => String(value ?? "").trim().length;
+const DATA_EDITORIAL_START = 0.84;
+const DATA_EDITORIAL_LINE_HEIGHT_PX = 35;
+const DATA_BOUNDARY_START = 0.76;
+const DATA_BOUNDARY_LINE_HEIGHT_PX = 32;
+const DATA_BOUND_TEXT_MARGIN_PX = 2 * BOUND_TEXT_PADDING + 1;
+// Safe Nunito advances measured from the pinned font corpus at 26px and
+// rounded upward by glyphWidth(). Keeping every printable ASCII glyph in the
+// table prevents a repeated wide glyph (for example 250 "m"s) from passing an
+// average-width estimate. Unknown/non-ASCII glyphs take a conservative 1.05em
+// fallback; this is a preflight safety bound, not a runtime font-coverage claim.
+const DATA_SAFE_ASCII_WIDTHS = new Map([
+  ["'", 0.226], ["!,.\u003a;", 0.233], ["i", 0.237], ["j", 0.241], [" ", 0.261],
+  ["I", 0.262], ["|", 0.270], ["/\\", 0.290], ["l", 0.301], ["[]", 0.324],
+  ["()", 0.326], ["J", 0.331], ["f", 0.340], ["t", 0.358], ["`{}", 0.361],
+  ["r", 0.365], ["\"", 0.405], ["-", 0.427], ["?", 0.447], ["*", 0.451],
+  ["c", 0.465], ["z", 0.466], ["s", 0.483], ["_", 0.500], ["k", 0.508],
+  ["y", 0.517], ["v", 0.518], ["x", 0.530], ["a", 0.533], ["e", 0.534],
+  ["L", 0.548], ["F", 0.551], ["o", 0.560], ["u", 0.565], ["hn", 0.572],
+  ["E", 0.586], ["bdpq", 0.587], ["g", 0.590], ["Z", 0.593],
+  ["#$+0123456789<=>^~", 0.600], ["Y", 0.601], ["T", 0.607], ["S", 0.618],
+  ["K", 0.634], ["P", 0.637], ["X", 0.655], ["R", 0.673], ["C", 0.675],
+  ["B", 0.679], ["V", 0.694], ["&", 0.701], ["G", 0.729], ["U", 0.731],
+  ["A", 0.733], ["N", 0.741], ["D", 0.747], ["H", 0.764], ["OQ", 0.771],
+  ["w", 0.844], ["M", 0.858], ["m", 0.861], ["%", 0.933], ["@", 0.947], ["W", 1.104],
+]);
+// The converter's own measured advances are the safety table used below.
+// Keep the ASCII coverage explicit so every printable glyph is bounded.
+const DATA_CONVERTER_ASCII_WIDTHS = [
+  ["'", 0.180], ["|", 0.200], [" ,.", 0.250], ["/:;\\ijlt", 0.278],
+  ["!()-I[]`fr", 0.333], ["Js", 0.389], ["\"", 0.408], ["?acez", 0.444],
+  ["^", 0.469], ["{}", 0.480], ["0123456789#$*_bdghknopquvxy", 0.500], ["~", 0.541],
+  ["FPS", 0.556], ["+<=>", 0.564], ["ELTZ", 0.611], ["BCR", 0.667],
+  ["ADGHKNOQUVXYw", 0.722], ["&m", 0.778], ["%", 0.833], ["M", 0.889],
+  ["@", 0.921], ["W", 0.944],
+];
+for (const [glyphs, width] of DATA_CONVERTER_ASCII_WIDTHS) {
+  for (const glyph of glyphs) DATA_SAFE_ASCII_WIDTHS.set(glyph, width);
+}
+// Values are rounded to the converter's measured precision; retain the pinned
+// advances instead of adding an arbitrary average-width margin that would
+// reject the existing three-line examples.
+const DATA_GLYPH_SAFETY = 0.005;
+const DATA_EDITORIAL_RECOVERY = "Shorten the data illustration copy, split it across bands, or grow the canvas height and rerun.";
 const cleanText = (value, fallback = "") => {
   const text = String(value ?? "").trim();
   return text || fallback;
 };
+
+function dataIllustrationCalloutParts(band) {
+  const visual = isObject(band.visual) ? band.visual : {};
+  const callouts = Array.isArray(visual.callouts) ? visual.callouts : [];
+  const source = callouts.length
+    ? callouts
+    : (Array.isArray(visual.nodes) ? visual.nodes : Array.isArray(band.nodes) ? band.nodes : []).slice(0, 2);
+  return source.map((node) => {
+    const label = isObject(node) ? cleanText(node.label) : cleanText(node);
+    const note = isObject(node) ? cleanText(node.note ?? node.text) : "";
+    return note ? `Callout — ${label}: ${note}` : "";
+  }).filter(Boolean);
+}
+
+function glyphWidth(char, fontSize) {
+  const directWidth = DATA_SAFE_ASCII_WIDTHS.get(char);
+  if (directWidth !== undefined) return (directWidth + DATA_GLYPH_SAFETY) * fontSize;
+  for (const [glyphs, width] of DATA_SAFE_ASCII_WIDTHS) {
+    if (glyphs.includes(char)) return (width + DATA_GLYPH_SAFETY) * fontSize;
+  }
+  return 1.05 * fontSize;
+}
+
+function estimateWrappedLines(value, width, fontSize) {
+  return String(value ?? "").split("\n").reduce((total, hardLine) => {
+    if (hardLine === "") return total + 1;
+    let lineUnits = 0;
+    let lineCount = 1;
+    let pendingSpaceUnits = 0;
+    for (const token of hardLine.match(/\s+|[^\s]+/gu) ?? []) {
+      if (/^\s+$/u.test(token)) {
+        pendingSpaceUnits = [...token].reduce((sum, char) => sum + glyphWidth(char, fontSize), 0);
+        continue;
+      }
+      const tokenUnits = [...token].reduce((sum, char) => sum + glyphWidth(char, fontSize), 0);
+      if (tokenUnits > width) {
+        if (lineUnits > 0) {
+          lineCount += 1;
+          lineUnits = 0;
+        }
+        for (const char of token) {
+          const units = glyphWidth(char, fontSize);
+          if (lineUnits > 0 && lineUnits + units > width) {
+            lineCount += 1;
+            lineUnits = 0;
+          }
+          lineUnits += units;
+        }
+      } else {
+        const neededUnits = tokenUnits + (lineUnits > 0 ? pendingSpaceUnits : 0);
+        if (lineUnits > 0 && lineUnits + neededUnits > width) {
+          lineCount += 1;
+          lineUnits = tokenUnits;
+        } else {
+          lineUnits += neededUnits;
+        }
+      }
+      pendingSpaceUnits = 0;
+    }
+    return total + lineCount;
+  }, 0);
+}
 
 function renderedFooterParts(band, index) {
   const visual = isObject(band.visual) ? band.visual : {};
@@ -57,17 +162,10 @@ function renderedFooterParts(band, index) {
     visual.tradeoff ? `Boundary — ${cleanText(visual.tradeoff)}` : "",
     ...(Array.isArray(visual.evidence) ? visual.evidence : []).map((item) => `Evidence — ${cleanText(item)}`),
   ];
-  const callouts = Array.isArray(visual.callouts) ? visual.callouts : [];
   if (family === "illustration" && visual.data) {
-    const source = callouts.length
-      ? callouts
-      : (Array.isArray(visual.nodes) ? visual.nodes : Array.isArray(band.nodes) ? band.nodes : []).slice(0, 2);
-    parts.push(...source.map((node) => {
-      const label = isObject(node) ? cleanText(node.label) : cleanText(node);
-      const note = isObject(node) ? cleanText(node.note ?? node.text) : "";
-      return note ? `Callout — ${label}: ${note}` : "";
-    }));
+    parts.push(...dataIllustrationCalloutParts(band));
   } else if (!["illustration", "spotlight"].includes(family)) {
+    const callouts = Array.isArray(visual.callouts) ? visual.callouts : [];
     parts.push(...callouts.map((callout) => {
       const label = isObject(callout) ? cleanText(callout.label) : cleanText(callout);
       const note = isObject(callout) ? cleanText(callout.note ?? callout.text) : cleanText(callout);
@@ -205,8 +303,9 @@ export function collectDeckPreflightFailures(spec, { specPath, specDir, mode = "
   }
   if (failures.length) return failures;
 
+  let plannedDeck;
   try {
-    planDeck(spec);
+    plannedDeck = planDeck(spec);
   } catch (error) {
     failures.push(failure("spec", error.message ?? String(error), { specPath }));
   }
@@ -313,6 +412,54 @@ export function collectDeckPreflightFailures(spec, { specPath, specDir, mode = "
     const footerParts = chars(renderedFooterParts(band, index).join("  •  "));
     if (footerParts > CONTENT_BUDGETS.footerChars) {
       failures.push(failure(`bands[${index}].visual`, `visual footer content is ${footerParts} characters; rendered column holds approximately ${CONTENT_BUDGETS.footerChars}`, { specPath }));
+    }
+    if (visual.family === "illustration" && visual.data) {
+      const dataExplanationParts = [
+        cleanText(visual.explanation, band.deck),
+        visual.example ? `Example — ${cleanText(visual.example)}` : "",
+      ].filter(Boolean).join("  •  ");
+      const dataBoundaryParts = [
+        visual.tradeoff ? `Boundary — ${cleanText(visual.tradeoff)}` : "",
+        ...(Array.isArray(visual.evidence) ? visual.evidence : []).map((item) => `Evidence — ${cleanText(item)}`),
+        ...dataIllustrationCalloutParts(band),
+      ].filter(Boolean).join("  •  ");
+      const plannedBand = plannedDeck?.bands?.[index];
+      const bodyWidth = PAGE_WIDTH - 2 * BODY_INSET;
+      const bodyHeight = Math.max(1, Number(plannedBand?.height) || 1);
+      const explanationLines = estimateWrappedLines(dataExplanationParts, bodyWidth * 0.46, 26);
+      const explanationAvailableHeight = bodyHeight * (1 - DATA_EDITORIAL_START);
+      const explanationRequiredHeight = explanationLines * DATA_EDITORIAL_LINE_HEIGHT_PX + DATA_BOUND_TEXT_MARGIN_PX;
+      if (dataExplanationParts && explanationRequiredHeight > explanationAvailableHeight) {
+        failures.push(failure(
+          `bands[${index}].visual`,
+          `data illustration explanation needs ${explanationLines} wrapped lines (${explanationRequiredHeight}px) but only ${explanationAvailableHeight}px remains in the ${bodyHeight}px body`,
+          { specPath, recovery: DATA_EDITORIAL_RECOVERY },
+        ));
+      }
+      const inspectY = visual.inspect ? Math.min(0.95, Math.max(0.82, 1 - 36 / bodyHeight)) : 1;
+      const boundaryLines = estimateWrappedLines(dataBoundaryParts, bodyWidth * 0.44, 23);
+      const boundaryAvailableHeight = bodyHeight * Math.max(0, inspectY - DATA_BOUNDARY_START);
+      const boundaryRequiredHeight = boundaryLines * DATA_BOUNDARY_LINE_HEIGHT_PX + DATA_BOUND_TEXT_MARGIN_PX;
+      if (dataBoundaryParts && boundaryRequiredHeight > boundaryAvailableHeight) {
+        failures.push(failure(
+          `bands[${index}].visual`,
+          `data illustration boundary needs ${boundaryLines} wrapped lines (${boundaryRequiredHeight}px) but only ${boundaryAvailableHeight}px remains in the ${bodyHeight}px body`,
+          { specPath, recovery: DATA_EDITORIAL_RECOVERY },
+        ));
+      }
+      if (visual.inspect) {
+        const inspectText = `Inspect — ${cleanText(visual.inspect)}`;
+        const inspectLines = estimateWrappedLines(inspectText, bodyWidth * 0.44, 23);
+        const inspectAvailableHeight = bodyHeight * Math.max(0, 1 - inspectY);
+        const inspectRequiredHeight = inspectLines * DATA_BOUNDARY_LINE_HEIGHT_PX;
+        if (inspectRequiredHeight > inspectAvailableHeight) {
+          failures.push(failure(
+            `bands[${index}].visual.inspect`,
+            `data illustration inspect needs ${inspectLines} wrapped lines (${inspectRequiredHeight}px) but only ${inspectAvailableHeight}px remains in the ${bodyHeight}px body`,
+            { specPath, recovery: DATA_EDITORIAL_RECOVERY },
+          ));
+        }
+      }
     }
     if (visual.callouts !== undefined && !Array.isArray(visual.callouts)) {
       failures.push(failure(`bands[${index}].visual.callouts`, `visual.callouts must be an array`, { specPath }));

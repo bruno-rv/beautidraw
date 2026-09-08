@@ -165,7 +165,10 @@ counted against the generic diagram-connector budget.
 Distribution labels use adaptive percentage/scientific notation so a positive probability is
 never rendered as zero. Data is supported only on `canvas` bands using the runtime-supported
 `illustration` family; preflight rejects other placements so the outline cannot silently omit
-authored values.
+authored values. Data illustration explanation/example copy shares the measured editorial
+column below the vignette; preflight uses the planned canvas body dimensions, converter-derived
+font advances, explicit-newline wrapping, and a conservative unknown-glyph fallback, then rejects
+copy that cannot fit without truncation or font-size changes with a split/grow recovery.
 
 Semantic composition families have finite authored capacities. Preflight rejects excess arrays
 before browser work with a split-across-frames recovery message: `illustration` nodes/callouts

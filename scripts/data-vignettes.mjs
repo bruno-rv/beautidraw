@@ -492,31 +492,47 @@ function tokenSequence(data, area, colors) {
     textElement(area, "caption", 0.02, 0.03, data.caption, colors.text, "prose", 0.96),
     textElement(area, "piece-guide", 0.02, 0.18, "Toy token pieces → aligned toy IDs (␠ marks a boundary space)", colors.muted, "prose", 0.96),
   ];
-  const gap = Math.min(0.018, 0.12 / data.pieces.length);
+  const dense = data.pieces.length > 4;
+  const columns = dense ? Math.ceil(data.pieces.length / 2) : data.pieces.length;
+  const gap = Math.min(0.018, 0.12 / columns);
   const totalWidth = 0.94;
-  const pieceWidth = (totalWidth - gap * (data.pieces.length - 1)) / data.pieces.length;
+  const pieceWidth = (totalWidth - gap * (columns - 1)) / columns;
+  // Dense labels are converter-sized at the shared 23px body ramp. Keep the
+  // authored rows compact enough that that measured height, rather than the
+  // normalized placeholder, cannot run into the alignment note below.
+  const pieceHeight = dense ? 0.06 : 0.15;
+  const linkHeight = dense ? 0.02 : 0.06;
+  const idHeight = dense ? 0.055 : 0.12;
+  const rowTop = dense ? 0.27 : 0.30;
+  const rowStep = dense ? 0.24 : 0;
+  const linkGap = dense ? 0.012 : 0.005;
+  const idGap = dense ? 0.04 : 0.03;
+  const alignmentY = dense ? 0.80 : 0.72;
   data.pieces.forEach((piece, index) => {
-    const x = 0.03 + index * (pieceWidth + gap);
+    const row = Math.floor(index / columns);
+    const column = index % columns;
+    const x = 0.03 + column * (pieceWidth + gap);
+    const y = rowTop + row * rowStep;
     const fill = index % 2 ? colors.accentFill : colors.secondaryFill;
     const stroke = index % 2 ? colors.accentStroke : colors.secondaryStroke;
-    elements.push(box(area, `piece-${index + 1}`, x, 0.30, pieceWidth, 0.15, visibleToken(piece.text), {
+    elements.push(box(area, `piece-${index + 1}`, x, y, pieceWidth, pieceHeight, visibleToken(piece.text), {
       fill,
       stroke,
       textColor: colors.text,
       customData: { beautidrawDataValue: piece.text },
     }));
     elements.push({
-      ...line(area, `piece-link-${index + 1}`, x + pieceWidth / 2 - 0.002, 0.45, 0.004, 0.06, [[0.5, 0], [0.5, 1]], colors.border),
+      ...line(area, `piece-link-${index + 1}`, x + pieceWidth / 2 - 0.002, y + pieceHeight + linkGap, 0.004, linkHeight, [[0.5, 0], [0.5, 1]], colors.border),
       customData: { beautidrawDataLink: "token-piece" },
     });
-    elements.push(box(area, `id-${index + 1}`, x, 0.52, pieceWidth, 0.12, piece.id, {
+    elements.push(box(area, `id-${index + 1}`, x, y + pieceHeight + linkHeight + idGap, pieceWidth, idHeight, piece.id, {
       role: "mono",
       fill: colors.surface,
       stroke: colors.border,
       textColor: colors.text,
     }));
   });
-  elements.push(textElement(area, "alignment-note", 0.02, 0.72, "Each toy ID is an address for the piece directly above it.", colors.muted, "prose", 0.96));
+  elements.push(textElement(area, "alignment-note", 0.02, alignmentY, "Each toy ID is an address for the piece directly above it.", colors.muted, "prose", 0.96));
   return elements;
 }
 

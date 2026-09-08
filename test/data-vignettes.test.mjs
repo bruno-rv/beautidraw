@@ -392,8 +392,8 @@ test("token data keeps every native piece-to-ID link in final composition", { ti
     const bandIndex = spec.bands.findIndex((band) => band.visual?.data?.kind === "token-sequence");
     const band = spec.bands[bandIndex];
     band.visual.data.pieces = Array.from({ length: count }, (_, index) => ({
-      text: `${index === 0 ? " " : ""}piece-${index + 1}`,
-      id: `toy-${String(index + 1).padStart(2, "0")}`,
+      text: `${index === 0 ? " " : ""}piece-${"x".repeat(index === 0 ? 10 : 11)}`,
+      id: `toy-${String(index + 1).padStart(14, "0")}`,
     }));
     const specPath = join(tempRoot, `tokens-${count}.json`);
     const output = join(tempRoot, `out-${count}`);
@@ -406,10 +406,75 @@ test("token data keeps every native piece-to-ID link in final composition", { ti
     });
     assert.equal(result.status, 0, `${count} token pieces: ${result.stdout}\n${result.stderr}`);
     const deck = JSON.parse(await readFile(join(output, "deck.excalidraw"), "utf8"));
+    const frame = deck.elements.find((element) => element.id === `b${bandIndex}-frame`);
+    const deckLine = deck.elements.find((element) => element.id === `b${bandIndex}-deck`);
+    const body = {
+      x: frame.x + BODY_INSET,
+      y: deckLine.y + deckLine.height + DECK_BODY_GAP,
+      width: frame.width - 2 * BODY_INSET,
+      height: frame.y + frame.height - FRAME_PAD_BOTTOM - (deckLine.y + deckLine.height + DECK_BODY_GAP),
+    };
+    const viewport = { x: body.x + body.width * 0.30, y: body.y + body.height * 0.07, width: body.width * 0.68, height: body.height * 0.76 };
+    const members = deck.elements.filter((element) => element.frameId === frame.id);
+    const dataId = new RegExp(`^b${bandIndex}-data-(?:caption|piece-guide|piece-\\d+|piece-link-\\d+|id-\\d+|alignment-note)$`);
+    const containers = new Set(members.filter((element) => dataId.test(element.id)).map((element) => element.id));
+    const dataElements = members.filter((element) => dataId.test(element.id) || containers.has(element.containerId));
+    const outside = dataElements.filter((element) =>
+      element.x < viewport.x - 0.5 || element.y < viewport.y - 0.5
+      || element.x + element.width > viewport.x + viewport.width + 0.5
+      || element.y + element.height > viewport.y + viewport.height + 0.5,
+    );
+    assert.deepEqual(outside.map((element) => element.id), [], `${count} token pieces must stay in the allocated viewport`);
+    const cells = dataElements.filter((element) => element.type !== "line" && element.type !== "arrow" && !element.containerId);
+    for (let left = 0; left < cells.length; left += 1) {
+      for (let right = left + 1; right < cells.length; right += 1) {
+        const a = cells[left]; const b = cells[right];
+        const overlaps = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x) > 0
+          && Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y) > 0;
+        assert.equal(overlaps, false, `${a.id} overlaps ${b.id}`);
+      }
+    }
     const links = deck.elements.filter((element) => new RegExp(`^b${bandIndex}-data-piece-link-\\d+$`).test(element.id));
     assert.equal(links.length, count);
     assert.deepEqual(links.map((element) => Number(element.id.match(/(\d+)$/)[1])), Array.from({ length: count }, (_, index) => index + 1));
     assert.ok(links.every((element) => Array.isArray(element.points) && element.points.length === 2 && (element.width > 0 || element.height > 0)), `${count} token links must retain native geometry`);
+  }
+});
+
+test("dense token data composes a standard canvas body", { timeout: 120_000 }, async (t) => {
+  const root = resolve(import.meta.dirname, "..");
+  const tempRoot = await mkdtemp(join(tmpdir(), "beautidraw-token-body-heights-"));
+  t.after(() => rm(tempRoot, { recursive: true, force: true }));
+  await cp(resolve(root, "decks/llm-token-flow/assets"), join(tempRoot, "assets"), { recursive: true });
+  for (const height of [700]) {
+    const spec = JSON.parse(await readFile(resolve(root, "decks/llm-token-flow/deck-spec.json"), "utf8"));
+    const bandIndex = spec.bands.findIndex((band) => band.visual?.data?.kind === "token-sequence");
+    const band = spec.bands[bandIndex];
+    band.height = height;
+    band.visual.data.pieces = Array.from({ length: DATA_VIGNETTE_LIMITS.pieces }, (_, index) => ({
+      text: `${index === 0 ? " " : ""}piece-${"x".repeat(index === 0 ? 10 : 11)}`,
+      id: `toy-${String(index + 1).padStart(14, "0")}`,
+    }));
+    band.visual.explanation = "Token IDs map pieces. Context shifts nearby clues before score and each choice.";
+    band.visual.example = "The sky becomes two toy IDs before attention chooses.";
+    band.visual.tradeoff = "Vocabulary size sets sequence length.";
+    band.visual.inspect = "Run encode check.";
+    band.visual.evidence = ["Check IDs first."];
+    band.visual.nodes = [];
+    band.visual.callouts = [{ kind: "boundary", label: "IDs", note: "Not words." }];
+    const specPath = join(tempRoot, `spec-${height}.json`);
+    const output = join(tempRoot, `out-${height}`);
+    await writeFile(specPath, JSON.stringify(spec));
+    const result = spawnSync(process.execPath, [resolve(root, "scripts/build-deck.mjs"), specPath, output], {
+      cwd: root,
+      encoding: "utf8",
+      timeout: 120_000,
+    });
+    assert.equal(result.status, 0, `${height}px token body:\n${result.stdout}\n${result.stderr}`);
+    const deck = JSON.parse(await readFile(join(output, "deck.excalidraw"), "utf8"));
+    const members = deck.elements.filter((element) => element.frameId === `b${bandIndex}-frame`);
+    assert.equal(members.filter((element) => /^b0-data-id-\d+$/.test(element.id)).length, DATA_VIGNETTE_LIMITS.pieces);
+    assert.ok(members.some((element) => element.text?.includes("Token IDs map pieces")));
   }
 });
 
