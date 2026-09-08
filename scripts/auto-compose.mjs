@@ -399,6 +399,8 @@ function semanticCalloutShape(id, callout, x, y, width, _height, colors, fontSiz
   });
   if (callout.note) elements.push(text(`${id}-note`, x + iconSize + 0.012, y + 0.075, callout.note, RAMP.note, colors.text, "prose", {
     beautidrawMaxWidth: Math.max(0.08, width - 0.034),
+    beautidrawBelowTextId: `${id}-label`,
+    beautidrawBelowTextGap: 0.018,
   }));
   return elements;
 }

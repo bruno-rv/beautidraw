@@ -170,6 +170,65 @@ test("two-line node labels keep short notes below measured bounds", { timeout: 1
   assert.equal(visible.includes("Short note below the two-line label."), true, "full note must remain visible");
 });
 
+test("specialized callout labels keep notes below measured bounds", { timeout: 120_000 }, async (t) => {
+  const temp = await mkdtemp(join(tmpdir(), "beautidraw-measured-callout-placement-"));
+  t.after(() => rm(temp, { recursive: true, force: true }));
+  const labelText = "A measured boundary keeps this illustration label readable in two lines";
+  const noteText = "The note stays below the converted semantic label.";
+  const spec = {
+    title: "Measured callout placement",
+    subtitle: "Semantic labels keep their notes readable",
+    footer: "Placement fixture",
+    bands: [{
+      heading: "Illustration",
+      deck: "A specialized callout keeps its semantic note below its measured label.",
+      pattern: "canvas",
+      accent: "violet",
+      height: 700,
+      visual: {
+        family: "illustration",
+        thesis: "An illustration thesis keeps the central claim readable.",
+        focus: "Illustration focus",
+        nodes: [
+          { label: "One", note: "First" },
+          { label: "Two", note: "Second" },
+        ],
+        callouts: [{ kind: "boundary", label: labelText, note: noteText }],
+        image: {
+          file: "assets/vector-lookup-space.png",
+          side: "right",
+          use: "Illustrate the callout",
+          description: "A bounded visual scene leaves room for measured explanatory text.",
+        },
+        explanation: "A specialized illustration gives the boundary a visible home while measured labels preserve the authored relationship and leave the supporting note below the converted text.",
+        example: "A concrete callout shows where the boundary matters.",
+        tradeoff: "Long labels remain bounded without dropping authored words.",
+        inspect: "inspect illustration geometry",
+      },
+    }],
+  };
+  const specPath = join(temp, "spec.json");
+  const output = join(temp, "out");
+  await cp(resolve(root, "decks/llm-token-flow/assets"), join(temp, "assets"), { recursive: true });
+  await writeFile(specPath, JSON.stringify(spec));
+  const result = runBuild(specPath, output);
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+
+  const deck = JSON.parse(await readFile(join(output, "deck.excalidraw"), "utf8"));
+  const body = frameBody(deck, 0);
+  const members = deck.elements.filter((element) => element.frameId === body.frame.id && element.customData?.beautidrawComposition === true);
+  assertInsideBody(members, body, "illustration");
+  const labelContainer = members.find((element) => element.id === "b0-callout-1-label");
+  const labelTextElement = labelContainer?.type === "text" ? labelContainer : members.find((element) => element.containerId === labelContainer?.id);
+  const note = members.find((element) => element.id === "b0-callout-1-note");
+  assert.ok(labelContainer && labelTextElement && note, "specialized callout label and note must survive composition");
+  assert.ok(labelTextElement.height > 40 && labelTextElement.height < 90, "specialized label must measure as two lines");
+  assert.ok(note.y >= labelContainer.y + labelContainer.height - 0.5, "specialized note must start below the measured label");
+  const visible = members.map(elementText).join(" ").replace(/\s+/g, " ");
+  assert.equal(visible.includes(labelText), true, "specialized label must remain complete");
+  assert.equal(visible.includes(noteText), true, "specialized note must remain complete");
+});
+
 test("data illustration header content stays clear of left and right images", { timeout: 180_000 }, async (t) => {
   const temp = await mkdtemp(join(tmpdir(), "beautidraw-measured-data-header-"));
   t.after(() => rm(temp, { recursive: true, force: true }));

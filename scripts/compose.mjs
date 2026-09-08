@@ -690,7 +690,10 @@ const result = await withHarness(async ({ page }) =>
         if (!semanticKinds.has(kind)) failures.push(`${icon.id}: unsupported semantic icon kind "${kind}"`);
         if (!icon.frameId) failures.push(`${icon.id}: semantic icon must belong to a frame`);
         const labelId = icon.customData.semanticLabelId;
-        const label = (labelId ? elementById.get(labelId) : null) ?? restored.find(
+        const labeledElement = labelId ? elementById.get(labelId) : null;
+        const boundLabelId = (labeledElement?.boundElements ?? []).find((binding) => binding.type === "text")?.id;
+        const label = (labeledElement?.type === "text" ? labeledElement : null) ??
+          (boundLabelId ? elementById.get(boundLabelId) : null) ?? restored.find(
           (element) => element.type === "text" && (
             element.containerId === icon.id || element.customData?.semanticLabelFor === icon.id
           ),
