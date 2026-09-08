@@ -49,6 +49,23 @@ export const FRAME_LABEL_BAND = 20.5;
 // body's available width, before wrapWidth ever sees it.
 export const BODY_INSET = 24;
 
+const AUTOMATIC_TALL_EDITORIAL_FAMILIES = new Set(["tension", "matrix", "journey", "map", "evidence"]);
+
+// Shared automatic-composition footer geometry. Consumers outside the browser
+// renderer use this same contract for preflight capacity checks.
+export function automaticEditorialLayout(family) {
+  return {
+    y: AUTOMATIC_TALL_EDITORIAL_FAMILIES.has(family) ? 0.74 : 0.68,
+    maxWidth: 0.90,
+    fontSize: 28,
+  };
+}
+
+export function automaticInspectY(bodyHeight) {
+  const height = Math.max(1, Number(bodyHeight) || 1);
+  return Math.min(0.95, Math.max(0.82, 1 - 36 / height));
+}
+
 export function wrapWidth(k) {
   return (PAGE_WIDTH - (k - 1) * GUTTER_COL) / k;
 }

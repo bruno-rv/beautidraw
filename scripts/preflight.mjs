@@ -4,7 +4,7 @@ import { isAbsolute, relative, resolve, dirname } from "node:path";
 
 import { CliError } from "./cli.mjs";
 import { DATA_VIGNETTE_VIEWPORT, dataVignetteOutline, validateDataVignette } from "./data-vignettes.mjs";
-import { BODY_INSET, BOUND_TEXT_PADDING, PAGE_WIDTH, RAMP, planDeck } from "./layout.mjs";
+import { automaticEditorialLayout, automaticInspectY, BODY_INSET, BOUND_TEXT_PADDING, PAGE_WIDTH, RAMP, planDeck } from "./layout.mjs";
 import { hasAbsolutePath } from "./outline.mjs";
 
 export const CONTENT_BUDGETS = Object.freeze({
@@ -157,6 +157,7 @@ function estimateWrappedLines(value, width, fontSize) {
 const DATA_TOKEN_RECOVERY = "Shorten the token label, reduce token items, or split the data vignette across frames; native cells stay single-line without truncation or font shrinking.";
 const DATA_FIXED_CELL_RECOVERY = "Shorten the label or use manual composition/split the data vignette across frames; fixed native cells stay single-line without truncation or font shrinking.";
 const DATA_CAPTION_RECOVERY = "Shorten the data caption or increase the canvas height; the caption must clear the native data header lane.";
+const AUTOMATIC_FOOTER_RECOVERY = "Shorten the editorial footer/callouts, split the family across frames, or grow the canvas height.";
 const DATA_OUTLINE_RECOVERY = "Keep authored data values portable for the outline; use a deck-relative image path or encode the example value.";
 
 function collectDataOutlinePathFailure(data, index, { specPath }) {
@@ -275,6 +276,43 @@ function renderedFooterParts(band, index) {
     }));
   }
   return parts.filter(Boolean);
+}
+
+function collectAutomaticFooterCapacityFailures(band, index, { bodyWidth, bodyHeight, specPath }) {
+  const visual = isObject(band.visual) ? band.visual : {};
+  const family = cleanText(visual.family, AUTO_COMPOSE_FAMILIES[index % AUTO_COMPOSE_FAMILIES.length]);
+  if (family === "illustration") return [];
+  const parts = renderedFooterParts(band, index);
+  if (!parts.length) return [];
+  const layout = automaticEditorialLayout(family);
+  const width = bodyWidth * layout.maxWidth;
+  const inspectY = visual.inspect ? automaticInspectY(bodyHeight) : 1;
+  const text = parts.join("  •  ");
+  const lines = estimateWrappedLines(text, width, layout.fontSize);
+  const lineHeight = layout.fontSize * 1.35;
+  const availableHeight = bodyHeight * Math.max(0, inspectY - layout.y);
+  const requiredHeight = lines * lineHeight + DATA_BOUND_TEXT_MARGIN_PX;
+  const failures = [];
+  if (requiredHeight > availableHeight) {
+    failures.push(failure(
+      `bands[${index}].visual`,
+      `automatic ${family} editorial footer needs ${lines} wrapped lines (${requiredHeight.toFixed(1)}px) but only ${availableHeight.toFixed(1)}px remains in the ${bodyHeight}px body`,
+      { specPath, recovery: AUTOMATIC_FOOTER_RECOVERY },
+    ));
+  }
+  if (visual.inspect) {
+    const inspectLines = estimateWrappedLines(`Inspect: ${cleanText(visual.inspect)}`, width, RAMP.note);
+    const inspectRequiredHeight = inspectLines * DATA_BOUNDARY_LINE_HEIGHT_PX;
+    const inspectAvailableHeight = bodyHeight * Math.max(0, 1 - inspectY);
+    if (inspectRequiredHeight > inspectAvailableHeight) {
+      failures.push(failure(
+        `bands[${index}].visual.inspect`,
+        `automatic ${family} inspect footer needs ${inspectLines} wrapped lines (${inspectRequiredHeight.toFixed(1)}px) but only ${inspectAvailableHeight.toFixed(1)}px remains in the ${bodyHeight}px body`,
+        { specPath, recovery: AUTOMATIC_FOOTER_RECOVERY },
+      ));
+    }
+  }
+  return failures;
 }
 
 function crc32(bytes) {
@@ -521,6 +559,14 @@ export function collectDeckPreflightFailures(spec, { specPath, specDir, mode = "
     const footerParts = chars(renderedFooterParts(band, index).join("  •  "));
     if (footerParts > CONTENT_BUDGETS.footerChars) {
       failures.push(failure(`bands[${index}].visual`, `visual footer content is ${footerParts} characters; rendered column holds approximately ${CONTENT_BUDGETS.footerChars}`, { specPath }));
+    }
+    if (mode === "automatic") {
+      const plannedBand = plannedDeck?.bands?.[index];
+      failures.push(...collectAutomaticFooterCapacityFailures(band, index, {
+        bodyWidth: PAGE_WIDTH - 2 * BODY_INSET,
+        bodyHeight: Math.max(1, Number(plannedBand?.height) || 1),
+        specPath,
+      }));
     }
     if (mode === "automatic" && visual.family === "illustration" && visual.data && dataValidationPassed) {
       const dataExplanationParts = [

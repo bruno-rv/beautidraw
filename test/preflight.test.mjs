@@ -285,6 +285,39 @@ test("footer budget counts every rendered callout and evidence part", async () =
   assert.match(dataCalloutFailures.map(({ reason }) => reason).join("\n"), /footer content is/);
 });
 
+test("automatic footer geometry rejects compressed generic families before browser work", () => {
+  const wideNote = `${"n".repeat(89)}\n${"n".repeat(90)}`;
+  const makeSpec = (height, inspect) => ({
+    title: "Generic footer geometry",
+    subtitle: "A bounded editorial fixture",
+    footer: "Toy values only",
+    bands: [{
+      heading: "Orbit",
+      deck: "A bounded footer fixture",
+      pattern: "canvas",
+      accent: "blue",
+      height,
+      visual: {
+        family: "orbit",
+        nodes: Array.from({ length: 6 }, (_, index) => ({ label: `Node ${index + 1}`, note: "A bounded note" })),
+        callouts: [
+          { kind: "example", label: "W".repeat(72), note: wideNote },
+          { kind: "boundary", label: "W".repeat(72), note: wideNote },
+        ],
+        ...(inspect ? { inspect: "inspect orbit geometry" } : {}),
+      },
+    }],
+  });
+  for (const inspect of [false, true]) {
+    const automatic = collectDeckPreflightFailures(makeSpec(240, inspect));
+    assert.ok(automatic.some(({ reason }) => /automatic orbit editorial footer needs|automatic orbit inspect footer needs/.test(reason)), `compressed orbit footer must fail (inspect=${inspect})`);
+    const core = collectDeckPreflightFailures(makeSpec(240, inspect), { mode: "core" });
+    assert.equal(core.some(({ reason }) => /automatic orbit (editorial|inspect) footer needs/.test(reason)), false, "core/manual mode must remain exempt");
+  }
+  const adequate = collectDeckPreflightFailures(makeSpec(1000, false));
+  assert.equal(adequate.some(({ reason }) => /automatic orbit (editorial|inspect) footer needs/.test(reason)), false, "adequate generic footer body remains accepted");
+});
+
 test("short data canvases reject only unrenderable editorial height", () => {
   const spec = {
     ...valid(),
