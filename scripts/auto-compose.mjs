@@ -398,38 +398,6 @@ function semanticCalloutShape(id, callout, x, y, width, _height, colors, fontSiz
   return elements;
 }
 
-function genericCalloutPlacement(meta) {
-  if (meta.family === "threshold") return { x: 0.68, y: 0.49 };
-  if (["field", "matrix"].includes(meta.family)) {
-    // A thesis occupies the top strip at y=.04. Keep generic callouts in the
-    // lower editorial lane when that strip is present so measured thesis text
-    // cannot collide with their labels or icons.
-    return { x: 0.36, y: meta.thesis ? 0.68 : 0.04 };
-  }
-  if (["orbit", "constellation"].includes(meta.family)) return { x: 0.68, y: 0.04 };
-  return { x: 0.36, y: 0.10 };
-}
-
-function genericCalloutElements(meta) {
-  if (!meta.callouts.length || ["illustration", "spotlight"].includes(meta.family)) return [];
-  const width = Math.min(0.28, 0.90 / meta.callouts.length);
-  const placement = genericCalloutPlacement(meta);
-  const start = meta.callouts.length === 1
-    ? placement.x
-    : 0.50 - (width * meta.callouts.length) / 2;
-  const y = placement.y;
-  return meta.callouts.flatMap((callout, index) => semanticCalloutShape(
-    `callout-${index + 1}`,
-    { ...callout, note: "" },
-    start + index * width,
-    y,
-    width,
-    0.04,
-    colorFor(meta, index + 1, meta.dark),
-    RAMP.note,
-  ));
-}
-
 function dataElements(data, viewport) {
   const elements = renderDataVignette(data, { idPrefix: "data", ...viewport })
     .filter((element) => !(data.kind === "distribution" && /data-candidate-\d+-baseline$/.test(element.id)));
@@ -454,7 +422,6 @@ function dataElements(data, viewport) {
 
 function finish(meta, elements, extra = {}) {
   const textColor = meta.dark ? darkText : "#475569";
-  elements.push(...genericCalloutElements(meta));
   elements.push(...annotationElements(meta, { y: 0.57 }));
   const editorialParts = [
     meta.explanation,
@@ -465,10 +432,7 @@ function finish(meta, elements, extra = {}) {
       ? meta.callouts.map((callout) => `Callout — ${callout.label}${callout.note ? `: ${callout.note}` : ""}`)
       : []),
   ].filter(Boolean);
-  const thesisCalloutRow = meta.thesis && meta.callouts.length && ["field", "matrix"].includes(meta.family);
-  const editorialY = thesisCalloutRow
-    ? 0.78
-    : new Set(["tension", "matrix", "journey", "map", "evidence"]).has(meta.family) ? 0.74 : 0.68;
+  const editorialY = new Set(["tension", "matrix", "journey", "map", "evidence"]).has(meta.family) ? 0.74 : 0.68;
   if (editorialParts.length) elements.push(text("explanation", 0.05, editorialY, editorialParts.join("  •  "), 28, textColor, "prose", { beautidrawMaxWidth: 0.90 }));
   if (meta.inspect) elements.push(text("inspect", 0.05, footerInspectY(meta), `Inspect: ${meta.inspect}`, 23, textColor, "mono", { beautidrawMaxWidth: 0.90 }));
   return {
@@ -662,12 +626,8 @@ async function conceptIllustration(meta) {
   }
   if (!dataMode) elements.push(...annotationElements(meta, { x: textX, y: 0.52, maxWidth: textWidth }));
   else elements.push(...annotationElements(meta, { x: side === "left" ? 0.03 : 0.73, y: 0.22, maxWidth: 0.24 }));
-  callouts.slice(0, 2).forEach((callout, index) => {
-    const calloutX = dataMode && index === 1 ? textX + textWidth * 0.50 : textX;
-    const calloutWidth = dataMode ? textWidth * 0.46 : textWidth;
-    const calloutY = dataMode ? 0.015 : 0.28 + index * 0.18;
-    const renderedCallout = dataMode ? { ...callout, note: "" } : callout;
-    elements.push(...semanticCalloutShape(`callout-${index + 1}`, renderedCallout, calloutX, calloutY, calloutWidth, 0.04, colorFor(meta, index + 1, meta.dark), RAMP.note));
+  if (!dataMode) callouts.slice(0, 2).forEach((callout, index) => {
+    elements.push(...semanticCalloutShape(`callout-${index + 1}`, callout, textX, 0.28 + index * 0.18, textWidth, 0.04, colorFor(meta, index + 1, meta.dark), RAMP.note));
   });
   if (dataViewport) elements.push(...dataElements(meta.data, dataViewport));
   const depthParts = [meta.explanation, meta.example ? `Example — ${meta.example}` : "", meta.tradeoff ? `Boundary — ${meta.tradeoff}` : "", ...meta.evidence.map((item) => `Evidence — ${item}`)].filter(Boolean);
@@ -677,7 +637,7 @@ async function conceptIllustration(meta) {
     const boundaryParts = [
       meta.tradeoff ? `Boundary — ${meta.tradeoff}` : "",
       ...meta.evidence.map((item) => `Evidence — ${item}`),
-      ...callouts.filter((callout) => callout.note).map((callout) => `Callout — ${callout.label}: ${callout.note}`),
+      ...callouts.map((callout) => `Callout — ${callout.label}${callout.note ? `: ${callout.note}` : ""}`),
     ].filter(Boolean).join("  •  ");
     if (explanationParts) elements.push(text("explanation", 0.03, 0.84, explanationParts, 26, mutedText, "prose", { beautidrawMaxWidth: 0.46 }));
     if (boundaryParts) elements.push(text("boundary", 0.52, 0.76, boundaryParts, 23, mutedText, "prose", { beautidrawMaxWidth: 0.44 }));
