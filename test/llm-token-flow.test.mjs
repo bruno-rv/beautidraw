@@ -170,10 +170,19 @@ test("composed token-flow exemplar survives the golden build inside the real edi
     assert.ok(outlineHeadingOffsets[index] > outlineHeadingOffsets[index - 1], "outline frame headings must remain in frame order");
   }
 
-  // Threshold-family composition regression: frame 2 must emit its axis and
-  // zone elements instead of crashing on an undefined text color.
-  for (const id of ["b1-threshold-axis", "b1-left-zone", "b1-threshold", "b1-right-zone"]) {
-    assert.ok(elements.some((element) => element.id === id), `threshold family must compose ${id}`);
+  // Threshold-family composition regression: frame 2 keeps an explicit
+  // boundary, three readable open labels, and meaningful marks rather than
+  // flattening each zone into an auto-sized prose container.
+  assert.equal(elements.find((element) => element.id === "b1-threshold-axis")?.type, "line");
+  for (const [id, type] of [
+    ["b1-left-zone-mark", "rectangle"],
+    ["b1-threshold-mark", "diamond"],
+    ["b1-right-zone-mark", "rectangle"],
+  ]) {
+    assert.equal(elements.find((element) => element.id === id)?.type, type, `threshold family must compose ${id} as a mark`);
+  }
+  for (const id of ["b1-left-zone-label", "b1-threshold-label", "b1-right-zone-label"]) {
+    assert.ok(elements.some((element) => element.id === id && element.type === "text" && element.text.trim()), `threshold family must keep readable ${id}`);
   }
 
   // Semantic callouts survive with their kinds, and every bound label stays

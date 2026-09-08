@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -248,4 +248,44 @@ test("preflight rejects an escaping semantic image symlink", async () => {
   });
   assert.equal(result.ok, false);
   assert.match(result.failures.map((failure) => failure.reason).join("\n"), /symlink|outside|realpath|contain|escape|readable/i);
+});
+
+test("compose normalizes reversed and routed linear points through the real converter", async () => {
+  const root = await mkdtemp(join(tmpdir(), "beautidraw-compose-linear-points-"));
+  const deckDir = join(root, "deck");
+  const compositionDir = join(root, "composition");
+  const outputDir = join(root, "out");
+  await mkdir(deckDir);
+  await mkdir(compositionDir);
+  await writeFile(join(deckDir, "deck.excalidraw"), JSON.stringify({
+    elements: [
+      { id: "b0-deck", type: "text", x: 80, y: 100, width: 100, height: 20, text: "Canvas", strokeColor: "#1e293b", fontSize: 23, fontFamily: 6, role: "prose" },
+      { id: "b0-frame", type: "frame", name: "01 Canvas", x: 0, y: 0, width: 2280, height: 900, children: [] },
+    ],
+    files: {},
+  }));
+  await writeFile(join(deckDir, "diagnostics.json"), JSON.stringify({ diagnostics: { bands: [{ index: 0, pattern: "canvas" }] } }));
+  await writeFile(join(compositionDir, "composition.json"), JSON.stringify({ bands: [{
+    band: 0,
+    lane: "composed",
+    surfaceColor: "#ffffff",
+    elements: [
+      { id: "reversed-arrow", type: "arrow", x: 0.72, y: 0.18, width: 0.20, height: 0.12, points: [[1, 0], [0, 1]], strokeColor: "#64748b" },
+      { id: "routed-arrow", type: "arrow", x: 0.15, y: 0.42, width: 0.46, height: 0.20, points: [[0.8, 0], [0.8, 1], [0, 1]], strokeColor: "#64748b" },
+      { id: "reversed-line", type: "line", x: 0.72, y: 0.68, width: 0.20, height: 0.08, points: [[1, 0.5], [0, 0.5]], strokeColor: "#64748b" },
+    ],
+  }] }));
+  const result = spawnSync(process.execPath, [resolve(import.meta.dirname, "../scripts/compose.mjs"), join(deckDir, "deck.excalidraw"), join(compositionDir, "composition.json"), outputDir], {
+    cwd: resolve(import.meta.dirname, ".."),
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const deck = JSON.parse(await readFile(join(outputDir, "deck.excalidraw"), "utf8"));
+  const linear = deck.elements.filter((element) => ["arrow", "line"].includes(element.type) && element.customData?.beautidrawComposition === true);
+  assert.equal(linear.length, 3);
+  for (const element of linear) {
+    assert.deepEqual(element.points[0], [0, 0], `${element.id} must start at the converter origin`);
+  }
+  const routed = linear.find((element) => element.id === "b0-routed-arrow");
+  assert.ok(routed.points.some(([x, y]) => x < 0 || y < 0), "routed geometry must preserve signed offsets after origin normalization");
 });

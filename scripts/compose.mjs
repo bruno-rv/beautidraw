@@ -275,7 +275,15 @@ for (const entry of spec.bands) {
       ) {
         throw new Error(`band ${entry.band} ${element.id}: points must be normalized [x,y] tuples`);
       }
-      skeleton.points = element.points.map(([px, py]) => [px * skeleton.width, py * skeleton.height]);
+      const scaledPoints = element.points.map(([px, py]) => [px * skeleton.width, py * skeleton.height]);
+      // Excalidraw 0.18.1 binds linear elements relative to their first point
+      // and assumes that point is [0, 0]. Preserve the authored geometry by
+      // moving the skeleton origin to that first point, then retaining signed
+      // offsets for every remaining point (including routed/reversed paths).
+      const [originX, originY] = scaledPoints[0];
+      skeleton.x += originX;
+      skeleton.y += originY;
+      skeleton.points = scaledPoints.map(([px, py]) => [px - originX, py - originY]);
     } else if (element.type === "line" || element.type === "arrow") {
       throw new Error(`band ${entry.band} ${element.id}: points are required for ${element.type}`);
     }
@@ -342,11 +350,12 @@ const result = await withHarness(async ({ page }) =>
             fontSize: skeleton.fontSize,
             fontFamily,
             role,
+            textAlign: skeleton.textAlign ?? "left",
           }], { regenerateIds: false });
-          const x = skeleton.x;
+          const x = skeleton.textAlign === "right" ? skeleton.x - measured.width : skeleton.x;
           const y = skeleton.y;
           const availableWidth = Math.min(
-            item.body.x + item.body.width - x,
+            item.body.x + item.body.width - (skeleton.textAlign === "right" ? skeleton.x : x),
             Number.isFinite(skeleton.customData?.beautidrawMaxWidth)
               ? skeleton.customData.beautidrawMaxWidth * item.body.width
               : Number.POSITIVE_INFINITY,
@@ -354,10 +363,12 @@ const result = await withHarness(async ({ page }) =>
           if (measured.width <= availableWidth + 0.5) {
             return {
               ...skeleton,
+              x,
               width: measured.width,
               height: measured.height,
               role,
               fontFamily,
+              textAlign: skeleton.textAlign === "right" ? "left" : skeleton.textAlign,
               customData: {
                 ...(skeleton.customData ?? {}),
                 beautidrawMeasuredBounds: { x, y, width: measured.width, height: measured.height },
@@ -368,6 +379,7 @@ const result = await withHarness(async ({ page }) =>
             throw new Error(`${skeleton.id}: converter-derived text has no available body width; shorten or reposition the authored text`);
           }
           const width = availableWidth;
+          const containerX = skeleton.textAlign === "right" ? skeleton.x - width : skeleton.x;
           const [wrappedContainer] = api.convertToExcalidrawElements([{
             id: `${skeleton.id}-container-measurement`,
             type: "rectangle",
@@ -383,6 +395,7 @@ const result = await withHarness(async ({ page }) =>
               fontSize: skeleton.fontSize,
               fontFamily,
               role,
+              textAlign: skeleton.textAlign ?? "left",
               strokeColor: skeleton.strokeColor,
               roughness: 0,
             },
@@ -394,7 +407,7 @@ const result = await withHarness(async ({ page }) =>
           return {
             id: skeleton.id,
             type: "rectangle",
-            x,
+            x: containerX,
             y,
             width,
             height,
@@ -406,13 +419,14 @@ const result = await withHarness(async ({ page }) =>
             customData: {
               ...(skeleton.customData ?? {}),
               beautidrawTextContainer: true,
-              beautidrawMeasuredBounds: { x, y, width, height },
+              beautidrawMeasuredBounds: { x: containerX, y, width, height },
             },
             label: {
               text: skeleton.text,
               fontSize: skeleton.fontSize,
               fontFamily,
               role,
+              textAlign: skeleton.textAlign ?? "left",
               strokeColor: skeleton.strokeColor,
               roughness: 0,
             },
@@ -453,7 +467,7 @@ const result = await withHarness(async ({ page }) =>
           x: 0,
           y: 0,
           width,
-          label: { ...skeleton.label, role, fontFamily },
+          label: { ...skeleton.label, role, fontFamily, textAlign: skeleton.label.textAlign ?? "left" },
         }], { regenerateIds: false });
         const height = wrapped.height;
         if (y + height > item.body.y + item.body.height + 0.5) {
@@ -658,6 +672,21 @@ const result = await withHarness(async ({ page }) =>
       const overlaps = (a, b) =>
         Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x) > 0 &&
         Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y) > 0;
+      const geometryBounds = (element) => {
+        if (!((element.type === "line" || element.type === "arrow") && Array.isArray(element.points) && element.points.length)) {
+          return element;
+        }
+        const xs = element.points.map(([x]) => x);
+        const ys = element.points.map(([, y]) => y);
+        const minX = Math.min(...xs);
+        const minY = Math.min(...ys);
+        return {
+          x: element.x + minX,
+          y: element.y + minY,
+          width: Math.max(...xs) - minX,
+          height: Math.max(...ys) - minY,
+        };
+      };
 
       for (const [frameId, item] of preparedByFrame) {
         const frame = frameById.get(frameId);
@@ -666,11 +695,12 @@ const result = await withHarness(async ({ page }) =>
             element.frameId === frameId && element.customData?.beautidrawComposition === true,
         );
         for (const element of members) {
+          const bounds = geometryBounds(element);
           const outside =
-            element.x < item.body.x - 0.5 ||
-            element.y < item.body.y - 0.5 ||
-            element.x + element.width > item.body.x + item.body.width + 0.5 ||
-            element.y + element.height > item.body.y + item.body.height + 0.5;
+            bounds.x < item.body.x - 0.5 ||
+            bounds.y < item.body.y - 0.5 ||
+            bounds.x + bounds.width > item.body.x + item.body.width + 0.5 ||
+            bounds.y + bounds.height > item.body.y + item.body.height + 0.5;
           if (outside) failures.push(`${element.id}: outside body bounds`);
           if (element.containerId && !elementById.has(element.containerId)) {
             failures.push(`${element.id}: bound-text container ${element.containerId} is missing`);

@@ -130,6 +130,45 @@ reserved for short annotations; it is not a paragraph face.
 - **`canvas`** — `height: number` from 240 to 1000, with no nodes. Allocates a blank body for
   deterministic post-generation assembly by `scripts/compose.mjs`.
 
+### Optional data vignettes
+
+Canvas visuals may include one small `visual.data` declaration. The bounded native contract is
+implemented in `scripts/data-vignettes.mjs`:
+
+```jsonc
+{
+  "kind": "token-sequence",
+  "caption": "Synthetic illustrative example — toy IDs are not real tokenizer output.",
+  "pieces": [{ "text": "The", "id": "toy-01" }]
+}
+```
+
+The other supported kinds are `lookup` (`key`, `rows: [{ id, label, vector }]`, `selected`) and
+`distribution` (`candidates: [{ label, probability }]`, `selected`). IDs use the explicit
+`toy-` prefix; vectors are finite, bounded numbers; probabilities are finite, positive, in
+`(0, 1]`, and sum to one. Captions must identify a synthetic illustrative example and state
+that the values are toy or not real output. `validateDataVignette(data)` returns an array of
+`{ field, reason }` failures. `renderDataVignette(data, { idPrefix, x, y, width, height, dark })`
+returns normalized native Excalidraw composition skeletons with role/font metadata, while
+`dataVignetteOutline(data)` emits every example value for the portable reading surface.
+The renderer requires a normalized viewport of at least `0.68` wide by `0.76` high; the
+worker must allocate that area before calling it. Declared maxima are intentionally tight
+(`captionChars=120`, `pieces=8`, `lookupRows=5`, `vectorDimensions=4`, `candidates=6`) so
+measured labels have room at the shared 23px body ramp. Token piece whitespace is preserved
+in the data and outline; the strip uses `␠` as a visible boundary marker and stores the exact
+authored value in `customData.beautidrawDataValue`.
+Distribution labels use adaptive percentage/scientific notation so a positive probability is
+never rendered as zero. Data is supported only on `canvas` bands using the runtime-supported
+`illustration` family; preflight rejects other placements so the outline cannot silently omit
+authored values.
+
+Semantic composition families have finite authored capacities. Preflight rejects excess arrays
+before browser work with a split-across-frames recovery message: `illustration` nodes/callouts
+2/2, `orbit` 6 nodes, `field` 6, `spotlight` 4/4, `constellation` 6, `evidence` 4,
+`matrix` 4, `threshold` 3, `map` 6, `pipeline` 6, `journey` 6, and `tension` 4. For
+illustration and spotlight, authored nodes are fallback content only when callouts are absent;
+their callout capacity is always enforced.
+
 Empty or whitespace-only labels are a **hard error** — the converter returns no text element
 for an empty string (spike F7), so a container would silently render blank.
 

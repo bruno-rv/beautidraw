@@ -6,6 +6,8 @@
 
 import { isAbsolute, normalize, sep } from "node:path";
 
+import { dataVignetteOutline } from "./data-vignettes.mjs";
+
 export const SEMANTIC_KINDS = new Set(["example", "boundary", "inspect", "warning"]);
 
 const URL_RE = /https?:\/\/[^\s)]+/gi;
@@ -257,6 +259,9 @@ export function buildOutline(spec, { frameNames = [], compositionManifest = {} }
   spec.bands.forEach((band, index) => {
     const name = frameNameFor(spec, frameNames, index);
     lines.push("", `## ${formatHeading(name, `frame ${index + 1}`)}`, "", formatInline(band.deck ?? ""));
+    if (band.visual?.data !== undefined && (band.pattern !== "canvas" || band.visual.family !== "illustration")) {
+      throw new Error(`frame ${index + 1}: visual.data requires a canvas band with visual.family "illustration"`);
+    }
     if (band.pattern !== "canvas") {
       if (band.relation) lines.push("", `**Relation:** ${formatInline(band.relation)}`);
       if (band.nodes?.length) lines.push("", renderNodes(band.nodes));
@@ -269,6 +274,7 @@ export function buildOutline(spec, { frameNames = [], compositionManifest = {} }
     if (visual.thesis) lines.push("", `**Thesis:** ${formatInline(visual.thesis)}`);
     if (visual.focus) lines.push("", `**Focus:** ${formatInline(visual.focus)}`);
     if (visual.caption) lines.push("", `**Caption:** ${formatInline(visual.caption)}`);
+    if (visual.data !== undefined) lines.push("", dataVignetteOutline(visual.data));
     if (visual.nodes?.length) lines.push("", "**Nodes:**", renderNodes(visual.nodes));
     if (visual.axisX) lines.push("", `**Axis X:** ${formatInline(visual.axisX)}`);
     if (visual.axisY) lines.push("", `**Axis Y:** ${formatInline(visual.axisY)}`);

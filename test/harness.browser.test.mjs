@@ -8,6 +8,38 @@ import { withHarness } from "../scripts/harness-runner.mjs";
 const root = resolve(import.meta.dirname, "..");
 const deck = JSON.parse(await readFile(resolve(root, "test/fixtures/editor-fidelity-deck.json"), "utf8"));
 
+const navigationScene = (() => {
+  const sourceFrame = deck.elements.find((element) => element.id === "fidelity-frame");
+  const sourceText = deck.elements.find((element) => element.id === "fidelity-prose");
+  const elements = [];
+  for (let index = 0; index < 19; index += 1) {
+    const frameId = `navigation-frame-${index}`;
+    const textId = `navigation-text-${index}`;
+    const y = index * sourceFrame.height;
+    const textY = sourceText.y + y;
+    elements.push({
+      ...sourceFrame,
+      id: frameId,
+      y,
+      name: index === 1
+        ? "02 Tokenizer boundaries"
+        : `${String(index + 1).padStart(2, "0")} A long frame navigation label for pointer routing`,
+      children: [textId],
+    });
+    elements.push({
+      ...sourceText,
+      id: textId,
+      y: textY,
+      frameId,
+      customData: {
+        ...sourceText.customData,
+        beautidrawMeasuredBounds: { ...sourceText.customData.beautidrawMeasuredBounds, y: textY },
+      },
+    });
+  }
+  return { elements, files: {} };
+})();
+
 for (const viewport of [
   { width: 1600, height: 900 },
   { width: 1280, height: 800 },
@@ -46,6 +78,107 @@ for (const viewport of [
     }, { viewport });
   });
 }
+
+test("frame navigation stays above native actions and pointer targets remain reachable", async () => {
+  await withHarness(async ({ page }) => {
+    const loaded = await page.evaluate((scene) => window.__bdLoadScene(scene), navigationScene);
+    assert.equal(loaded.state, "ready");
+
+    const chrome = await page.evaluate(() => {
+      const nav = document.getElementById("bd-frame-navigation");
+      const bottom = document.querySelector("#root .App-menu_bottom");
+      const navRect = nav.getBoundingClientRect();
+      const bottomRect = bottom.getBoundingClientRect();
+      return {
+        nav: { x: navRect.x, y: navRect.y, width: navRect.width, height: navRect.height, scrollWidth: nav.scrollWidth, clientWidth: nav.clientWidth, scrollHeight: nav.scrollHeight, clientHeight: nav.clientHeight },
+        bottom: { x: bottomRect.x, y: bottomRect.y, width: bottomRect.width, height: bottomRect.height },
+        buttonCount: nav.querySelectorAll("button").length,
+      };
+    });
+    assert.equal(chrome.buttonCount, 19);
+    assert.ok(chrome.nav.y + chrome.nav.height <= chrome.bottom.y - 4, "frame navigation must not overlap native bottom actions");
+    assert.ok(chrome.nav.scrollWidth > chrome.nav.clientWidth, "long frame names should use a bounded horizontal strip");
+    assert.ok(chrome.nav.scrollHeight <= chrome.nav.clientHeight, "frame navigation must not wrap into an unbounded stack");
+
+    const frameViewport = async (frameId) => page.evaluate((id) => {
+      const frame = window.__bdEditor.getSceneElements().find((element) => element.id === id);
+      const appState = window.__bdEditor.getAppState();
+      const topLeft = window.__bdApi.sceneCoordsToViewportCoords({ sceneX: frame.x, sceneY: frame.y }, appState);
+      const bottomRight = window.__bdApi.sceneCoordsToViewportCoords({ sceneX: frame.x + frame.width, sceneY: frame.y + frame.height }, appState);
+      const nav = document.getElementById("bd-frame-navigation").getBoundingClientRect();
+      const bottom = document.querySelector("#root .App-menu_bottom").getBoundingClientRect();
+      const state = document.getElementById("bd-state").getBoundingClientRect();
+      return {
+        bounds: {
+          x: Math.min(topLeft.x, bottomRight.x),
+          y: Math.min(topLeft.y, bottomRight.y),
+          width: Math.abs(bottomRight.x - topLeft.x),
+          height: Math.abs(bottomRight.y - topLeft.y),
+        },
+        usable: {
+          left: 8,
+          right: innerWidth - 8,
+          top: state.y + state.height + 8,
+          bottom: Math.min(nav.y, bottom.y) - 8,
+        },
+        zoom: appState.zoom.value,
+        scrollX: appState.scrollX,
+        scrollY: appState.scrollY,
+      };
+    }, frameId);
+    const assertFrameFits = async (frameId) => {
+      const view = await frameViewport(frameId);
+      assert.ok(view.bounds.x >= view.usable.left - 1, `${frameId} is clipped on the left after navigation`);
+      assert.ok(view.bounds.y >= view.usable.top - 1, `${frameId} is clipped on the top after navigation`);
+      assert.ok(view.bounds.x + view.bounds.width <= view.usable.right + 1, `${frameId} is clipped on the right after navigation`);
+      assert.ok(view.bounds.y + view.bounds.height <= view.usable.bottom + 1, `${frameId} is clipped on the bottom after navigation`);
+    };
+    const activateFrame = async (button, keyboard = false) => {
+      const before = await page.evaluate(() => {
+        const appState = window.__bdEditor.getAppState();
+        return { scrollX: appState.scrollX, scrollY: appState.scrollY };
+      });
+      if (keyboard) {
+        await button.focus();
+        await page.keyboard.press("Enter");
+      } else {
+        await button.scrollIntoViewIfNeeded();
+        const box = await button.boundingBox();
+        assert.ok(box);
+        await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+      }
+      await page.waitForFunction(({ before: previous }) => {
+        const appState = window.__bdEditor.getAppState();
+        return appState.scrollX !== previous.scrollX || appState.scrollY !== previous.scrollY;
+      }, { before }, { timeout: 5_000 });
+    };
+
+    const frame3 = page.getByRole("button", { name: /^03 / });
+    await activateFrame(frame3);
+    await assertFrameFits("navigation-frame-2");
+
+    const zoomBefore = await page.evaluate(() => window.__bdEditor.getAppState().zoom.value);
+    const zoomButton = page.getByRole("button", { name: "Zoom in" });
+    const zoomBox = await zoomButton.boundingBox();
+    assert.ok(zoomBox);
+    const hit = await page.evaluate(({ x, y }) => {
+      const element = document.elementFromPoint(x, y)?.closest("button");
+      return { id: element?.getAttribute("aria-label"), text: element?.textContent };
+    }, { x: zoomBox.x + zoomBox.width / 2, y: zoomBox.y + zoomBox.height / 2 });
+    assert.equal(hit.id, "Zoom in");
+    await page.mouse.click(zoomBox.x + zoomBox.width / 2, zoomBox.y + zoomBox.height / 2);
+    await page.waitForFunction((before) => window.__bdEditor.getAppState().zoom.value !== before, zoomBefore);
+    assert.ok((await page.evaluate(() => window.__bdEditor.getAppState().zoom.value)) > zoomBefore);
+
+    const frame5 = page.getByRole("button", { name: /^05 / });
+    await activateFrame(frame5);
+    await assertFrameFits("navigation-frame-4");
+
+    const frame6 = page.getByRole("button", { name: /^06 / });
+    await activateFrame(frame6, true);
+    await assertFrameFits("navigation-frame-5");
+  }, { viewport: { width: 1280, height: 800 } });
+});
 
 test("invalid image exposes a structured recovery state", async () => {
   await withHarness(async ({ page }) => {

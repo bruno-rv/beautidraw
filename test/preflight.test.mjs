@@ -45,6 +45,23 @@ test("core preflight permits a manual canvas without visual while automatic pref
   assert.ok(automatic.failures.some(({ field, reason }) => field === "bands[0].visual" && /requires a visual declaration/.test(reason)));
 });
 
+test("core preflight permits unused manual canvas nodes beyond automatic family capacity", async () => {
+  const spec = {
+    ...valid(),
+    bands: [{
+      heading: "Manual scene",
+      deck: "Composition supplies the visual later",
+      pattern: "canvas",
+      accent: "violet",
+      height: 620,
+      nodes: Array.from({ length: 7 }, (_, index) => ({ label: `Manual node ${index + 1}` })),
+    }],
+  };
+  const core = await preflightDeck({ spec, mode: "core" });
+  assert.equal(core.ok, true);
+  assert.deepEqual(core.failures, []);
+});
+
 test("top-level malformed bands return structured failures", async () => {
   for (const spec of [{}, 42, { bands: "not-an-array" }]) {
     const result = await preflightDeck({ spec });

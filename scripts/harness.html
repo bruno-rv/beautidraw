@@ -43,10 +43,17 @@
         position: fixed;
         z-index: 9999;
         right: 8px;
-        bottom: 8px;
+        left: 8px;
+        bottom: 60px;
         display: flex;
+        flex-wrap: nowrap;
+        align-items: center;
         gap: 4px;
+        max-height: 52px;
+        overflow-x: auto;
+        overflow-y: hidden;
         padding: 4px;
+        box-sizing: border-box;
         border: 1px solid #64748b;
         border-radius: 4px;
         background: #ffffff;
@@ -58,6 +65,8 @@
       }
 
       #bd-frame-navigation button {
+        flex: 0 0 auto;
+        white-space: nowrap;
         padding: 4px 8px;
       }
     </style>
@@ -336,7 +345,7 @@
       function chromeModel(viewport = { width: innerWidth, height: innerHeight }) {
         const rects = fixedChromeRects();
         const top = Math.max(0, ...rects.filter((rect) => rect.y <= 24).map((rect) => rect.y + rect.height));
-        const bottom = Math.max(0, ...rects.filter((rect) => rect.y + rect.height >= viewport.height - 24).map((rect) => viewport.height - rect.y));
+        const bottom = Math.max(0, ...rects.filter((rect) => rect.role === "bd-frame-navigation" || rect.y + rect.height >= viewport.height - 24).map((rect) => viewport.height - rect.y));
         const left = Math.max(0, ...rects.filter((rect) => rect.x <= 0 && rect.y > 24 && rect.y + rect.height < viewport.height - 24).map((rect) => rect.x + rect.width));
         const right = Math.max(0, ...rects.filter((rect) => rect.x + rect.width >= viewport.width && rect.y > 24 && rect.y + rect.height < viewport.height - 24).map((rect) => viewport.width - rect.x));
         return {
@@ -747,13 +756,25 @@
         return reports;
       };
 
+      async function navigateToFrame(frame) {
+        try {
+          await fitEditorToFrame(frame);
+        } catch (error) {
+          const failure = error.harnessFailure ?? {
+            reason: `Frame navigation failed: ${error.message || String(error)}`,
+            recovery: "Reload the harness and verify the frame geometry.",
+          };
+          setError(failure, null, null);
+        }
+      }
+
       function updateFrameNavigation(elements) {
         frameNavigation.replaceChildren();
         for (const frame of elements.filter((element) => element.type === "frame")) {
           const button = document.createElement("button");
           button.type = "button";
           button.textContent = frame.name || frame.id;
-          button.addEventListener("click", () => window.__bdEditor.scrollToContent([frame]));
+          button.addEventListener("click", () => { void navigateToFrame(frame); });
           frameNavigation.append(button);
         }
       }

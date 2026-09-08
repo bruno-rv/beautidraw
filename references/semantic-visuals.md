@@ -27,20 +27,45 @@ automatic composer computes coordinates. Do not write normalized positions in or
 }
 ```
 
+## Native data vignettes
+
+Use `visual.data` only with `family: "illustration"`; the image remains the intuition and the
+data vignette becomes the editable, inspectable referent beside it. Other families reject
+`visual.data` during automatic composition instead of silently dropping it.
+
+The bounded kinds are deliberately synthetic and must say so in `caption`:
+
+```jsonc
+{
+  "data": {
+    "kind": "token-sequence",
+    "caption": "Synthetic illustrative example — toy IDs are not real tokenizer output.",
+    "pieces": [
+      { "text": "The", "id": "toy-01" },
+      { "text": " sky", "id": "toy-02" }
+    ]
+  }
+}
+```
+
+`lookup` accepts a toy `key`, bounded rows with finite vectors, and `selected`; `distribution`
+accepts bounded candidate labels, positive probabilities summing to one, and `selected`. Do not
+invent real model/tokenizer output or unlabelled probabilities. The renderer preserves these
+values in editable rows/bars and the outline.
+
 ## Rendered capacity (audited)
 
-The composer renders these fields inside fixed footprints and ellipsizes past them, so
-`audit-deck-spec.mjs` enforces the budgets before a build:
+The composer measures authored text through the real Excalidraw converter and rejects geometry
+that cannot fit. Keep support copy concise enough to remain readable at normal frame zoom:
 
 - `thesis` — one rendered line, at most **120 characters**. Without a thesis the frame simply
   opens on its shapes; the composer never invents one.
-- `explanation` + `example` + `tradeoff` (+ the strongest single `evidence` item) — the footer
-  column holds about **560 characters** total in every family. Split the mechanism across bands
-  instead of writing past the column.
+- `explanation`, `example`, `tradeoff`, and `evidence` are rendered as separate editorial groups
+  beside or below the referent; do not compress them into one detached essay line.
 - `inspect` — at most **84 characters**. The command must survive rendering typeable: a cut-off
   command is worse than none.
-- Shape labels wrap to their own box width; keep `label`s scannable and put depth in the fields
-  above.
+- Labels and notes are open typography in composed families. A small mark represents an object,
+  boundary, datum, or relationship; prose is not placed inside a universal ellipse/diamond/card.
 
 Callout `kind` is one of exactly `example`, `boundary`, `inspect`, or `warning`.
 Every semantic icon carries that kind in `customData.semanticKind` and keeps a
@@ -58,7 +83,7 @@ Choose the family by relationship, not by colour:
 
 | Family | Visual argument | Useful inputs |
 |---|---|---|
-| `illustration` | a topic-specific raster scene carries the intuition while callouts add precision | `image`, `focus`, `callouts`, depth fields |
+| `illustration` | a topic-specific raster scene carries the intuition while callouts/data add precision | `image`, `focus`, `callouts`, depth fields, optional `data` |
 | `orbit` | several levers converge on one focal system | `focus`, `nodes` |
 | `field` | options sit on two meaningful dimensions | `nodes`, `axisX`, `axisY` |
 | `spotlight` | one focal idea is surrounded by reasons and implications | `focus`, `callouts` |
@@ -73,8 +98,8 @@ families and are not part of the automatic rotation. `tension` is also retained 
 prefer `threshold` when the visual argument is a boundary rather than a process.
 
 `nodes` may be short strings or `{label, note}` objects. Keep labels scannable and put the depth in
-`explanation`, `example`, `evidence`, `tradeoff`, `inspect`, or `callouts`, not in a tiny label. The composer wraps
-labels, rotates palette roles, alternates shape types, and uses connectors only when the family
+`explanation`, `example`, `evidence`, `tradeoff`, `inspect`, or `callouts`, not in a tiny label. The composer
+measures labels/notes separately, uses restrained marks, and adds connectors only when the family
 needs them.
 
 ## What the composer owns
@@ -97,5 +122,5 @@ Every other composed family may appear at most **twice** in a substantial (8+ ba
 enforces this the same way it caps structured patterns, because repeating one composition with new
 content is the "same boxes, different colours" failure SKILL.md rejects. Raster illustrations are
 exempt: SKILL.md requires them. Every family also honours two reserved strips: the thesis line owns
-the top-left of the body, and the footer owns everything below ~73% of the body height; shape zones
-are laid out around both.
+the top-left of the body, and editorial support owns the lower body; visual zones are laid out around
+both. Review generated PNGs at 1600×900 and 1280×800 before calling a canvas complete.

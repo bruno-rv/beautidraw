@@ -3,6 +3,7 @@ import { constants } from "node:fs";
 import { isAbsolute, relative, resolve, dirname } from "node:path";
 
 import { CliError } from "./cli.mjs";
+import { validateDataVignette } from "./data-vignettes.mjs";
 import { planDeck } from "./layout.mjs";
 
 export const CONTENT_BUDGETS = Object.freeze({
@@ -16,6 +17,23 @@ export const CONTENT_BUDGETS = Object.freeze({
 
 const MAX_HEADING_CHARS = 2000;
 const SEMANTIC_KINDS = new Set(["example", "boundary", "inspect", "warning"]);
+export const AUTO_COMPOSE_FAMILIES = Object.freeze([
+  "illustration", "orbit", "field", "spotlight", "constellation", "evidence", "matrix", "threshold", "map",
+]);
+export const FAMILY_CAPACITIES = Object.freeze({
+  illustration: Object.freeze({ nodes: 2, callouts: 2 }),
+  orbit: Object.freeze({ nodes: 6 }),
+  field: Object.freeze({ nodes: 6 }),
+  spotlight: Object.freeze({ nodes: 4, callouts: 4 }),
+  constellation: Object.freeze({ nodes: 6 }),
+  evidence: Object.freeze({ nodes: 4 }),
+  matrix: Object.freeze({ nodes: 4 }),
+  threshold: Object.freeze({ nodes: 3 }),
+  map: Object.freeze({ nodes: 6 }),
+  pipeline: Object.freeze({ nodes: 6 }),
+  journey: Object.freeze({ nodes: 6 }),
+  tension: Object.freeze({ nodes: 4 }),
+});
 const PNG_SIGNATURE = "89504e470d0a1a0a";
 const CRC_TABLE = Array.from({ length: 256 }, (_, value) => {
   let crc = value;
@@ -49,6 +67,39 @@ function isObject(value) {
 function isWithin(root, candidate) {
   const remainder = relative(root, candidate);
   return remainder === "" || (!remainder.startsWith("..") && !isAbsolute(remainder));
+}
+
+export function collectFamilyCapacityFailures(spec, { specPath, mode = "automatic" } = {}) {
+  if (mode !== "automatic") return [];
+  const failures = [];
+  for (const [index, band] of (Array.isArray(spec?.bands) ? spec.bands : []).entries()) {
+    if (!isObject(band) || band.pattern !== "canvas") continue;
+    const visual = isObject(band.visual) ? band.visual : {};
+    const authoredFamily = typeof visual.family === "string" ? visual.family.trim() : "";
+    const family = authoredFamily || AUTO_COMPOSE_FAMILIES[index % AUTO_COMPOSE_FAMILIES.length];
+    const capacity = FAMILY_CAPACITIES[family];
+    if (!capacity) continue;
+    const nodes = Array.isArray(visual.nodes)
+      ? visual.nodes
+      : Array.isArray(band.nodes) ? band.nodes : [];
+    const callouts = Array.isArray(visual.callouts) ? visual.callouts : [];
+    const nodeCapacityApplies = !["illustration", "spotlight"].includes(family) || callouts.length === 0;
+    if (nodeCapacityApplies && nodes.length > capacity.nodes) {
+      failures.push(failure(
+        `bands[${index}].visual.nodes`,
+        `${family} family supports up to ${capacity.nodes} authored nodes; split across frames or choose a family with more capacity`,
+        { specPath },
+      ));
+    }
+    if (capacity.callouts !== undefined && callouts.length > capacity.callouts) {
+      failures.push(failure(
+        `bands[${index}].visual.callouts`,
+        `${family} family supports up to ${capacity.callouts} authored callouts; split across frames or choose a family with more capacity`,
+        { specPath },
+      ));
+    }
+  }
+  return failures;
 }
 
 // Resolve before every asset read/copy. Lexical containment alone lets a
@@ -126,6 +177,7 @@ export function collectDeckPreflightFailures(spec, { specPath, specDir, mode = "
   } catch (error) {
     failures.push(failure("spec", error.message ?? String(error), { specPath }));
   }
+  failures.push(...collectFamilyCapacityFailures(spec, { specPath, mode }));
 
   const titleChars = chars(spec.title);
   if (titleChars > MAX_HEADING_CHARS) {
@@ -167,6 +219,21 @@ export function collectDeckPreflightFailures(spec, { specPath, specDir, mode = "
     }
     if (visual.nodes !== undefined && !Array.isArray(visual.nodes)) {
       failures.push(failure(`bands[${index}].visual.nodes`, `bands[${index}].visual.nodes must be an array`, { specPath }));
+    }
+    if (visual.data !== undefined) {
+      if (band.pattern !== "canvas" || visual.family !== "illustration") {
+        failures.push(failure(
+          `bands[${index}].visual.data`,
+          `visual.data requires a canvas band with visual.family "illustration"`,
+          { specPath },
+        ));
+      }
+      for (const dataFailure of validateDataVignette(visual.data)) {
+        const field = dataFailure.field === "data"
+          ? `bands[${index}].visual.data`
+          : `bands[${index}].visual.data.${dataFailure.field}`;
+        failures.push(failure(field, dataFailure.reason, { specPath }));
+      }
     }
 
     const image = visual.image;
