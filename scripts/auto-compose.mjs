@@ -427,11 +427,7 @@ function genericCalloutElements(meta) {
 
 function dataElements(data, viewport) {
   const elements = renderDataVignette(data, { idPrefix: "data", ...viewport })
-    .filter((element) => {
-      if (data.kind === "distribution" && /data-candidate-\d+-baseline$/.test(element.id)) return false;
-      const link = /^data-piece-link-(\d+)$/.exec(element.id);
-      return !(data.kind === "token-sequence" && link && Number(link[1]) === data.pieces.length);
-    });
+    .filter((element) => !(data.kind === "distribution" && /data-candidate-\d+-baseline$/.test(element.id)));
   const shift = viewport.height * 0.06;
   const lift = 0;
   return elements.map((element) => {
@@ -488,7 +484,7 @@ function conceptOrbit(meta) {
   elements.push(text("focus-label", 0.38, 0.30, meta.focus, RAMP.label, meta.dark ? darkText : lightText, "prose", { beautidrawMaxWidth: 0.24 }));
   const positions = [[0.05, 0.20], [0.69, 0.20], [0.05, 0.42], [0.69, 0.42], [0.20, 0.55], [0.58, 0.55]];
   const anchors = positions.slice(0, Math.min(meta.nodeCount, positions.length)).map(([x, y]) => nodeAnchor(x, y, 0.25, x < 0.5 ? "right" : "left"));
-  const maxPairs = meta.callouts.some((callout) => callout.kind === "inspect") ? 2 : anchors.length / 2;
+  const maxPairs = anchors.length / 2;
   for (let index = 0; index < Math.min(anchors.length, maxPairs * 2); index += 2) {
     const pair = anchors.slice(index + 1, index + 2);
     elements.push(routedLine(`orbit-link-${index / 2 + 1}`, [anchors[index], [anchors[index][0], 0.46], [hub.x + 0.035, 0.46], ...(pair.length ? [[pair[0][0], 0.46], pair[0]] : [])], stroke));
@@ -527,7 +523,7 @@ function conceptSpotlight(meta) {
   const callouts = meta.callouts.length
     ? meta.callouts.slice(0, positions.length)
     : meta.nodes.slice(0, Math.min(meta.nodeCount, positions.length)).map((node) => ({ kind: "example", label: node.label, note: node.note }));
-  const connectorBudget = Math.max(0, 3 - callouts.filter((callout) => callout.kind === "inspect").length);
+  const connectorBudget = 3;
   callouts.forEach((callout, index) => {
     const [x, y] = positions[index];
     const colors = colorFor(meta, index + 1, meta.dark);
@@ -547,7 +543,7 @@ function conceptConstellation(meta) {
   const positions = [[0.08, 0.21], [0.38, 0.17], [0.68, 0.21], [0.14, 0.50], [0.48, 0.45], [0.76, 0.51]];
   const nodes = meta.nodes.slice(0, Math.min(meta.nodeCount, positions.length));
   const links = [[0, 1], [1, 2], [0, 3], [1, 4], [2, 5], [3, 4], [4, 5]];
-  const maxLinks = meta.callouts.some((callout) => callout.kind === "inspect") ? 2 : 3;
+  const maxLinks = 3;
   links.filter(([a, b]) => a < nodes.length && b < nodes.length).slice(0, maxLinks).forEach(([a, b], index) => {
     const [ax, ay] = positions[a]; const [bx, by] = positions[b];
     const start = nodeAnchor(ax, ay, 0.24, ax < 0.5 ? "right" : "left");

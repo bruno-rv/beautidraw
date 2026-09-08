@@ -383,6 +383,36 @@ test("six-candidate distribution stays inside the final composed viewport", { ti
   }
 });
 
+test("token data keeps every native piece-to-ID link in final composition", { timeout: 120_000 }, async (t) => {
+  const root = resolve(import.meta.dirname, "..");
+  const tempRoot = await mkdtemp(join(tmpdir(), "beautidraw-token-link-pairs-"));
+  t.after(() => rm(tempRoot, { recursive: true, force: true }));
+  for (const count of [3, DATA_VIGNETTE_LIMITS.pieces]) {
+    const spec = JSON.parse(await readFile(resolve(root, "decks/llm-token-flow/deck-spec.json"), "utf8"));
+    const bandIndex = spec.bands.findIndex((band) => band.visual?.data?.kind === "token-sequence");
+    const band = spec.bands[bandIndex];
+    band.visual.data.pieces = Array.from({ length: count }, (_, index) => ({
+      text: `${index === 0 ? " " : ""}piece-${index + 1}`,
+      id: `toy-${String(index + 1).padStart(2, "0")}`,
+    }));
+    const specPath = join(tempRoot, `tokens-${count}.json`);
+    const output = join(tempRoot, `out-${count}`);
+    await writeFile(specPath, JSON.stringify(spec));
+    await cp(resolve(root, "decks/llm-token-flow/assets"), join(tempRoot, "assets"), { recursive: true });
+    const result = spawnSync(process.execPath, [resolve(root, "scripts/build-deck.mjs"), specPath, output], {
+      cwd: root,
+      encoding: "utf8",
+      timeout: 120_000,
+    });
+    assert.equal(result.status, 0, `${count} token pieces: ${result.stdout}\n${result.stderr}`);
+    const deck = JSON.parse(await readFile(join(output, "deck.excalidraw"), "utf8"));
+    const links = deck.elements.filter((element) => new RegExp(`^b${bandIndex}-data-piece-link-\\d+$`).test(element.id));
+    assert.equal(links.length, count);
+    assert.deepEqual(links.map((element) => Number(element.id.match(/(\d+)$/)[1])), Array.from({ length: count }, (_, index) => index + 1));
+    assert.ok(links.every((element) => Array.isArray(element.points) && element.points.length === 2 && (element.width > 0 || element.height > 0)), `${count} token links must retain native geometry`);
+  }
+});
+
 test("precision vectors and extreme probabilities survive final composition", { timeout: 120_000 }, async (t) => {
   const root = resolve(import.meta.dirname, "..");
   const tempRoot = await mkdtemp(join(tmpdir(), "beautidraw-precision-final-compose-"));

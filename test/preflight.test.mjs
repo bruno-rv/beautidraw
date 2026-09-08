@@ -196,6 +196,76 @@ test("content budgets report measured values without echoing large input", () =>
   assert.equal(message.includes(hugeHeading), false);
 });
 
+test("footer budget counts every rendered callout and evidence part", async () => {
+  const underBudget = valid();
+  underBudget.bands[0] = {
+    heading: "Callout frame",
+    deck: "A bounded footer fixture",
+    pattern: "canvas",
+    accent: "blue",
+    height: 700,
+    visual: {
+      family: "orbit",
+      explanation: "Base explanation",
+      callouts: [
+        { kind: "example", label: "First", note: "A concise note" },
+        { kind: "boundary", label: "Second", note: "Another concise note" },
+      ],
+      evidence: ["First evidence", "Second evidence"],
+    },
+  };
+  assert.equal((await preflightDeck({ spec: underBudget })).ok, true);
+
+  const calloutOverflow = structuredClone(underBudget);
+  calloutOverflow.bands[0].visual.callouts = [
+    { kind: "example", label: "A".repeat(60), note: "B".repeat(180) },
+    { kind: "boundary", label: "C".repeat(60), note: "D".repeat(180) },
+  ];
+  const calloutFailures = await preflightDeck({ spec: calloutOverflow });
+  assert.equal(calloutFailures.ok, false);
+  assert.match(calloutFailures.failures.map(({ reason }) => reason).join("\n"), /footer content is/);
+
+  const evidenceOverflow = structuredClone(underBudget);
+  evidenceOverflow.bands[0].visual.callouts = [];
+  evidenceOverflow.bands[0].visual.evidence = Array.from({ length: 4 }, () => "Evidence ".repeat(30));
+  const evidenceFailures = await preflightDeck({ spec: evidenceOverflow });
+  assert.equal(evidenceFailures.ok, false);
+  assert.match(evidenceFailures.failures.map(({ reason }) => reason).join("\n"), /footer content is/);
+
+  const dataCalloutBase = {
+    ...valid(),
+    bands: [{
+      heading: "Data callouts",
+      deck: "A bounded data footer fixture",
+      pattern: "canvas",
+      accent: "blue",
+      height: 700,
+      visual: {
+        family: "illustration",
+        data: {
+          kind: "token-sequence",
+          caption: "Synthetic illustrative example — toy IDs are not real tokenizer output.",
+          pieces: [{ text: "The", id: "toy-01" }, { text: " sky", id: "toy-02" }],
+        },
+        image: { file: "assets/data.png", use: "Data scene", description: "A data teaching scene" },
+        explanation: "Base explanation",
+        callouts: [
+          { kind: "example", label: "A".repeat(60), note: "B".repeat(150) },
+          { kind: "boundary", label: "C".repeat(60), note: "D".repeat(150) },
+        ],
+      },
+    }],
+  };
+  const dataCalloutUnderBudget = collectDeckPreflightFailures(dataCalloutBase);
+  assert.equal(dataCalloutUnderBudget.some(({ reason }) => /footer content is/.test(reason)), false);
+  const dataCalloutOverflow = structuredClone(dataCalloutBase);
+  dataCalloutOverflow.bands[0].visual.explanation = "E".repeat(50);
+  dataCalloutOverflow.bands[0].visual.callouts[0].note = "B".repeat(180);
+  dataCalloutOverflow.bands[0].visual.callouts[1].note = "D".repeat(180);
+  const dataCalloutFailures = collectDeckPreflightFailures(dataCalloutOverflow);
+  assert.match(dataCalloutFailures.map(({ reason }) => reason).join("\n"), /footer content is/);
+});
+
 test("malformed visual callouts produce structured failures", () => {
   const spec = valid();
   spec.bands[0].visual = { callouts: "not-an-array" };

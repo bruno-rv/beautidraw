@@ -505,7 +505,10 @@ function tokenSequence(data, area, colors) {
       textColor: colors.text,
       customData: { beautidrawDataValue: piece.text },
     }));
-    elements.push(line(area, `piece-link-${index + 1}`, x + pieceWidth / 2 - 0.002, 0.45, 0.004, 0.06, [[0.5, 0], [0.5, 1]], colors.border));
+    elements.push({
+      ...line(area, `piece-link-${index + 1}`, x + pieceWidth / 2 - 0.002, 0.45, 0.004, 0.06, [[0.5, 0], [0.5, 1]], colors.border),
+      customData: { beautidrawDataLink: "token-piece" },
+    });
     elements.push(box(area, `id-${index + 1}`, x, 0.52, pieceWidth, 0.12, piece.id, {
       role: "mono",
       fill: colors.surface,

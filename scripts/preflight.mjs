@@ -43,6 +43,39 @@ const CRC_TABLE = Array.from({ length: 256 }, (_, value) => {
 
 const words = (value) => String(value ?? "").trim().split(/\s+/).filter(Boolean).length;
 const chars = (value) => String(value ?? "").trim().length;
+const cleanText = (value, fallback = "") => {
+  const text = String(value ?? "").trim();
+  return text || fallback;
+};
+
+function renderedFooterParts(band, index) {
+  const visual = isObject(band.visual) ? band.visual : {};
+  const family = cleanText(visual.family, AUTO_COMPOSE_FAMILIES[index % AUTO_COMPOSE_FAMILIES.length]);
+  const parts = [
+    cleanText(visual.explanation, band.deck),
+    visual.example ? `Example — ${cleanText(visual.example)}` : "",
+    visual.tradeoff ? `Boundary — ${cleanText(visual.tradeoff)}` : "",
+    ...(Array.isArray(visual.evidence) ? visual.evidence : []).map((item) => `Evidence — ${cleanText(item)}`),
+  ];
+  const callouts = Array.isArray(visual.callouts) ? visual.callouts : [];
+  if (family === "illustration" && visual.data) {
+    const source = callouts.length
+      ? callouts
+      : (Array.isArray(visual.nodes) ? visual.nodes : Array.isArray(band.nodes) ? band.nodes : []).slice(0, 2);
+    parts.push(...source.map((node) => {
+      const label = isObject(node) ? cleanText(node.label) : cleanText(node);
+      const note = isObject(node) ? cleanText(node.note ?? node.text) : "";
+      return note ? `Callout — ${label}: ${note}` : "";
+    }));
+  } else if (!["illustration", "spotlight"].includes(family)) {
+    parts.push(...callouts.map((callout) => {
+      const label = isObject(callout) ? cleanText(callout.label) : cleanText(callout);
+      const note = isObject(callout) ? cleanText(callout.note ?? callout.text) : cleanText(callout);
+      return `Callout — ${label}${note ? `: ${note}` : ""}`;
+    }));
+  }
+  return parts.filter(Boolean);
+}
 
 function crc32(bytes) {
   let crc = 0xffffffff;
@@ -277,8 +310,7 @@ export function collectDeckPreflightFailures(spec, { specPath, specDir, mode = "
     if (explanationWords > CONTENT_BUDGETS.explanationWords) {
       failures.push(failure(`bands[${index}].visual.explanation`, `visual.explanation is ${explanationWords} words; the renderer truncates past approximately 130`, { specPath }));
     }
-    const evidence = Array.isArray(visual.evidence) ? visual.evidence : [];
-    const footerParts = chars(visual.explanation) + (visual.example ? chars(visual.example) + 9 : 0) + (visual.tradeoff ? chars(visual.tradeoff) + 11 : 0) + Math.min(evidence.length, 1) * (evidence[0] ? chars(evidence[0]) + 10 : 0);
+    const footerParts = chars(renderedFooterParts(band, index).join("  •  "));
     if (footerParts > CONTENT_BUDGETS.footerChars) {
       failures.push(failure(`bands[${index}].visual`, `visual footer content is ${footerParts} characters; rendered column holds approximately ${CONTENT_BUDGETS.footerChars}`, { specPath }));
     }

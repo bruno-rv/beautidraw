@@ -159,7 +159,9 @@ worker must allocate that area before calling it. Declared maxima are intentiona
 (`captionChars=120`, `pieces=8`, `lookupRows=5`, `vectorDimensions=4`, `candidates=6`) so
 measured labels have room at the shared 23px body ramp. Token piece whitespace is preserved
 in the data and outline; the strip uses `␠` as a visible boundary marker and stores the exact
-authored value in `customData.beautidrawDataValue`.
+authored value in `customData.beautidrawDataValue`. One-to-one token-piece links carry
+`customData.beautidrawDataLink` and are validated as native data relationships rather than
+counted against the generic diagram-connector budget.
 Distribution labels use adaptive percentage/scientific notation so a positive probability is
 never rendered as zero. Data is supported only on `canvas` bands using the runtime-supported
 `illustration` family; preflight rejects other placements so the outline cannot silently omit
