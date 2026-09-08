@@ -489,6 +489,67 @@ const result = await withHarness(async ({ page }) =>
           },
         };
       });
+      const positionBelowMeasuredText = (item, skeletons) => {
+        const anchorRefs = skeletons
+          .map((skeleton) => skeleton.customData?.beautidrawBelowTextId)
+          .filter((id) => typeof id === "string" && id.trim() !== "");
+        const anchorIds = new Set(anchorRefs.flatMap((id) => [id, `b${item.entry.band}-${id}`]));
+        if (!anchorIds.size) return skeletons;
+        const originalY = new Map(skeletons.map((skeleton) => [skeleton.id, skeleton.y]));
+        let positioned = skeletons.map((skeleton) => ({ ...skeleton }));
+        const notes = skeletons
+          .filter((skeleton) => skeleton.customData?.beautidrawBelowTextId)
+          .sort((left, right) => left.y - right.y);
+        for (const noteSkeleton of notes) {
+          const currentNote = positioned.find((skeleton) => skeleton.id === noteSkeleton.id);
+          const anchorId = noteSkeleton.customData.beautidrawBelowTextId;
+          const anchorSkeleton = positioned.find((skeleton) => skeleton.id === anchorId || skeleton.id === `b${item.entry.band}-${anchorId}`);
+          if (!currentNote || !anchorSkeleton) throw new Error(`${noteSkeleton.id}: measured anchor ${anchorId} is missing`);
+          const [anchor] = sizeFromConvertedBounds(item, [anchorSkeleton]);
+          const gap = Number.isFinite(noteSkeleton.customData?.beautidrawBelowTextGap)
+            ? noteSkeleton.customData.beautidrawBelowTextGap * item.body.height
+            : 0;
+          const targetY = Math.max(
+            originalY.get(noteSkeleton.id) ?? currentNote.y,
+            anchor.y + anchor.height + gap,
+          );
+          const delta = targetY - currentNote.y;
+          const lane = noteSkeleton.customData?.beautidrawTextFlowLane;
+          positioned = positioned.map((skeleton) => {
+            if (skeleton.id === noteSkeleton.id) return { ...skeleton, y: targetY };
+            if (
+              delta > 0 && lane && skeleton.customData?.beautidrawTextFlowLane === lane &&
+              (originalY.get(skeleton.id) ?? skeleton.y) > (originalY.get(noteSkeleton.id) ?? noteSkeleton.y)
+            ) return { ...skeleton, y: skeleton.y + delta };
+            return skeleton;
+          });
+        }
+        return positioned;
+      };
+      const imageAdjustments = [];
+      const positionDataImageBelowHeader = (item) => {
+        const anchorId = item.entry.image?.anchorBelow;
+        if (!anchorId) return;
+        const image = item.skeletons.find((skeleton) => skeleton.type === "image");
+        const anchor = item.skeletons.find((skeleton) => skeleton.id === `b${item.entry.band}-${anchorId}`);
+        if (!image || !anchor) throw new Error(`band ${item.entry.band}: data header/image anchor is missing`);
+        const [measuredHeader] = sizeFromConvertedBounds(item, [anchor]);
+        const originalY = image.y;
+        const originalBottom = image.y + image.height;
+        const targetY = Math.max(originalY, measuredHeader.y + measuredHeader.height + item.body.height * 0.02);
+        if (targetY <= originalY + 0.5) return;
+        const availableHeight = originalBottom - targetY;
+        const minimumHeight = item.body.height * 0.20;
+        if (availableHeight < minimumHeight) {
+          throw new Error(`band ${item.entry.band}: data header leaves insufficient room for the illustration image; shorten the thesis/focus or grow the canvas height and rerun`);
+        }
+        const scale = Math.min(1, availableHeight / image.height);
+        const height = image.height * scale;
+        const width = image.width * scale;
+        const x = item.entry.image.side === "right" ? image.x + image.width - width : image.x;
+        imageAdjustments.push({ band: item.entry.band, targetWidth: width, targetHeight: height });
+        item.skeletons = item.skeletons.map((skeleton) => skeleton === image ? { ...skeleton, x, y: targetY, width, height } : skeleton);
+      };
       const annotationCandidates = [
         [0.05, 0.18], [0.30, 0.18], [0.55, 0.18],
         [0.05, 0.30], [0.30, 0.30], [0.55, 0.30],
@@ -519,9 +580,11 @@ const result = await withHarness(async ({ page }) =>
       };
       const byFrame = new Map();
       for (const item of prepared) {
+        positionDataImageBelowHeader(item);
         const annotationSkeletons = item.skeletons.filter((skeleton) => skeleton.customData?.beautidrawAnnotation === true);
         const familySkeletons = item.skeletons.filter((skeleton) => skeleton.customData?.beautidrawAnnotation !== true);
-        const familySized = sizeFromConvertedBounds(item, familySkeletons);
+        const positionedFamilySkeletons = positionBelowMeasuredText(item, familySkeletons);
+        const familySized = sizeFromConvertedBounds(item, positionedFamilySkeletons);
         const familyConverted = api.convertToExcalidrawElements(familySized, { regenerateIds: false });
         const familyCollisionElements = familyConverted.filter(
           (element) => element && element.customData?.beautidrawCompositionKind !== "surface" &&
@@ -797,6 +860,7 @@ const result = await withHarness(async ({ page }) =>
         deck: JSON.parse(api.serializeAsJSON(restored, deck.appState ?? { viewBackgroundColor: "#ffffff" }, files, "local")),
         bandPngs,
         scenePng: scene.toDataURL("image/png"),
+        imageAdjustments,
       };
     },
     {
@@ -817,6 +881,12 @@ const result = await withHarness(async ({ page }) =>
 );
 
 await mkdir(outDir, { recursive: true });
+for (const adjustment of result.imageAdjustments ?? []) {
+  const asset = manifest.find((candidate) => candidate.band === adjustment.band);
+  if (!asset) throw new Error(`band ${adjustment.band}: adjusted image manifest entry is missing`);
+  asset.targetWidth = adjustment.targetWidth;
+  asset.targetHeight = adjustment.targetHeight;
+}
 // Same orphan rule as generate.mjs: a composition with fewer bands than the
 // previous render must not leave stale band-NN.png files beside it.
 const staleBand = (name) => /^band-\d{2}\.png$/.exec(name);

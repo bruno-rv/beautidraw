@@ -111,7 +111,7 @@ function mark(id, type, x, y, width, height, colors, customData = {}) {
   };
 }
 
-function nodeBlock(id, node, meta, { x, y, width, index, marker = "ellipse", labelSize = RAMP.label, markerSide = "left" } = {}) {
+function nodeBlock(id, node, meta, { x, y, width, index, marker = "ellipse", labelSize = RAMP.label, markerSide = "left", flowLane = null } = {}) {
   const colors = colorFor(meta, index, meta.dark);
   const markerSize = marker === "line" ? 0.028 : 0.022;
   const markerY = y + (marker === "line" ? 0.018 : 0.006);
@@ -119,13 +119,18 @@ function nodeBlock(id, node, meta, { x, y, width, index, marker = "ellipse", lab
   const textX = markerSide === "right" ? markerX - 0.012 : x + markerSize + 0.018;
   const textWidth = Math.max(0.08, width - markerSize - 0.018);
   const muted = meta.dark ? "#cbd5e1" : "#475569";
-  const elements = [mark(`${id}-mark`, marker, markerX, markerY, markerSize, marker === "line" ? 0.006 : markerSize, colors)];
+  const flowData = flowLane ? { beautidrawTextFlowLane: flowLane } : {};
+  const elements = [mark(`${id}-mark`, marker, markerX, markerY, markerSize, marker === "line" ? 0.006 : markerSize, colors, flowData)];
   elements.push(text(`${id}-label`, textX, y, node.label, labelSize, colors.text, "prose", {
     beautidrawMaxWidth: textWidth,
+    ...flowData,
   }, markerSide === "right" ? "right" : "left"));
   if (node.note) {
     elements.push(text(`${id}-note`, textX, y + 0.075, node.note, RAMP.note, muted, "prose", {
       beautidrawMaxWidth: textWidth,
+      beautidrawBelowTextId: `${id}-label`,
+      beautidrawBelowTextGap: 0.018,
+      ...flowData,
     }, markerSide === "right" ? "right" : "left"));
   }
   return elements;
@@ -478,7 +483,9 @@ function conceptField(meta) {
   elements.push(text("field-focus", 0.36, 0.12, meta.focus, RAMP.note, textColor, "prose", { beautidrawMaxWidth: 0.28 }));
   const positions = [[0.08, 0.20], [0.59, 0.20], [0.10, 0.36], [0.60, 0.36], [0.20, 0.55], [0.61, 0.55]];
   positions.slice(0, Math.min(meta.nodeCount, positions.length)).forEach(([x, y], index) => {
-    elements.push(...nodeBlock(`field-${index + 1}`, meta.nodes[index], meta, { x, y, width: 0.28, index }));
+    elements.push(...nodeBlock(`field-${index + 1}`, meta.nodes[index], meta, {
+      x, y, width: 0.28, index, flowLane: x < 0.5 ? "field-left" : "field-right",
+    }));
   });
   return finish(meta, elements);
 }
@@ -655,6 +662,7 @@ async function conceptIllustration(meta) {
   return { lane: "composed", surfaceColor: meta.dark ? darkSurface : lightSurface, image: {
     file: meta.image.file, path: meta.image.path, mode: "side", use: clean(meta.image.use, meta.caption),
     description: clean(meta.image.description, ""), x, y, width, height, opacity: 100,
+    ...(dataMode ? { anchorBelow: "data-header" } : {}),
   }, elements };
 }
 
