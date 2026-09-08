@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { deflateSync, inflateSync } from "node:zlib";
 
 import { CONTENT_BUDGETS, collectDeckPreflightFailures, preflightDeck } from "../scripts/preflight.mjs";
 
@@ -752,11 +753,51 @@ function crc32(bytes) {
 }
 
 function pngWithDimensions(width, height) {
-  const png = validPng();
-  png.writeUInt32BE(width, 16);
-  png.writeUInt32BE(height, 20);
-  png.writeUInt32BE(crc32(png.subarray(12, 29)), 29);
-  return png;
+  const chunk = (type, data) => {
+    const typeBytes = Buffer.from(type, "ascii");
+    const length = Buffer.alloc(4);
+    length.writeUInt32BE(data.length);
+    const checksum = Buffer.alloc(4);
+    checksum.writeUInt32BE(crc32(Buffer.concat([typeBytes, data])));
+    return Buffer.concat([length, typeBytes, data, checksum]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  const scanlines = Buffer.alloc(height * (1 + width * 4));
+  for (let row = 0; row < height; row += 1) scanlines[row * (1 + width * 4)] = 0;
+  return Buffer.concat([
+    Buffer.from("89504e470d0a1a0a", "hex"),
+    chunk("IHDR", ihdr),
+    chunk("IDAT", deflateSync(scanlines)),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
+}
+
+function decodeTinyPng(png) {
+  assert.equal(png.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
+  const idat = [];
+  let offset = 8;
+  let width;
+  let height;
+  while (offset < png.length) {
+    const length = png.readUInt32BE(offset);
+    const type = png.subarray(offset + 4, offset + 8).toString("ascii");
+    const data = png.subarray(offset + 8, offset + 8 + length);
+    if (type === "IHDR") {
+      width = data.readUInt32BE(0);
+      height = data.readUInt32BE(4);
+    }
+    if (type === "IDAT") idat.push(data);
+    offset += 12 + length;
+  }
+  const scanlines = inflateSync(Buffer.concat(idat));
+  const rowLength = 1 + width * 4;
+  assert.equal(scanlines.length, height * rowLength);
+  for (let row = 0; row < height; row += 1) assert.equal(scanlines[row * rowLength], 0);
+  return { width, height };
 }
 
 function illustrationSpec(file) {
@@ -808,8 +849,20 @@ test("data header capacity rejects combined copy early and uses actual PNG aspec
     "core/manual preflight remains exempt",
   );
 
-  await writeFile(join(root, "normal.png"), pngWithDimensions(1672, 941));
-  await writeFile(join(root, "wide.png"), pngWithDimensions(10000, 2500));
+  const wideGlyphs = makeSpec("missing.png");
+  wideGlyphs.bands[0].visual.thesis = "W".repeat(120);
+  wideGlyphs.bands[0].visual.focus = "W".repeat(120);
+  assert.ok(
+    collectDeckPreflightFailures(wideGlyphs).some(({ code }) => code === "data-header-capacity"),
+    "120-char wide-glyph thesis/focus must fail the universal 780px bound",
+  );
+
+  const normalPng = pngWithDimensions(16, 9);
+  const widePng = pngWithDimensions(4, 1);
+  assert.deepEqual(decodeTinyPng(normalPng), { width: 16, height: 9 });
+  assert.deepEqual(decodeTinyPng(widePng), { width: 4, height: 1 });
+  await writeFile(join(root, "normal.png"), normalPng);
+  await writeFile(join(root, "wide.png"), widePng);
   const fitting = await preflightDeck({ specPath: join(root, "normal.json"), spec: makeSpec("normal.png") });
   assert.equal(fitting.ok, true, fitting.failures.map(({ reason }) => reason).join("\n"));
   const wide = await preflightDeck({ specPath: join(root, "wide.json"), spec: makeSpec("wide.png") });
