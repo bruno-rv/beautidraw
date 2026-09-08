@@ -297,6 +297,88 @@ test("constellation routes every accepted node through three native connectors",
   }
 });
 
+test("tension outcome source and sibling notes follow measured labels", { timeout: 120_000 }, async (t) => {
+  const temp = await mkdtemp(join(tmpdir(), "beautidraw-tension-placement-"));
+  t.after(() => rm(temp, { recursive: true, force: true }));
+  const longLabel = "A measured source label keeps the decision boundary readable";
+  const sourceNote = "Source note.";
+  const siblingNote = "Sibling note.";
+  const baseVisual = {
+    family: "tension",
+    thesis: "A tension frame keeps the decision boundary inspectable.",
+    focus: "Tension focus",
+    axisX: "specificity →",
+    axisY: "blast radius ↑",
+    explanation: "The tension frame preserves the choice and its supporting source evidence.",
+    example: "A concrete decision keeps the boundary visible.",
+    tradeoff: "A source note must remain below its measured label.",
+    evidence: ["Measured output verifies the source and sibling note placement in the serialized frame."],
+    inspect: "inspect tension geometry",
+  };
+  const spec = {
+    title: "Tension measured placement",
+    subtitle: "Outcome notes stay below converted labels",
+    footer: "Placement fixture",
+    bands: [
+      {
+        heading: "Explicit decision",
+        deck: "An explicit decision keeps its source label and note readable.",
+        pattern: "canvas",
+        accent: "amber",
+        height: 900,
+        visual: {
+          ...baseVisual,
+          decision: "Chosen boundary",
+          nodes: [
+            { label: "Left option", note: "Left note" },
+            { label: "Decision", note: "Decision note" },
+            { label: "Right option", note: "Right note" },
+            { label: longLabel, note: sourceNote },
+          ],
+        },
+      },
+      {
+        heading: "Sibling outcome",
+        deck: "A sibling outcome keeps its fallback note readable.",
+        pattern: "canvas",
+        accent: "violet",
+        height: 900,
+        visual: {
+          ...baseVisual,
+          nodes: [
+            { label: "Left option", note: "Left note" },
+            { label: "Decision", note: "Decision note" },
+            { label: "Right option", note: "Right note" },
+            { label: "Fallback source", note: siblingNote },
+          ],
+        },
+      },
+    ],
+  };
+  const specPath = join(temp, "spec.json");
+  const output = join(temp, "out");
+  await writeFile(specPath, JSON.stringify(spec));
+  const result = runBuild(specPath, output);
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+
+  const deck = JSON.parse(await readFile(join(output, "deck.excalidraw"), "utf8"));
+  for (const [bandIndex, noteId, labelId, expected] of [
+    [0, "b0-outcome-source-note", "b0-outcome-source", `${longLabel} ${sourceNote}`],
+    [1, "b1-outcome-note", "b1-outcome", siblingNote],
+  ]) {
+    const body = frameBody(deck, bandIndex);
+    const members = deck.elements.filter((element) => element.frameId === body.frame.id && element.customData?.beautidrawComposition === true);
+    assertInsideBody(members, body, `tension-${bandIndex}`);
+    const labelContainer = members.find((element) => element.id === labelId);
+    const labelText = labelContainer?.type === "text" ? labelContainer : members.find((element) => element.containerId === labelContainer?.id);
+    const note = members.find((element) => element.id === noteId);
+    assert.ok(labelContainer && labelText && note, `tension ${bandIndex} labels and notes must survive`);
+    assert.ok(note.y >= labelContainer.y + labelContainer.height - 0.5, `tension ${bandIndex} note must start below its measured label`);
+    const visible = members.map(elementText).join(" ").replace(/\s+/g, " ");
+    for (const value of expected.split(" ").filter(Boolean)) assert.ok(visible.includes(value), `tension ${bandIndex} must preserve ${value}`);
+  }
+});
+
 test("data illustration header content stays clear of left and right images", { timeout: 180_000 }, async (t) => {
   const temp = await mkdtemp(join(tmpdir(), "beautidraw-measured-data-header-"));
   t.after(() => rm(temp, { recursive: true, force: true }));
