@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
@@ -345,6 +345,206 @@ test("six-candidate distribution stays inside the final composed viewport", { ti
     for (const editorialElement of editorialElements) {
       assert.equal(overlaps(dataElement, editorialElement), false, `${dataElement.id} overlaps ${editorialElement.id}`);
     }
+  }
+});
+
+test("data illustrations reserve the vignette before fitting 1000px canvases", { timeout: 120_000 }, async (t) => {
+  const root = resolve(import.meta.dirname, "..");
+  const tempRoot = await mkdtemp(join(tmpdir(), "beautidraw-data-image-fit-"));
+  t.after(() => rm(tempRoot, { recursive: true, force: true }));
+  const caption = "Synthetic illustrative example — toy probabilities are not real model output.";
+  const spec = {
+    title: "Tall data canvases",
+    subtitle: "A bounded native data layout",
+    footer: "Toy values only",
+    bands: [
+      {
+        heading: "Token sequence",
+        deck: "A prompt is split into bounded toy pieces",
+        pattern: "canvas",
+        accent: "blue",
+        height: 1000,
+        visual: {
+          family: "illustration",
+          data: {
+            kind: "token-sequence",
+            caption: "Synthetic illustrative example — toy IDs are not real tokenizer output.",
+            pieces: [{ text: "The", id: "toy-01" }, { text: " sky", id: "toy-02" }],
+          },
+          image: { file: "assets/probability-selection.png", side: "left", use: "Use", description: "Description" },
+        },
+      },
+      {
+        heading: "Distribution",
+        deck: "A bounded probability spread retains alternatives",
+        pattern: "canvas",
+        accent: "green",
+        height: 1000,
+        visual: {
+          family: "illustration",
+          data: {
+            kind: "distribution",
+            caption,
+            candidates: [
+              { label: "blue", probability: 0.5 },
+              { label: "gray", probability: 0.3 },
+              { label: "clear", probability: 0.2 },
+            ],
+            selected: "gray",
+          },
+          image: { file: "assets/probability-selection.png", side: "right", use: "Use", description: "Description" },
+        },
+      },
+    ],
+  };
+  const specPath = join(tempRoot, "spec.json");
+  const output = join(tempRoot, "out");
+  const deckLineY = 80;
+  const deckLineHeight = 31.05;
+  const bodyTopOffset = deckLineY + deckLineHeight + DECK_BODY_GAP;
+  const frameHeight = bodyTopOffset + 1000 + FRAME_PAD_BOTTOM;
+  const baseDeck = { elements: [], files: {} };
+  for (let index = 0; index < spec.bands.length; index += 1) {
+    const frameY = index * 1400;
+    const frameId = `b${index}-frame`;
+    baseDeck.elements.push({
+      id: `b${index}-deck`,
+      type: "text",
+      x: 80,
+      y: frameY + deckLineY,
+      width: 700,
+      height: deckLineHeight,
+      text: spec.bands[index].deck,
+      fontSize: 23,
+      fontFamily: 6,
+      role: "prose",
+      strokeColor: "#1e1e1e",
+      boundElements: [],
+      frameId,
+    });
+    baseDeck.elements.push({ id: frameId, type: "frame", x: 0, y: frameY, width: 2280, height: frameHeight, name: `0${index + 1} ${spec.bands[index].heading}`, children: [`b${index}-deck`] });
+  }
+  await writeFile(specPath, JSON.stringify(spec));
+  await mkdir(output, { recursive: true });
+  await writeFile(join(output, "deck.excalidraw"), JSON.stringify(baseDeck));
+  await writeFile(join(output, "diagnostics.json"), JSON.stringify({ diagnostics: { bands: [{ index: 0, pattern: "canvas" }, { index: 1, pattern: "canvas" }] } }));
+  await cp(resolve(root, "decks/llm-token-flow/assets"), join(tempRoot, "assets"), { recursive: true });
+
+  const result = spawnSync(process.execPath, [resolve(root, "scripts/auto-compose.mjs"), specPath, output], {
+    cwd: root,
+    encoding: "utf8",
+    timeout: 120_000,
+  });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const composition = JSON.parse(await readFile(join(output, "auto-composition-spec.json"), "utf8"));
+  const deck = JSON.parse(await readFile(join(output, "deck.excalidraw"), "utf8"));
+  const overlap = (a, b) => Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x) > 0
+    && Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y) > 0;
+  for (const [index, band] of spec.bands.entries()) {
+    const entry = composition.bands.find((candidate) => candidate.band === index);
+    assert.ok(entry?.image, `${band.visual.data.kind}: image composition must survive`);
+    const viewport = {
+      x: band.visual.image.side === "right" ? 0.03 : Math.max(0.30, entry.image.x + entry.image.width + 0.03),
+      y: 0.07,
+      width: 0.68,
+      height: 0.76,
+    };
+    assert.ok(viewport.x >= 0 && viewport.x + viewport.width <= 1, `${band.visual.data.kind}: normalized vignette viewport must fit`);
+    assert.ok(entry.image.x >= 0 && entry.image.x + entry.image.width <= 1, `${band.visual.data.kind}: normalized image must fit`);
+    assert.equal(overlap(entry.image, viewport), false, `${band.visual.data.kind}: image must not overlap its vignette viewport`);
+
+    const frame = deck.elements.find((element) => element.id === `b${index}-frame`);
+    const deckLine = deck.elements.find((element) => element.id === `b${index}-deck`);
+    const body = {
+      x: frame.x + BODY_INSET,
+      y: deckLine.y + deckLine.height + DECK_BODY_GAP,
+      width: frame.width - 2 * BODY_INSET,
+      height: frame.y + frame.height - FRAME_PAD_BOTTOM - (deckLine.y + deckLine.height + DECK_BODY_GAP),
+    };
+    const absoluteViewport = {
+      x: body.x + body.width * viewport.x,
+      y: body.y + body.height * viewport.y,
+      width: body.width * viewport.width,
+      height: body.height * viewport.height,
+    };
+    const image = deck.elements.find((element) => element.id === `b${index}-composition-image`);
+    const members = deck.elements.filter((element) => element.frameId === frame.id);
+    const dataId = new RegExp(`^b${index}-data-(?!header(?:$|-))`);
+    const containers = new Set(members.filter((element) => dataId.test(element.id)).map((element) => element.id));
+    const dataElements = members.filter((element) => dataId.test(element.id) || containers.has(element.containerId));
+    assert.ok(dataElements.length > 0, `${band.visual.data.kind}: rendered data must survive`);
+    const outside = dataElements.filter((element) =>
+      element.x < absoluteViewport.x - 0.5 || element.y < absoluteViewport.y - 0.5
+      || element.x + element.width > absoluteViewport.x + absoluteViewport.width + 0.5
+      || element.y + element.height > absoluteViewport.y + absoluteViewport.height + 0.5,
+    );
+    assert.deepEqual(outside.map((element) => element.id), [], `${band.visual.data.kind}: data must stay in its allocated viewport`);
+    assert.equal(dataElements.some((element) => overlap(element, image)), false, `${band.visual.data.kind}: data must not overlap its image`);
+  }
+  assert.equal(composition.bands.filter((entry) => entry.image).length, spec.bands.length, "both data images must remain composed");
+});
+
+test("data outline preserves single and multiple backticks plus spaces in code spans", () => {
+  const data = {
+    ...tokenData,
+    pieces: [
+      { text: "`", id: "toy-01" },
+      { text: "``x``", id: "toy-02" },
+      { text: "  spaced `value`  ", id: "toy-03" },
+    ],
+  };
+  const outline = dataVignetteOutline(data);
+  assert.ok(outline.includes('``"`"``'));
+  assert.ok(outline.includes('```"``x``"```'));
+  assert.ok(outline.includes('``"  spaced `value`  "``'));
+});
+
+test("auto-compose accepts omitted optional explanation and example on data and illustration paths", { timeout: 120_000 }, async (t) => {
+  const root = resolve(import.meta.dirname, "..");
+  const tempRoot = await mkdtemp(join(tmpdir(), "beautidraw-optional-editorial-copy-"));
+  t.after(() => rm(tempRoot, { recursive: true, force: true }));
+  const fixtures = [
+    {
+      name: "data",
+      specFile: "decks/llm-token-flow/deck-spec.json",
+      assetDir: "decks/llm-token-flow/assets",
+      find: (band) => band.visual?.data?.kind === "distribution",
+    },
+    {
+      name: "illustration",
+      specFile: "decks/claude-code-artifacts/deck-spec.json",
+      assetDir: "decks/claude-code-artifacts/assets",
+      find: (band) => band.visual?.family === "illustration" && !band.visual?.data,
+    },
+  ];
+  for (const fixture of fixtures) {
+    const fixtureRoot = join(tempRoot, fixture.name);
+    await mkdir(fixtureRoot, { recursive: true });
+    const spec = JSON.parse(await readFile(resolve(root, fixture.specFile), "utf8"));
+    const bandIndex = spec.bands.findIndex(fixture.find);
+    assert.ok(bandIndex >= 0, `${fixture.name}: fixture band must exist`);
+    delete spec.bands[bandIndex].visual.explanation;
+    delete spec.bands[bandIndex].visual.example;
+    const specPath = join(fixtureRoot, "spec.json");
+    const output = join(fixtureRoot, "out");
+    await writeFile(specPath, JSON.stringify(spec));
+    await cp(resolve(root, fixture.assetDir), join(fixtureRoot, "assets"), { recursive: true });
+    const generated = spawnSync(process.execPath, [resolve(root, "scripts/generate.mjs"), specPath, output], {
+      cwd: root,
+      encoding: "utf8",
+      timeout: 120_000,
+    });
+    assert.equal(generated.status, 0, `${fixture.name} generate:\n${generated.stdout}\n${generated.stderr}`);
+    const composed = spawnSync(process.execPath, [resolve(root, "scripts/auto-compose.mjs"), specPath, output], {
+      cwd: root,
+      encoding: "utf8",
+      timeout: 120_000,
+    });
+    assert.equal(composed.status, 0, `${fixture.name} auto-compose:\n${composed.stdout}\n${composed.stderr}`);
+    const composition = JSON.parse(await readFile(join(output, "auto-composition-spec.json"), "utf8"));
+    const entry = composition.bands.find((candidate) => candidate.band === bandIndex);
+    assert.ok(entry, `${fixture.name}: composition entry must exist`);
+    assert.equal(entry.elements.some((element) => element.type === "text" && !String(element.text ?? "").trim()), false, `${fixture.name}: composition must not contain empty text`);
   }
 });
 

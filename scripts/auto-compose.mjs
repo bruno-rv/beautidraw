@@ -621,20 +621,31 @@ async function conceptIllustration(meta) {
   const imageAspect = pixelWidth / pixelHeight;
   const bodyAspect = (PAGE_WIDTH - 2 * BODY_INSET) / meta.bandHeight;
   const dataMode = Boolean(meta.data);
+  const dataViewportWidth = 0.68;
+  const dataViewportGutter = 0.03;
+  const dataViewportMargin = 0.03;
+  const maxDataImageWidth = 1 - (2 * dataViewportMargin) - dataViewportGutter - dataViewportWidth;
   let height = dataMode ? 0.36 : 0.50;
   let width = imageAspect * height / bodyAspect;
-  if (width > 0.52) { width = 0.52; height = width * bodyAspect / imageAspect; }
+  const maxWidth = dataMode ? maxDataImageWidth : 0.52;
+  if (width > maxWidth) { width = maxWidth; height = width * bodyAspect / imageAspect; }
   const side = meta.image.side === "right" ? "right" : "left";
   const x = side === "left" ? 0.03 : 0.97 - width;
   const y = (1 - height) / 2;
   const textX = side === "left" ? (dataMode ? Math.max(0.30, x + width + 0.03) : Math.max(0.56, x + width + 0.02)) : 0.05;
-  const textWidth = Math.min(dataMode ? 0.68 : 0.40, 0.97 - textX);
+  const textWidth = Math.min(dataMode ? dataViewportWidth : 0.40, 0.97 - textX);
   const textColor = meta.dark ? darkText : lightText;
   const mutedText = meta.dark ? "#cbd5e1" : "#475569";
   const callouts = meta.callouts.length
     ? meta.callouts
     : meta.nodes.slice(0, 2).map((node) => ({ kind: "example", label: node.label, note: node.note }));
-  const dataViewport = dataMode ? { x: side === "left" ? textX : 0.03, y: 0.07, width: 0.68, height: 0.76, dark: meta.dark } : null;
+  const dataViewport = dataMode ? {
+    x: side === "left" ? textX : dataViewportMargin,
+    y: 0.07,
+    width: dataViewportWidth,
+    height: 0.76,
+    dark: meta.dark,
+  } : null;
   const elements = [];
   if (!dataMode) {
     if (meta.thesis) elements.push(text("thesis", textX, 0.06, meta.thesis, 29, textColor, "prose", { beautidrawMaxWidth: textWidth }));
@@ -663,7 +674,7 @@ async function conceptIllustration(meta) {
       ...meta.evidence.map((item) => `Evidence — ${item}`),
       ...meta.callouts.filter((callout) => callout.note).map((callout) => `Callout — ${callout.label}: ${callout.note}`),
     ].filter(Boolean).join("  •  ");
-    elements.push(text("explanation", 0.03, 0.84, explanationParts, 26, mutedText, "prose", { beautidrawMaxWidth: 0.46 }));
+    if (explanationParts) elements.push(text("explanation", 0.03, 0.84, explanationParts, 26, mutedText, "prose", { beautidrawMaxWidth: 0.46 }));
     if (boundaryParts) elements.push(text("boundary", 0.52, 0.76, boundaryParts, 23, mutedText, "prose", { beautidrawMaxWidth: 0.44 }));
     if (meta.inspect) elements.push(text("inspect", 0.52, footerInspectY(meta), `Inspect — ${meta.inspect}`, 23, mutedText, "mono", { beautidrawMaxWidth: 0.44 }));
   } else {
@@ -673,7 +684,7 @@ async function conceptIllustration(meta) {
       meta.tradeoff ? `Boundary — ${meta.tradeoff}` : "",
       ...meta.evidence.map((item) => `Evidence — ${item}`),
     ].filter(Boolean);
-    elements.push(text("explanation", 0.05, 0.76, editorialParts.join("  •  "), 28, mutedText, "prose", { beautidrawMaxWidth: 0.90 }));
+    if (editorialParts.length) elements.push(text("explanation", 0.05, 0.76, editorialParts.join("  •  "), 28, mutedText, "prose", { beautidrawMaxWidth: 0.90 }));
   if (meta.inspect) elements.push(text("inspect", 0.05, footerInspectY(meta), `Inspect: ${meta.inspect}`, 23, mutedText, "mono", { beautidrawMaxWidth: 0.90 }));
   }
   return { lane: "composed", surfaceColor: meta.dark ? darkSurface : lightSurface, image: {

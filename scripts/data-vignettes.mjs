@@ -270,7 +270,11 @@ function markdownText(value) {
 }
 
 function codeToken(value) {
-  return `\`${String(value).replace(/[\r\n`]/g, "") }\``;
+  const content = String(value).replace(/[\r\n]/g, "");
+  const longestRun = Math.max(0, ...(content.match(/`+/g) ?? []).map((run) => run.length));
+  const fence = "`".repeat(longestRun + 1);
+  const padded = content.startsWith(" ") || content.endsWith(" ") ? ` ${content} ` : content;
+  return `${fence}${padded}${fence}`;
 }
 
 function visibleToken(value) {
