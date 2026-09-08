@@ -312,43 +312,71 @@ test("short data canvases reject only unrenderable editorial height", () => {
   }
 });
 
-test("native data row heights reject compressed lookup bodies before compose", () => {
-  const lookupData = {
-    kind: "lookup",
-    caption: "Synthetic illustrative example — toy values are not real output.",
-    key: "toy-key",
-    rows: [
-      { id: "toy-01", label: "one", vector: [0.1, 0.2] },
-      { id: "toy-02", label: "two", vector: [0.2, 0.3] },
-    ],
-    selected: "toy-01",
-  };
-  const makeSpec = (height) => ({
-    title: "Compressed lookup",
+test("native data row heights reject compressed bodies for every data kind", () => {
+  const caption = "Synthetic illustrative example — toy values are not real output.";
+  const dataCases = [
+    {
+      kind: "token-sequence",
+      data: {
+        kind: "token-sequence",
+        caption,
+        pieces: Array.from({ length: 8 }, (_, index) => ({ text: `piece-${index}`, id: `toy-${String(index).padStart(2, "0")}` })),
+      },
+      reason: /native token rows/,
+    },
+    {
+      kind: "lookup",
+      data: {
+        kind: "lookup",
+        caption,
+        key: "toy-key",
+        rows: [
+          { id: "toy-01", label: "one", vector: [0.1, 0.2] },
+          { id: "toy-02", label: "two", vector: [0.2, 0.3] },
+        ],
+        selected: "toy-01",
+      },
+      reason: /native lookup rows/,
+    },
+    {
+      kind: "distribution",
+      data: {
+        kind: "distribution",
+        caption,
+        candidates: [{ label: "one", probability: 0.6 }, { label: "two", probability: 0.4 }],
+        selected: "one",
+      },
+      reason: /native distribution rows/,
+    },
+  ];
+  const makeSpec = (data, height) => ({
+    title: "Compressed native data",
     subtitle: "A bounded native scene",
     footer: "Toy values only",
     bands: [{
-      heading: "Lookup",
-      deck: "A selected row becomes a vector",
+      heading: "Data canvas",
+      deck: "A bounded native data scene",
       pattern: "canvas",
       accent: "blue",
       height,
       visual: {
         family: "illustration",
-        data: lookupData,
+        data,
         image: { file: "assets/data.png", use: "Data scene", description: "A data teaching scene" },
-        explanation: "Short lookup explanation.",
+        explanation: "Short native data explanation.",
       },
     }],
   });
-  const compressed = collectDeckPreflightFailures(makeSpec(288));
-  const heightFailure = compressed.find(({ reason }) => /native lookup rows/.test(reason));
-  assert.ok(heightFailure, "288px lookup rows must fail before browser work");
-  assert.match(heightFailure.recovery, /canvas height/);
-  const core = collectDeckPreflightFailures(makeSpec(288), { mode: "core" });
-  assert.equal(core.some(({ reason }) => /native lookup rows/.test(reason)), false, "core/manual mode remains exempt");
-  const validHeight = collectDeckPreflightFailures(makeSpec(800));
-  assert.equal(validHeight.some(({ reason }) => /native lookup rows/.test(reason)), false, "a physically valid lookup body remains accepted");
+  for (const { kind, data, reason } of dataCases) {
+    const compressed = collectDeckPreflightFailures(makeSpec(data, 288));
+    const heightFailure = compressed.find(({ reason: message }) => reason.test(message));
+    assert.ok(heightFailure, `288px ${kind} data must fail before browser work`);
+    assert.match(heightFailure.recovery, /canvas height/);
+    const core = collectDeckPreflightFailures(makeSpec(data, 288), { mode: "core" });
+    assert.equal(core.some(({ reason: message }) => reason.test(message)), false, `${kind}: core/manual mode remains exempt`);
+    const validHeight = collectDeckPreflightFailures(makeSpec(data, 800));
+    assert.equal(validHeight.some(({ reason: message }) => reason.test(message)), false, `${kind}: a physically valid body remains accepted`);
+  }
 });
 
 test("native data capacity rejects wide dense labels while ordinary fixtures remain accepted", () => {
@@ -447,6 +475,10 @@ test("native data capacity rejects wide dense labels while ordinary fixtures rem
   assert.ok(outlineFailure, "absolute data values must fail before browser work");
   assert.equal(outlineFailure.field, "bands[0].visual.data");
   assert.match(outlineFailure.recovery, /portable/);
+  const inspectPathSpec = makeSpec(dataCases[0].ordinary);
+  inspectPathSpec.bands[0].visual.inspect = "/usr/bin";
+  const inspectFailures = collectDeckPreflightFailures(inspectPathSpec);
+  assert.equal(inspectFailures.some(({ field, reason }) => field === "bands[0].visual.data" && /machine-local path/.test(reason)), false, "inspect paths must not be attributed to data values");
 });
 
 test("malformed visual callouts produce structured failures", () => {

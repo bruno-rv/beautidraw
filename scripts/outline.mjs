@@ -320,4 +320,4 @@ export function buildOutline(spec, { frameNames = [], compositionManifest = {} }
   return markdown;
 }
 
-export { normalizeCallout };
+export { hasAbsolutePath, normalizeCallout };
