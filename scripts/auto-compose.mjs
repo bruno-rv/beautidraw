@@ -526,17 +526,19 @@ function conceptConstellation(meta) {
   const anchors = positions.slice(0, nodes.length).map(([x, y]) => nodeAnchor(x, y, 0.24, x < 0.5 ? "right" : "left"));
   const routes = [];
   if (anchors.length >= 2) {
-    const top = anchors.slice(0, Math.min(3, anchors.length));
-    routes.push([top[0], [top[0][0], 0.10], [top[1][0], 0.10], top[1], [top[1][0], 0.10], [top[2]?.[0] ?? top[1][0], 0.10], ...(top[2] ? [top[2]] : [])]);
+    routes.push([anchors[0], [anchors[0][0], 0.10], [anchors[1][0], 0.10], anchors[1]]);
+    if (anchors.length === 3) routes.push([anchors[1], anchors[2]]);
   }
   if (anchors.length >= 4) {
-    const bottom = anchors.slice(3, Math.min(6, anchors.length));
-    routes.push([bottom[0], [bottom[0][0], 0.40], [bottom[1]?.[0] ?? bottom[0][0], 0.40], ...(bottom[1] ? [bottom[1]] : []), ...(bottom[2] ? [[bottom[1][0], 0.40], [bottom[2][0], 0.40], bottom[2]] : [])]);
-  }
-  if (anchors.length >= 4) {
-    const bridge = anchors[2] ?? anchors[1];
-    const target = anchors[5] ?? anchors[4] ?? anchors[3];
-    routes.push([bridge, [0.70, 0.28], [0.70, 0.40], target]);
+    const junction = anchors[4] ?? anchors[3];
+    if (anchors.length === 4) {
+      routes.push([anchors[1], anchors[2], [0.95, 0.10], [0.95, anchors[3][1]], anchors[3]]);
+    } else {
+      routes.push([anchors[1], anchors[2], [anchors[2][0], 0.10], [0.95, 0.10], [0.95, 0.40], [junction[0], 0.40]]);
+      const bottom = [anchors[3], [anchors[3][0], 0.40], [junction[0], 0.40], junction];
+      if (anchors[5]) bottom.push([anchors[5][0], 0.40], anchors[5]);
+      routes.push(bottom);
+    }
   }
   routes.slice(0, 3).forEach((points, index) => elements.push(routedLine(`constellation-link-${index + 1}`, points, stroke)));
   nodes.forEach((node, index) => elements.push(...nodeBlock(`star-${index + 1}`, node, meta, {

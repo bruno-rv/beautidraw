@@ -268,7 +268,22 @@ test("constellation routes every accepted node through three native connectors",
     const members = deck.elements.filter((element) => element.frameId === body.frame.id && element.customData?.beautidrawComposition === true);
     const links = members.filter((element) => element.id.startsWith(`b${bandIndex}-constellation-link-`));
     assert.ok(links.length <= 3, `${count}-node constellation must stay within the connector budget`);
-    const points = links.flatMap((element) => (element.points ?? []).map(([x, y]) => [element.x + x, element.y + y]));
+    const points = [];
+    const segments = new Set();
+    for (const link of links) {
+      const path = (link.points ?? []).map(([x, y]) => [link.x + x, link.y + y]);
+      for (let index = 1; index < path.length; index += 1) {
+        const [ax, ay] = path[index - 1];
+        const [bx, by] = path[index];
+        assert.ok(Math.hypot(bx - ax, by - ay) > 0.1, `${count}-node constellation must not emit zero-length segments`);
+        const first = `${ax.toFixed(2)},${ay.toFixed(2)}`;
+        const second = `${bx.toFixed(2)},${by.toFixed(2)}`;
+        const key = first < second ? `${first}|${second}` : `${second}|${first}`;
+        assert.equal(segments.has(key), false, `${count}-node constellation must not retrace a segment`);
+        segments.add(key);
+      }
+      points.push(...path);
+    }
     for (let index = 0; index < count; index += 1) {
       const [x, y] = positions[index];
       const anchor = [
