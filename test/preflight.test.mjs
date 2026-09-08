@@ -278,10 +278,9 @@ test("short data canvases reject only unrenderable editorial height", () => {
       visual: {
         family: "illustration",
         data: {
-          kind: "distribution",
+          kind: "token-sequence",
           caption: "Synthetic illustrative example — toy probabilities are not real output.",
-          candidates: [{ label: "blue", probability: 0.6 }, { label: "gray", probability: 0.4 }],
-          selected: "gray",
+          pieces: [{ text: "The", id: "toy-01" }, { text: " sky", id: "toy-02" }, { text: " is", id: "toy-03" }],
         },
         image: { file: "assets/data.png", use: "Data scene", description: "A data teaching scene" },
         explanation: "Compact data explanation stays readable.",
@@ -313,6 +312,45 @@ test("short data canvases reject only unrenderable editorial height", () => {
   }
 });
 
+test("native data row heights reject compressed lookup bodies before compose", () => {
+  const lookupData = {
+    kind: "lookup",
+    caption: "Synthetic illustrative example — toy values are not real output.",
+    key: "toy-key",
+    rows: [
+      { id: "toy-01", label: "one", vector: [0.1, 0.2] },
+      { id: "toy-02", label: "two", vector: [0.2, 0.3] },
+    ],
+    selected: "toy-01",
+  };
+  const makeSpec = (height) => ({
+    title: "Compressed lookup",
+    subtitle: "A bounded native scene",
+    footer: "Toy values only",
+    bands: [{
+      heading: "Lookup",
+      deck: "A selected row becomes a vector",
+      pattern: "canvas",
+      accent: "blue",
+      height,
+      visual: {
+        family: "illustration",
+        data: lookupData,
+        image: { file: "assets/data.png", use: "Data scene", description: "A data teaching scene" },
+        explanation: "Short lookup explanation.",
+      },
+    }],
+  });
+  const compressed = collectDeckPreflightFailures(makeSpec(288));
+  const heightFailure = compressed.find(({ reason }) => /native lookup rows/.test(reason));
+  assert.ok(heightFailure, "288px lookup rows must fail before browser work");
+  assert.match(heightFailure.recovery, /canvas height/);
+  const core = collectDeckPreflightFailures(makeSpec(288), { mode: "core" });
+  assert.equal(core.some(({ reason }) => /native lookup rows/.test(reason)), false, "core/manual mode remains exempt");
+  const validHeight = collectDeckPreflightFailures(makeSpec(800));
+  assert.equal(validHeight.some(({ reason }) => /native lookup rows/.test(reason)), false, "a physically valid lookup body remains accepted");
+});
+
 test("native data capacity rejects wide dense labels while ordinary fixtures remain accepted", () => {
   const image = { file: "assets/data.png", use: "Data scene", description: "A native data teaching scene" };
   const makeSpec = (data) => ({
@@ -324,7 +362,7 @@ test("native data capacity rejects wide dense labels while ordinary fixtures rem
       deck: "A bounded native data scene",
       pattern: "canvas",
       accent: "blue",
-      height: 780,
+      height: 800,
       visual: { family: "illustration", data, image },
     }],
   });

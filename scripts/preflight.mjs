@@ -173,10 +173,14 @@ function collectDataOutlinePathFailure(spec, band, index, { specPath }) {
   return null;
 }
 
-function collectDataNativeCapacityFailures(band, index, { bodyWidth, specPath }) {
+const DATA_NATIVE_CELL_HEIGHT_PX = 42;
+const DATA_NATIVE_NOTE_HEIGHT_PX = 32;
+
+function collectDataNativeCapacityFailures(band, index, { bodyWidth, bodyHeight, specPath }) {
   const data = band.visual?.data;
   if (!data || !isObject(data)) return [];
   const viewportWidth = bodyWidth * DATA_VIGNETTE_VIEWPORT.minWidth;
+  const viewportHeight = bodyHeight * DATA_VIGNETTE_VIEWPORT.minHeight;
   const failures = [];
   const check = (field, value, width, fixedCell = false) => {
     const text = String(value ?? "");
@@ -188,22 +192,55 @@ function collectDataNativeCapacityFailures(band, index, { bodyWidth, specPath })
       { specPath, recovery: fixedCell ? DATA_FIXED_CELL_RECOVERY : DATA_TOKEN_RECOVERY },
     ));
   };
+  const heightFailure = (field, actual, context, fixedCell = false, required = DATA_NATIVE_CELL_HEIGHT_PX) => {
+    if (actual >= required) return;
+    failures.push(failure(
+      `bands[${index}].visual.data.${field}`,
+      `${context} provides only ${actual.toFixed(1)}px for a ${required}px native label cell; increase the canvas height or ${fixedCell ? "shorten the label/use manual composition" : "shorten the label/reduce items"}`,
+      { specPath, recovery: fixedCell ? DATA_FIXED_CELL_RECOVERY.replace("Shorten the label", "Increase the canvas height or shorten the label") : `${DATA_TOKEN_RECOVERY} Increase the canvas height if the native rows still cannot fit.` },
+    ));
+  };
   if (data.kind === "token-sequence") {
     const columns = data.pieces.length > 4 ? Math.ceil(data.pieces.length / 2) : data.pieces.length;
     const gap = Math.min(0.018, 0.12 / columns);
     const cellWidth = viewportWidth * ((0.94 - gap * (columns - 1)) / columns);
+    const areaHeight = viewportHeight;
+    const dense = data.pieces.length > 4;
+    const rowTop = dense ? 0.27 : 0.30;
+    const rowStep = dense ? 0.24 : 0;
+    const linkGap = dense ? 0.012 : 0.005;
+    const linkHeight = dense ? 0.02 : 0.06;
+    const idGap = dense ? 0.04 : 0.03;
+    const rowStack = DATA_NATIVE_CELL_HEIGHT_PX * 2 + areaHeight * (linkGap + linkHeight + idGap);
+    const availableToNextRow = rowStep ? areaHeight * rowStep : areaHeight * (0.72 - rowTop);
+    if (rowStack > availableToNextRow) {
+      heightFailure("pieces", availableToNextRow, "native token rows", false, rowStack);
+    }
+    if (rowStep && areaHeight * 0.80 < areaHeight * (rowTop + rowStep) + rowStack) {
+      heightFailure("pieces", areaHeight * (0.80 - rowTop - rowStep), "native token rows before the alignment note", false, rowStack);
+    }
     data.pieces.forEach((piece, pieceIndex) => {
       const visible = String(piece.text ?? "").replace(/^[ \t]+|[ \t]+$/g, (whitespace) => "␠".repeat(whitespace.length));
       check(`pieces[${pieceIndex}].text`, visible, cellWidth);
       check(`pieces[${pieceIndex}].id`, piece.id, cellWidth);
     });
   } else if (data.kind === "lookup") {
+    const rowHeight = viewportHeight * Math.min(0.07, 0.40 / data.rows.length);
+    heightFailure("rows", rowHeight, "native lookup rows", true);
     check("key", `Lookup key: ${data.key}`, viewportWidth * 0.62, true);
     data.rows.forEach((row, rowIndex) => {
       check(`rows[${rowIndex}].id`, row.id, viewportWidth * 0.20, true);
       check(`rows[${rowIndex}].label`, row.label, viewportWidth * 0.20, true);
     });
   } else if (data.kind === "distribution") {
+    const rowHeight = viewportHeight * Math.min(0.085, 0.54 / data.candidates.length);
+    heightFailure("candidates", rowHeight, "native distribution rows", true);
+    const rowGap = 0.008;
+    const noteY = Math.min(0.86, 0.27 + data.candidates.length * (Math.min(0.085, 0.54 / data.candidates.length) + rowGap) + 0.03);
+    const noteBottomRoom = bodyHeight * ((0.07 + DATA_VIGNETTE_VIEWPORT.minHeight) - (0.07 + DATA_VIGNETTE_VIEWPORT.minHeight * noteY + DATA_VIGNETTE_VIEWPORT.minHeight * 0.05));
+    if (noteBottomRoom < DATA_NATIVE_NOTE_HEIGHT_PX) {
+      heightFailure("candidates", noteBottomRoom, "native distribution note", true, DATA_NATIVE_NOTE_HEIGHT_PX);
+    }
     data.candidates.forEach((candidate, candidateIndex) => {
       check(`candidates[${candidateIndex}].label`, candidate.label, viewportWidth * 0.24, true);
     });
@@ -491,7 +528,7 @@ export function collectDeckPreflightFailures(spec, { specPath, specDir, mode = "
       const plannedBand = plannedDeck?.bands?.[index];
       const bodyWidth = PAGE_WIDTH - 2 * BODY_INSET;
       const bodyHeight = Math.max(1, Number(plannedBand?.height) || 1);
-      failures.push(...collectDataNativeCapacityFailures(band, index, { bodyWidth, specPath }));
+      failures.push(...collectDataNativeCapacityFailures(band, index, { bodyWidth, bodyHeight, specPath }));
       const explanationLines = estimateWrappedLines(dataExplanationParts, bodyWidth * 0.46, 26);
       const explanationAvailableHeight = bodyHeight * (1 - DATA_EDITORIAL_START);
       const explanationRequiredHeight = explanationLines * DATA_EDITORIAL_LINE_HEIGHT_PX + DATA_BOUND_TEXT_MARGIN_PX;

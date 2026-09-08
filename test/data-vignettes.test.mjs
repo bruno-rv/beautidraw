@@ -785,7 +785,7 @@ test("outline includes every data example value and preflight wires visual.data"
       deck: "A selected row becomes a vector",
       pattern: "canvas",
       accent: "violet",
-      height: 700,
+      height: 800,
       visual: {
         family: "illustration",
         data: lookupData,
