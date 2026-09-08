@@ -408,7 +408,7 @@ function semanticCalloutShape(id, callout, x, y, width, _height, colors, fontSiz
 function dataElements(data, viewport) {
   const elements = renderDataVignette(data, { idPrefix: "data", ...viewport })
     .filter((element) => !(data.kind === "distribution" && /data-candidate-\d+-baseline$/.test(element.id)));
-  const shift = viewport.height * 0.06;
+  const shift = data.kind === "distribution" ? 0 : viewport.height * 0.06;
   const lift = 0;
   return elements.map((element) => {
     const id = element.id;
@@ -418,11 +418,7 @@ function dataElements(data, viewport) {
         ? /data-candidate-\d+|data-selected-note/.test(id)
         : /data-(?:piece-guide|piece-|id-|alignment-note)/.test(id);
     const note = /data-(?:lookup-note|selected-note|alignment-note)$/.test(id);
-    const noteAdjustment = id === "data-lookup-note"
-      ? -viewport.height * 0.08
-      : id === "data-selected-note"
-        ? viewport.height * 0.05
-        : 0;
+    const noteAdjustment = id === "data-lookup-note" ? -viewport.height * 0.08 : 0;
     return move ? { ...element, y: element.y + (note ? 0 : shift) + noteAdjustment + lift } : { ...element, y: element.y + lift };
   });
 }

@@ -243,8 +243,8 @@ function collectDataNativeCapacityFailures(band, index, { bodyWidth, bodyHeight,
     const rowHeight = viewportHeight * Math.min(0.085, 0.54 / data.candidates.length);
     heightFailure("candidates", rowHeight, "native distribution rows", true);
     const rowGap = 0.008;
-    const noteY = Math.min(0.86, 0.27 + data.candidates.length * (Math.min(0.085, 0.54 / data.candidates.length) + rowGap) + 0.03);
-    const noteBottomRoom = bodyHeight * ((0.07 + DATA_VIGNETTE_VIEWPORT.minHeight) - (0.07 + DATA_VIGNETTE_VIEWPORT.minHeight * noteY + DATA_VIGNETTE_VIEWPORT.minHeight * 0.05));
+    const noteY = Math.min(0.83, 0.27 + data.candidates.length * (Math.min(0.085, 0.54 / data.candidates.length) + rowGap) + 0.03);
+    const noteBottomRoom = bodyHeight * (DATA_BOUNDARY_START - (0.07 + DATA_VIGNETTE_VIEWPORT.minHeight * noteY));
     if (noteBottomRoom < DATA_NATIVE_NOTE_HEIGHT_PX) {
       heightFailure("candidates", noteBottomRoom, "native distribution note", true, DATA_NATIVE_NOTE_HEIGHT_PX);
     }

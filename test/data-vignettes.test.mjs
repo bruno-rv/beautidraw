@@ -306,16 +306,20 @@ test("six-candidate distribution stays inside the final composed viewport", { ti
   band.visual.data = {
     ...band.visual.data,
     candidates: [
-      { label: "blue", probability: 0.40 },
-      { label: "gray", probability: 0.20 },
-      { label: "clear", probability: 0.15 },
-      { label: "gold", probability: 0.10 },
-      { label: "rose", probability: 0.10 },
-      { label: "white", probability: 0.05 },
+      { label: "alpha-000001", probability: 0.40 },
+      { label: "bravo-000002", probability: 0.20 },
+      { label: "charlie-0003", probability: 0.15 },
+      { label: "delta-000004", probability: 0.10 },
+      { label: "echo-000005", probability: 0.10 },
+      { label: "foxtrot-00006", probability: 0.05 },
     ],
-    selected: "gray",
+    selected: "delta-000004",
   };
+  band.visual.image.side = "left";
   band.visual.explanation = explanation;
+  band.visual.tradeoff = "Wide recall preserves alternatives but spends context.";
+  band.visual.evidence = ["Every positive candidate remains visible in the chart."];
+  band.visual.callouts = [{ kind: "boundary", label: "Boundary guard", note: "Keep the shortlist inside the chart." }];
   const specPath = join(tempRoot, "spec.json");
   const output = join(tempRoot, "out");
   await writeFile(specPath, JSON.stringify(spec));
@@ -340,7 +344,7 @@ test("six-candidate distribution stays inside the final composed viewport", { ti
     height: frame.y + frame.height - FRAME_PAD_BOTTOM - (deckLine.y + deckLine.height + DECK_BODY_GAP),
   };
   const viewport = {
-    x: body.x + body.width * 0.03,
+    x: body.x + body.width * (band.visual.image.side === "right" ? 0.03 : 0.30),
     y: body.y + body.height * 0.07,
     width: body.width * 0.68,
     height: body.height * 0.76,
@@ -357,7 +361,7 @@ test("six-candidate distribution stays inside the final composed viewport", { ti
     new RegExp(`^b${bandIndex}-(?:explanation|boundary|inspect)$`).test(element.id));
   const normalizedText = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
   assert.equal(dataElements.filter((element) => new RegExp(`^b${bandIndex}-data-candidate-\\d+-label$`).test(element.id)).length, 6);
-  assert.ok(dataElements.some((element) => element.text?.includes("Selected candidate: gray")));
+  assert.ok(dataElements.some((element) => element.text?.includes("Selected candidate: delta-000004")));
   assert.ok(members.some((element) => normalizedText(element.text).includes(normalizedText(explanation))));
 
   const outsideViewport = dataElements.filter((element) =>
@@ -381,6 +385,12 @@ test("six-candidate distribution stays inside the final composed viewport", { ti
       assert.equal(overlaps(dataElement, editorialElement), false, `${dataElement.id} overlaps ${editorialElement.id}`);
     }
   }
+  const selectedNote = dataElements.find((element) => element.id === `b${bandIndex}-data-selected-note`);
+  const lastCandidate = dataElements.find((element) => element.id === `b${bandIndex}-data-candidate-6-label`);
+  const boundary = editorialElements.find((element) => element.id === `b${bandIndex}-boundary`);
+  assert.ok(selectedNote && lastCandidate && boundary);
+  assert.ok(selectedNote.y >= lastCandidate.y + lastCandidate.height - 0.5, "selected note must clear the final candidate row");
+  assert.ok(selectedNote.y + selectedNote.height <= boundary.y - 0.5, "selected note must clear the editorial boundary lane");
 });
 
 test("token data keeps every native piece-to-ID link in final composition", { timeout: 120_000 }, async (t) => {

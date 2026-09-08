@@ -667,7 +667,7 @@ function distribution(data, area, colors) {
       },
     }));
   });
-  const noteY = Math.min(0.86, rowTop + data.candidates.length * (rowHeight + rowGap) + 0.03);
+  const noteY = Math.min(0.83, rowTop + data.candidates.length * (rowHeight + rowGap) + 0.03);
   elements.push(textElement(area, "selected-note", 0.02, noteY, `Selected candidate: ${data.selected} · illustrative draw`, colors.muted, "prose", 0.96));
   return elements;
 }
