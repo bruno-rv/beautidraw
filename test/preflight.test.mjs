@@ -313,6 +313,97 @@ test("short data canvases reject only unrenderable editorial height", () => {
   }
 });
 
+test("native data capacity rejects wide dense labels while ordinary fixtures remain accepted", () => {
+  const image = { file: "assets/data.png", use: "Data scene", description: "A native data teaching scene" };
+  const makeSpec = (data) => ({
+    title: "Native data",
+    subtitle: "Bounded data",
+    footer: "Toy values only",
+    bands: [{
+      heading: "Data canvas",
+      deck: "A bounded native data scene",
+      pattern: "canvas",
+      accent: "blue",
+      height: 780,
+      visual: { family: "illustration", data, image },
+    }],
+  });
+  const caption = "Synthetic illustrative example — toy values are not real output.";
+  const dataCases = [
+    {
+      kind: "token-sequence",
+      ordinary: {
+        kind: "token-sequence",
+        caption,
+        pieces: Array.from({ length: 8 }, (_, index) => ({ text: `piece-${index}`, id: `toy-${String(index).padStart(2, "0")}` })),
+      },
+      wide: (glyph) => ({
+        kind: "token-sequence",
+        caption,
+        pieces: Array.from({ length: 8 }, (_, index) => ({ text: glyph.repeat(18), id: `toy-${String(index).padStart(2, "0")}` })),
+      }),
+    },
+    {
+      kind: "lookup",
+      ordinary: {
+        kind: "lookup",
+        caption,
+        key: "toy-key",
+        rows: Array.from({ length: 5 }, (_, index) => ({ id: `toy-${index}`, label: `row-${index}`, vector: [0.1, 0.2] })),
+        selected: "toy-0",
+      },
+      wide: (glyph) => ({
+        kind: "lookup",
+        caption,
+        key: "toy-key",
+        rows: Array.from({ length: 5 }, (_, index) => ({ id: `toy-${index}`, label: `${glyph.repeat(17)}${index}`, vector: [0.1, 0.2] })),
+        selected: "toy-0",
+      }),
+    },
+    {
+      kind: "distribution",
+      ordinary: {
+        kind: "distribution",
+        caption,
+        candidates: [0.30, 0.20, 0.15, 0.12, 0.10, 0.13].map((probability, index) => ({ label: `candidate-${index}`, probability })),
+        selected: "candidate-0",
+      },
+      wide: (glyph) => ({
+        kind: "distribution",
+        caption,
+        candidates: [0.30, 0.20, 0.15, 0.12, 0.10, 0.13].map((probability, index) => ({ label: `${glyph.repeat(17)}${index}`, probability })),
+        selected: `${glyph.repeat(17)}0`,
+      }),
+    },
+  ];
+  for (const dataCase of dataCases) {
+    assert.equal(collectDeckPreflightFailures(makeSpec(dataCase.ordinary)).length, 0, `${dataCase.kind}: ordinary labels remain accepted`);
+    for (const glyph of ["W", "界"]) {
+      const wideSpec = makeSpec(dataCase.wide(glyph));
+      const failures = collectDeckPreflightFailures(wideSpec);
+      const capacityFailure = failures.find(({ reason }) => /native data label requires/.test(reason));
+      assert.ok(capacityFailure, `${dataCase.kind}/${glyph}: wide dense labels must fail native capacity preflight`);
+      assert.match(capacityFailure.field, /bands\[0\]\.visual\.data/);
+      if (dataCase.kind === "token-sequence") assert.match(capacityFailure.recovery, /reduce token items/);
+      else assert.match(capacityFailure.recovery, /manual composition/);
+      const coreFailures = collectDeckPreflightFailures(wideSpec, { mode: "core" });
+      assert.equal(coreFailures.some(({ reason }) => /native data label requires/.test(reason)), false, `${dataCase.kind}/${glyph}: core/manual mode must remain exempt`);
+    }
+  }
+  const malformed = [
+    { ...dataCases[0].ordinary, pieces: null },
+    { ...dataCases[1].ordinary, rows: null },
+    { ...dataCases[2].ordinary, candidates: null },
+    { ...dataCases[0].ordinary, pieces: [null, { text: "ok", id: "toy-01" }] },
+  ];
+  for (const data of malformed) {
+    assert.doesNotThrow(() => collectDeckPreflightFailures(makeSpec(data)));
+    const failures = collectDeckPreflightFailures(makeSpec(data));
+    assert.ok(failures.some(({ field }) => field.startsWith("bands[0].visual.data")));
+    assert.ok(failures.every(({ stage }) => stage === "preflight"));
+  }
+});
+
 test("malformed visual callouts produce structured failures", () => {
   const spec = valid();
   spec.bands[0].visual = { callouts: "not-an-array" };

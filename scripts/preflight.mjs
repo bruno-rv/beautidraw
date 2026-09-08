@@ -3,8 +3,8 @@ import { constants } from "node:fs";
 import { isAbsolute, relative, resolve, dirname } from "node:path";
 
 import { CliError } from "./cli.mjs";
-import { validateDataVignette } from "./data-vignettes.mjs";
-import { BODY_INSET, BOUND_TEXT_PADDING, PAGE_WIDTH, planDeck } from "./layout.mjs";
+import { DATA_VIGNETTE_VIEWPORT, validateDataVignette } from "./data-vignettes.mjs";
+import { BODY_INSET, BOUND_TEXT_PADDING, PAGE_WIDTH, RAMP, planDeck } from "./layout.mjs";
 
 export const CONTENT_BUDGETS = Object.freeze({
   thesisChars: 120,
@@ -151,6 +151,47 @@ function estimateWrappedLines(value, width, fontSize) {
     }
     return total + lineCount;
   }, 0);
+}
+
+const DATA_TOKEN_RECOVERY = "Shorten the token label, reduce token items, or split the data vignette across frames; native cells stay single-line without truncation or font shrinking.";
+const DATA_FIXED_CELL_RECOVERY = "Shorten the label or use manual composition/split the data vignette across frames; fixed native cells stay single-line without truncation or font shrinking.";
+
+function collectDataNativeCapacityFailures(band, index, { bodyWidth, specPath }) {
+  const data = band.visual?.data;
+  if (!data || !isObject(data)) return [];
+  const viewportWidth = bodyWidth * DATA_VIGNETTE_VIEWPORT.minWidth;
+  const failures = [];
+  const check = (field, value, width, fixedCell = false) => {
+    const text = String(value ?? "");
+    const lines = estimateWrappedLines(text, Math.max(1, width - 2 * BOUND_TEXT_PADDING), RAMP.note);
+    if (lines <= 1) return;
+    failures.push(failure(
+      `bands[${index}].visual.data.${field}`,
+      `native data label requires ${lines} lines in a ${width.toFixed(1)}px single-line cell; ${fixedCell ? "shorten the label or use manual composition/split the vignette" : "shorten it, reduce items, or split the vignette"}`,
+      { specPath, recovery: fixedCell ? DATA_FIXED_CELL_RECOVERY : DATA_TOKEN_RECOVERY },
+    ));
+  };
+  if (data.kind === "token-sequence") {
+    const columns = data.pieces.length > 4 ? Math.ceil(data.pieces.length / 2) : data.pieces.length;
+    const gap = Math.min(0.018, 0.12 / columns);
+    const cellWidth = viewportWidth * ((0.94 - gap * (columns - 1)) / columns);
+    data.pieces.forEach((piece, pieceIndex) => {
+      const visible = String(piece.text ?? "").replace(/^[ \t]+|[ \t]+$/g, (whitespace) => "␠".repeat(whitespace.length));
+      check(`pieces[${pieceIndex}].text`, visible, cellWidth);
+      check(`pieces[${pieceIndex}].id`, piece.id, cellWidth);
+    });
+  } else if (data.kind === "lookup") {
+    check("key", `Lookup key: ${data.key}`, viewportWidth * 0.62, true);
+    data.rows.forEach((row, rowIndex) => {
+      check(`rows[${rowIndex}].id`, row.id, viewportWidth * 0.20, true);
+      check(`rows[${rowIndex}].label`, row.label, viewportWidth * 0.20, true);
+    });
+  } else if (data.kind === "distribution") {
+    data.candidates.forEach((candidate, candidateIndex) => {
+      check(`candidates[${candidateIndex}].label`, candidate.label, viewportWidth * 0.24, true);
+    });
+  }
+  return failures;
 }
 
 function renderedFooterParts(band, index) {
@@ -352,6 +393,7 @@ export function collectDeckPreflightFailures(spec, { specPath, specDir, mode = "
     if (visual.nodes !== undefined && !Array.isArray(visual.nodes)) {
       failures.push(failure(`bands[${index}].visual.nodes`, `bands[${index}].visual.nodes must be an array`, { specPath }));
     }
+    let dataValidationPassed = false;
     if (visual.data !== undefined) {
       if (band.pattern !== "canvas" || visual.family !== "illustration") {
         failures.push(failure(
@@ -360,7 +402,9 @@ export function collectDeckPreflightFailures(spec, { specPath, specDir, mode = "
           { specPath },
         ));
       }
-      for (const dataFailure of validateDataVignette(visual.data)) {
+      const dataFailures = validateDataVignette(visual.data);
+      dataValidationPassed = dataFailures.length === 0;
+      for (const dataFailure of dataFailures) {
         const field = dataFailure.field === "data"
           ? `bands[${index}].visual.data`
           : `bands[${index}].visual.data.${dataFailure.field}`;
@@ -413,7 +457,7 @@ export function collectDeckPreflightFailures(spec, { specPath, specDir, mode = "
     if (footerParts > CONTENT_BUDGETS.footerChars) {
       failures.push(failure(`bands[${index}].visual`, `visual footer content is ${footerParts} characters; rendered column holds approximately ${CONTENT_BUDGETS.footerChars}`, { specPath }));
     }
-    if (visual.family === "illustration" && visual.data) {
+    if (mode === "automatic" && visual.family === "illustration" && visual.data && dataValidationPassed) {
       const dataExplanationParts = [
         cleanText(visual.explanation, band.deck),
         visual.example ? `Example — ${cleanText(visual.example)}` : "",
@@ -426,6 +470,7 @@ export function collectDeckPreflightFailures(spec, { specPath, specDir, mode = "
       const plannedBand = plannedDeck?.bands?.[index];
       const bodyWidth = PAGE_WIDTH - 2 * BODY_INSET;
       const bodyHeight = Math.max(1, Number(plannedBand?.height) || 1);
+      failures.push(...collectDataNativeCapacityFailures(band, index, { bodyWidth, specPath }));
       const explanationLines = estimateWrappedLines(dataExplanationParts, bodyWidth * 0.46, 26);
       const explanationAvailableHeight = bodyHeight * (1 - DATA_EDITORIAL_START);
       const explanationRequiredHeight = explanationLines * DATA_EDITORIAL_LINE_HEIGHT_PX + DATA_BOUND_TEXT_MARGIN_PX;
