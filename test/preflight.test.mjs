@@ -64,7 +64,7 @@ test("core preflight permits unused manual canvas nodes beyond automatic family 
 });
 
 test("automatic relationship families require meaningful authored cardinality", () => {
-  const makeSpec = (family, count) => ({
+  const makeSpec = (family, count, omitNodes = false) => ({
     ...valid(),
     bands: [{
       heading: `${family} fixture`,
@@ -72,7 +72,7 @@ test("automatic relationship families require meaningful authored cardinality", 
       pattern: "canvas",
       accent: "blue",
       height: 700,
-      visual: { family, nodes: Array.from({ length: count }, (_, index) => ({ label: `Node ${index + 1}` })) },
+      visual: { family, ...(omitNodes ? {} : { nodes: Array.from({ length: count }, (_, index) => ({ label: `Node ${index + 1}` })) }) },
     }],
   });
   for (const [family, minimum] of [["pipeline", 3], ["constellation", 2]]) {
@@ -85,6 +85,10 @@ test("automatic relationship families require meaningful authored cardinality", 
     }
     const accepted = collectDeckPreflightFailures(makeSpec(family, minimum));
     assert.equal(accepted.some(({ reason }) => reason.includes(`needs at least ${minimum}`)), false, `${family}/${minimum} authored nodes must remain accepted`);
+    const omitted = collectDeckPreflightFailures(makeSpec(family, 0, true));
+    assert.ok(omitted.some(({ field, reason }) => field === "bands[0].visual.nodes" && reason.includes(`needs at least ${minimum}`)), `${family}/omitted nodes must fail before audit`);
+    const omittedCore = collectDeckPreflightFailures(makeSpec(family, 0, true), { mode: "core" });
+    assert.equal(omittedCore.some(({ reason }) => reason.includes(`needs at least ${minimum}`)), false, `${family} omitted nodes must remain core/manual exempt`);
   }
 });
 

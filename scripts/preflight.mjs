@@ -361,9 +361,8 @@ export function collectFamilyCapacityFailures(spec, { specPath, mode = "automati
       ? visual.nodes
       : Array.isArray(band.nodes) ? band.nodes : [];
     const callouts = Array.isArray(visual.callouts) ? visual.callouts : [];
-    const authoredNodesProvided = Array.isArray(visual.nodes) || Array.isArray(band.nodes);
     const minimumNodes = family === "pipeline" ? 3 : family === "constellation" ? 2 : null;
-    if (minimumNodes !== null && authoredNodesProvided && nodes.length < minimumNodes) {
+    if (minimumNodes !== null && nodes.length < minimumNodes) {
       const noun = family === "pipeline" ? "stages" : "nodes";
       failures.push(failure(
         `bands[${index}].visual.nodes`,
