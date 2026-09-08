@@ -393,6 +393,40 @@ test("six-candidate distribution stays inside the final composed viewport", { ti
   assert.ok(selectedNote.y + selectedNote.height <= boundary.y - 0.5, "selected note must clear the editorial boundary lane");
 });
 
+test("three token pieces compose a short 400px data frame", { timeout: 120_000 }, async (t) => {
+  const root = resolve(import.meta.dirname, "..");
+  const tempRoot = await mkdtemp(join(tmpdir(), "beautidraw-token-short-frame-"));
+  t.after(() => rm(tempRoot, { recursive: true, force: true }));
+  const source = JSON.parse(await readFile(resolve(root, "decks/llm-token-flow/deck-spec.json"), "utf8"));
+  const band = structuredClone(source.bands.find((candidate) => candidate.visual?.data?.kind === "token-sequence"));
+  assert.ok(band);
+  band.height = 400;
+  band.visual.data.pieces = [
+    { text: "The", id: "toy-01" },
+    { text: " sky", id: "toy-02" },
+    { text: " glows", id: "toy-03" },
+  ];
+  band.visual.nodes = [];
+  band.visual.explanation = "Three toy pieces stay visible.";
+  band.visual.example = "A short sequence.";
+  band.visual.tradeoff = "Context costs.";
+  band.visual.evidence = [];
+  band.visual.callouts = [];
+  band.visual.inspect = "inspect toy pieces";
+  const spec = { title: "Short token frame", subtitle: "A bounded data example", footer: "Toy values only", bands: [band] };
+  const specPath = join(tempRoot, "spec.json");
+  const output = join(tempRoot, "out");
+  await writeFile(specPath, JSON.stringify(spec));
+  await cp(resolve(root, "decks/llm-token-flow/assets"), join(tempRoot, "assets"), { recursive: true });
+  const generated = spawnSync(process.execPath, [resolve(root, "scripts/generate.mjs"), specPath, output], { cwd: root, encoding: "utf8", timeout: 120_000 });
+  assert.equal(generated.status, 0, `${generated.stdout}\n${generated.stderr}`);
+  const composed = spawnSync(process.execPath, [resolve(root, "scripts/auto-compose.mjs"), specPath, output], { cwd: root, encoding: "utf8", timeout: 120_000 });
+  assert.equal(composed.status, 0, `${composed.stdout}\n${composed.stderr}`);
+  const deck = JSON.parse(await readFile(join(output, "deck.excalidraw"), "utf8"));
+  const visible = deck.elements.filter((element) => element.frameId === "b0-frame").map((element) => element.text ?? element.label?.text ?? "").join(" ");
+  for (const piece of band.visual.data.pieces) assert.ok(visible.includes(piece.text.trim()), `short token frame must retain ${piece.text}`);
+});
+
 test("token data keeps every native piece-to-ID link in final composition", { timeout: 120_000 }, async (t) => {
   const root = resolve(import.meta.dirname, "..");
   const tempRoot = await mkdtemp(join(tmpdir(), "beautidraw-token-link-pairs-"));

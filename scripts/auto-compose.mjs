@@ -10,7 +10,7 @@ import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { BODY_INSET, PAGE_WIDTH, RAMP, fontForRole } from "./layout.mjs";
+import { BODY_INSET, PAGE_WIDTH, RAMP, automaticEditorialLayout, automaticInspectY, fontForRole } from "./layout.mjs";
 import { CliError, runCli } from "./cli.mjs";
 import { normalizeAnnotations } from "./outline.mjs";
 import { preflightDeck, readJsonInput, resolveAssetWithinRoot } from "./preflight.mjs";
@@ -345,8 +345,7 @@ function assertAuthoredVisibleContent(meta, elements, bandIndex) {
 }
 
 function footerInspectY(meta) {
-  const bandHeight = Math.max(1, Number(meta.bandHeight) || 1);
-  return Math.min(0.95, Math.max(0.82, 1 - 36 / bandHeight));
+  return automaticInspectY(meta.bandHeight);
 }
 
 function semanticIcon(kind, {
@@ -435,8 +434,8 @@ function finish(meta, elements, extra = {}) {
       ? meta.callouts.map((callout) => `Callout — ${callout.label}${callout.note ? `: ${callout.note}` : ""}`)
       : []),
   ].filter(Boolean);
-  const editorialY = new Set(["tension", "matrix", "journey", "map", "evidence"]).has(meta.family) ? 0.74 : 0.68;
-  if (editorialParts.length) elements.push(text("explanation", 0.05, editorialY, editorialParts.join("  •  "), 28, textColor, "prose", { beautidrawMaxWidth: 0.90 }));
+  const editorialLayout = automaticEditorialLayout(meta.family);
+  if (editorialParts.length) elements.push(text("explanation", 0.05, editorialLayout.y, editorialParts.join("  •  "), editorialLayout.fontSize, textColor, "prose", { beautidrawMaxWidth: editorialLayout.maxWidth }));
   if (meta.inspect) elements.push(text("inspect", 0.05, footerInspectY(meta), `Inspect: ${meta.inspect}`, 23, textColor, "mono", { beautidrawMaxWidth: 0.90 }));
   return {
     lane: sequentialFamilies.has(meta.family) || meta.family === "matrix" ? "hybrid" : "composed",
