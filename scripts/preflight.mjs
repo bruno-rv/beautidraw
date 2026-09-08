@@ -5,6 +5,7 @@ import { isAbsolute, relative, resolve, dirname } from "node:path";
 import { CliError } from "./cli.mjs";
 import { DATA_VIGNETTE_VIEWPORT, validateDataVignette } from "./data-vignettes.mjs";
 import { BODY_INSET, BOUND_TEXT_PADDING, PAGE_WIDTH, RAMP, planDeck } from "./layout.mjs";
+import { buildOutline } from "./outline.mjs";
 
 export const CONTENT_BUDGETS = Object.freeze({
   thesisChars: 120,
@@ -155,6 +156,22 @@ function estimateWrappedLines(value, width, fontSize) {
 
 const DATA_TOKEN_RECOVERY = "Shorten the token label, reduce token items, or split the data vignette across frames; native cells stay single-line without truncation or font shrinking.";
 const DATA_FIXED_CELL_RECOVERY = "Shorten the label or use manual composition/split the data vignette across frames; fixed native cells stay single-line without truncation or font shrinking.";
+const DATA_OUTLINE_RECOVERY = "Keep authored data values portable for the outline; use a deck-relative image path or encode the example value.";
+
+function collectDataOutlinePathFailure(spec, band, index, { specPath }) {
+  try {
+    buildOutline({ ...spec, bands: [band] });
+  } catch (error) {
+    if (/outline contains an absolute source path/i.test(error?.message ?? "")) {
+      return failure(
+        `bands[${index}].visual.data`,
+        "data values contain an absolute or machine-local path that would make outline.md non-portable",
+        { specPath, recovery: DATA_OUTLINE_RECOVERY },
+      );
+    }
+  }
+  return null;
+}
 
 function collectDataNativeCapacityFailures(band, index, { bodyWidth, specPath }) {
   const data = band.visual?.data;
@@ -409,6 +426,10 @@ export function collectDeckPreflightFailures(spec, { specPath, specDir, mode = "
           ? `bands[${index}].visual.data`
           : `bands[${index}].visual.data.${dataFailure.field}`;
         failures.push(failure(field, dataFailure.reason, { specPath }));
+      }
+      if (dataValidationPassed) {
+        const outlinePathFailure = collectDataOutlinePathFailure(spec, band, index, { specPath });
+        if (outlinePathFailure) failures.push(outlinePathFailure);
       }
     }
 

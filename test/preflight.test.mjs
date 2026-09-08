@@ -402,6 +402,13 @@ test("native data capacity rejects wide dense labels while ordinary fixtures rem
     assert.ok(failures.some(({ field }) => field.startsWith("bands[0].visual.data")));
     assert.ok(failures.every(({ stage }) => stage === "preflight"));
   }
+  const unsafe = structuredClone(dataCases[0].ordinary);
+  unsafe.pieces[0].text = "/usr/bin";
+  const outlineFailures = collectDeckPreflightFailures(makeSpec(unsafe));
+  const outlineFailure = outlineFailures.find(({ reason }) => /machine-local path/.test(reason));
+  assert.ok(outlineFailure, "absolute data values must fail before browser work");
+  assert.equal(outlineFailure.field, "bands[0].visual.data");
+  assert.match(outlineFailure.recovery, /portable/);
 });
 
 test("malformed visual callouts produce structured failures", () => {
