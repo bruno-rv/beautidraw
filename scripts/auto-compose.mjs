@@ -400,7 +400,12 @@ function semanticCalloutShape(id, callout, x, y, width, _height, colors, fontSiz
 
 function genericCalloutPlacement(meta) {
   if (meta.family === "threshold") return { x: 0.68, y: 0.49 };
-  if (["field", "matrix"].includes(meta.family)) return { x: 0.36, y: 0.04 };
+  if (["field", "matrix"].includes(meta.family)) {
+    // A thesis occupies the top strip at y=.04. Keep generic callouts in the
+    // lower editorial lane when that strip is present so measured thesis text
+    // cannot collide with their labels or icons.
+    return { x: 0.36, y: meta.thesis ? 0.68 : 0.04 };
+  }
   if (["orbit", "constellation"].includes(meta.family)) return { x: 0.68, y: 0.04 };
   return { x: 0.36, y: 0.10 };
 }
@@ -460,7 +465,10 @@ function finish(meta, elements, extra = {}) {
       ? meta.callouts.map((callout) => `Callout — ${callout.label}${callout.note ? `: ${callout.note}` : ""}`)
       : []),
   ].filter(Boolean);
-  const editorialY = new Set(["tension", "matrix", "journey", "map", "evidence"]).has(meta.family) ? 0.74 : 0.68;
+  const thesisCalloutRow = meta.thesis && meta.callouts.length && ["field", "matrix"].includes(meta.family);
+  const editorialY = thesisCalloutRow
+    ? 0.78
+    : new Set(["tension", "matrix", "journey", "map", "evidence"]).has(meta.family) ? 0.74 : 0.68;
   if (editorialParts.length) elements.push(text("explanation", 0.05, editorialY, editorialParts.join("  •  "), 28, textColor, "prose", { beautidrawMaxWidth: 0.90 }));
   if (meta.inspect) elements.push(text("inspect", 0.05, footerInspectY(meta), `Inspect: ${meta.inspect}`, 23, textColor, "mono", { beautidrawMaxWidth: 0.90 }));
   return {
