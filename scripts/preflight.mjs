@@ -22,17 +22,17 @@ export const AUTO_COMPOSE_FAMILIES = Object.freeze([
 ]);
 export const FAMILY_CAPACITIES = Object.freeze({
   illustration: Object.freeze({ nodes: 2, callouts: 2 }),
-  orbit: Object.freeze({ nodes: 6 }),
-  field: Object.freeze({ nodes: 6 }),
+  orbit: Object.freeze({ nodes: 6, callouts: 2 }),
+  field: Object.freeze({ nodes: 6, callouts: 2 }),
   spotlight: Object.freeze({ nodes: 4, callouts: 4 }),
-  constellation: Object.freeze({ nodes: 6 }),
-  evidence: Object.freeze({ nodes: 4 }),
-  matrix: Object.freeze({ nodes: 4 }),
-  threshold: Object.freeze({ nodes: 3 }),
-  map: Object.freeze({ nodes: 6 }),
-  pipeline: Object.freeze({ nodes: 6 }),
-  journey: Object.freeze({ nodes: 6 }),
-  tension: Object.freeze({ nodes: 4 }),
+  constellation: Object.freeze({ nodes: 6, callouts: 2 }),
+  evidence: Object.freeze({ nodes: 4, callouts: 2 }),
+  matrix: Object.freeze({ nodes: 4, callouts: 2 }),
+  threshold: Object.freeze({ nodes: 3, callouts: 2 }),
+  map: Object.freeze({ nodes: 6, callouts: 2 }),
+  pipeline: Object.freeze({ nodes: 6, callouts: 2 }),
+  journey: Object.freeze({ nodes: 6, callouts: 2 }),
+  tension: Object.freeze({ nodes: 4, callouts: 2 }),
 });
 const PNG_SIGNATURE = "89504e470d0a1a0a";
 const CRC_TABLE = Array.from({ length: 256 }, (_, value) => {

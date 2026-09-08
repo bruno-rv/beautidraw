@@ -167,10 +167,12 @@ authored values.
 
 Semantic composition families have finite authored capacities. Preflight rejects excess arrays
 before browser work with a split-across-frames recovery message: `illustration` nodes/callouts
-2/2, `orbit` 6 nodes, `field` 6, `spotlight` 4/4, `constellation` 6, `evidence` 4,
-`matrix` 4, `threshold` 3, `map` 6, `pipeline` 6, `journey` 6, and `tension` 4. For
-illustration and spotlight, authored nodes are fallback content only when callouts are absent;
-their callout capacity is always enforced.
+2/2, `orbit` 6/2, `field` 6/2, `spotlight` 4/4, `constellation` 6/2, `evidence` 4/2,
+`matrix` 4/2, `threshold` 3/2, `map` 6/2, `pipeline` 6/2, `journey` 6/2, and
+`tension` 4/2 (nodes/callouts). For illustration and spotlight, authored nodes are fallback
+content only when callouts are absent; their callout capacity is always enforced. These
+automatic-mode caps keep the generic callout row readable; core/manual composition mode
+retains its existing exemption.
 
 Empty or whitespace-only labels are a **hard error** — the converter returns no text element
 for an empty string (spike F7), so a container would silently render blank.

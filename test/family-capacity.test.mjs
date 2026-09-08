@@ -67,6 +67,42 @@ test("illustration and spotlight reject authored callouts beyond their visible s
   }
 });
 
+test("generic composition families accept two callouts and reject a third before browser work", async (t) => {
+  const genericFamilies = Object.entries(FAMILY_CAPACITIES)
+    .filter(([family, capacity]) => !["illustration", "spotlight"].includes(family) && capacity.callouts === 2)
+    .map(([family]) => family);
+  const temp = await mkdtemp(join(tmpdir(), "beautidraw-generic-callout-capacity-"));
+  t.after(() => rm(temp, { recursive: true, force: true }));
+  for (const family of genericFamilies) {
+    const accepted = specFor({
+      pattern: "canvas",
+      height: 700,
+      visual: { family, callouts: [callout(0), callout(1)] },
+    });
+    assert.equal((await preflightDeck({ spec: accepted })).ok, true, `${family} must accept two callouts`);
+
+    const rejected = specFor({
+      pattern: "canvas",
+      height: 700,
+      visual: { family, callouts: [callout(0), callout(1), callout(2)] },
+    });
+    const preflight = await preflightDeck({ spec: rejected });
+    assert.equal(preflight.ok, false, `${family} must reject three callouts`);
+    assert.match(preflight.failures.map(({ reason }) => reason).join("\n"), new RegExp(`${family} family supports up to 2 authored callouts`));
+    const specPath = join(temp, `${family}.json`);
+    const outDir = join(temp, `${family}-out`);
+    await writeFile(specPath, JSON.stringify(rejected));
+    const result = spawnSync(process.execPath, [resolve(root, "scripts/build-deck.mjs"), specPath, outDir], {
+      cwd: root,
+      encoding: "utf8",
+      timeout: 120_000,
+    });
+    assert.notEqual(result.status, 0, `${family} must fail before browser work`);
+    assert.match(`${result.stdout}${result.stderr}`, new RegExp(`${family} family supports up to 2 authored callouts`));
+    assert.equal(existsSync(join(outDir, "deck.excalidraw")), false, `${family} must not publish a partial deck`);
+  }
+});
+
 test("preflight and public build reject seventh map node and fifth spotlight callout before browser work", async (t) => {
   const temp = await mkdtemp(join(tmpdir(), "beautidraw-family-capacity-"));
   t.after(() => rm(temp, { recursive: true, force: true }));

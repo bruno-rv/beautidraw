@@ -248,19 +248,49 @@ function ensureValid(data) {
   return normalizedData(data);
 }
 
-function formatNumber(value) {
+function formatExactNumber(value) {
   if (!Number.isFinite(value)) return String(value);
-  return new Intl.NumberFormat("en-US", {
-    useGrouping: false,
-    maximumSignificantDigits: 17,
-  }).format(value);
+  const raw = String(value);
+  const match = /^(-?)(\d+)(?:\.(\d+))?e([+-]?\d+)$/.exec(raw);
+  if (!match || Number(match[4]) < -20 || Number(match[4]) > 20) return raw;
+  const sign = match[1];
+  const digits = `${match[2]}${match[3] ?? ""}`;
+  const decimalIndex = match[2].length + Number(match[4]);
+  if (decimalIndex <= 0) return `${sign}0.${"0".repeat(-decimalIndex)}${digits}`;
+  if (decimalIndex >= digits.length) return `${sign}${digits}${"0".repeat(decimalIndex - digits.length)}`;
+  return `${sign}${digits.slice(0, decimalIndex)}.${digits.slice(decimalIndex)}`;
+}
+
+function formatDisplayNumber(value) {
+  if (!Number.isFinite(value)) return String(value);
+  const absolute = Math.abs(value);
+  if (absolute !== 0 && (absolute < 0.001 || absolute >= 1000)) {
+    return value.toExponential(0).replace(/e([+-])0+(\d+)/, "e$1$2");
+  }
+  return Number(value.toPrecision(2)).toString().replace(/^(-?)0\./, "$1.");
+}
+
+function exactVectorText(vector) {
+  return `[${vector.map(formatExactNumber).join(", ")}]`;
+}
+
+function displayVectorText(vector) {
+  return `[${vector.map(formatDisplayNumber).join(", ")}]`;
+}
+
+function vectorDisplayData(vector) {
+  const display = displayVectorText(vector);
+  return {
+    beautidrawDataValue: [...vector],
+    ...(display === exactVectorText(vector) ? {} : { beautidrawDisplayApproximation: true }),
+  };
 }
 
 export function formatProbabilityLabel(probability) {
   if (!Number.isFinite(probability) || probability <= 0) return "0%";
   const percentage = probability * 100;
   if (percentage < 0.01) return `${percentage.toExponential(2)}%`;
-  if (percentage >= 99.995) return `${formatNumber(percentage)}%`;
+  if (percentage >= 99.995) return probability < 1 ? "≈100%" : "100%";
   const decimals = percentage >= 10 ? 2 : percentage >= 1 ? 3 : 4;
   return `${percentage.toFixed(decimals)}%`;
 }
@@ -273,7 +303,9 @@ function codeToken(value) {
   const content = String(value).replace(/[\r\n]/g, "");
   const longestRun = Math.max(0, ...(content.match(/`+/g) ?? []).map((run) => run.length));
   const fence = "`".repeat(longestRun + 1);
-  const padded = content.startsWith(" ") || content.endsWith(" ") ? ` ${content} ` : content;
+  const padded = content.startsWith(" ") || content.endsWith(" ") || content.startsWith("`") || content.endsWith("`")
+    ? ` ${content} `
+    : content;
   return `${fence}${padded}${fence}`;
 }
 
@@ -293,16 +325,16 @@ export function dataVignetteOutline(data) {
   } else if (normalized.kind === "lookup") {
     lines.push(`- **Lookup key:** ${codeToken(normalized.key)}`);
     lines.push("- **Rows:**");
-    for (const row of normalized.rows) lines.push(`  - ${codeToken(row.id)} — ${markdownText(row.label)} → ${codeToken(`[${row.vector.map(formatNumber).join(", ")}]`)}`);
+    for (const row of normalized.rows) lines.push(`  - ${codeToken(row.id)} — ${markdownText(row.label)} → ${codeToken(exactVectorText(row.vector))}`);
     const selected = normalized.rows.find((row) => row.id === normalized.selected);
-    lines.push(`- **Selected row:** ${codeToken(normalized.selected)} — ${markdownText(selected.label)} → ${codeToken(`[${selected.vector.map(formatNumber).join(", ")}]`)}`);
+    lines.push(`- **Selected row:** ${codeToken(normalized.selected)} — ${markdownText(selected.label)} → ${codeToken(exactVectorText(selected.vector))}`);
   } else {
     lines.push("- **Candidates and probabilities:**");
     for (const candidate of normalized.candidates) {
-      lines.push(`  - ${markdownText(candidate.label)} — ${codeToken(formatNumber(candidate.probability))} probability (${codeToken(formatProbabilityLabel(candidate.probability))})`);
+      lines.push(`  - ${markdownText(candidate.label)} — ${codeToken(formatExactNumber(candidate.probability))} probability (${codeToken(formatProbabilityLabel(candidate.probability))})`);
     }
     const selected = normalized.candidates.find((candidate) => candidate.label === normalized.selected);
-    lines.push(`- **Selected candidate:** ${markdownText(selected.label)} — ${codeToken(formatNumber(selected.probability))}`);
+    lines.push(`- **Selected candidate:** ${markdownText(selected.label)} — ${codeToken(formatExactNumber(selected.probability))}`);
   }
   return lines.join("\n");
 }
@@ -536,12 +568,13 @@ function lookup(data, area, colors) {
       textColor: colors.text,
       strokeWidth: selected ? 3 : 2,
     }));
-    elements.push(box(area, `row-${index + 1}-vector`, vectorX, y, vectorWidth, rowHeight, `[${row.vector.map(formatNumber).join(", ")}]`, {
+    elements.push(box(area, `row-${index + 1}-vector`, vectorX, y, vectorWidth, rowHeight, displayVectorText(row.vector), {
       role: "mono",
       fill,
       stroke,
       textColor: colors.text,
       strokeWidth: selected ? 3 : 2,
+      customData: vectorDisplayData(row.vector),
     }));
   });
   const outputY = Math.min(0.69, Math.max(0.42, selectedY - 0.02));
@@ -553,12 +586,13 @@ function lookup(data, area, colors) {
     textColor: colors.text,
     strokeWidth: 3,
   }));
-  elements.push(box(area, "result-vector", outputX, outputY + 0.10, outputWidth, 0.14, `[${selectedRow.vector.map(formatNumber).join(", ")}]`, {
+  elements.push(box(area, "result-vector", outputX, outputY + 0.10, outputWidth, 0.14, displayVectorText(selectedRow.vector), {
     role: "mono",
     fill: colors.surface,
     stroke: colors.accentStroke,
     textColor: colors.text,
     strokeWidth: 3,
+    customData: vectorDisplayData(selectedRow.vector),
   }));
   elements.push(textElement(area, "lookup-note", 0.02, 0.91, "The selected row is copied as the toy input vector.", colors.muted, "prose", 0.65));
   return elements;
@@ -601,13 +635,17 @@ function distribution(data, area, colors) {
       roughness: 0,
       customData: { beautidrawCompositionKind: "data-vignette-bar" },
     });
-    elements.push(box(area, `candidate-${index + 1}-value`, valueX, y, valueWidth, rowHeight, formatProbabilityLabel(candidate.probability), {
+    const probabilityLabel = formatProbabilityLabel(candidate.probability);
+    elements.push(box(area, `candidate-${index + 1}-value`, valueX, y, valueWidth, rowHeight, probabilityLabel, {
       role: "mono",
       fill,
       stroke,
       textColor: colors.text,
       strokeWidth: selected ? 3 : 2,
-      customData: { beautidrawDataValue: candidate.probability },
+      customData: {
+        beautidrawDataValue: candidate.probability,
+        ...(probabilityLabel.startsWith("≈") ? { beautidrawDisplayApproximation: true } : {}),
+      },
     }));
   });
   const noteY = Math.min(0.86, rowTop + data.candidates.length * (rowHeight + rowGap) + 0.03);

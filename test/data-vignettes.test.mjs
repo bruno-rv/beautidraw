@@ -89,6 +89,38 @@ test("data-vignette validation rejects misleading, unbounded, and inconsistent d
   assert.ok(validateDataVignette(badDistribution).some(({ field, reason }) => field === "candidates" && /sum/.test(reason)));
 });
 
+test("precision data keeps raw metadata while compacting bounded display labels", () => {
+  const vector = [0.12345678901234567, -0.9876543210987654, Number.MIN_VALUE, -0.000000000000000123];
+  const lookup = {
+    ...lookupData,
+    rows: [
+      { id: "toy-301", label: "precise", vector },
+      { id: "toy-314", label: "selected", vector: [...vector] },
+    ],
+    selected: "toy-314",
+  };
+  const renderedLookup = renderDataVignette(lookup, { idPrefix: "precision-lookup" });
+  const vectorContainers = renderedLookup.filter((element) => /(?:row-[12]-vector|result-vector)$/.test(element.id));
+  assert.equal(vectorContainers.length, 3);
+  for (const container of vectorContainers) {
+    assert.deepEqual(container.customData.beautidrawDataValue, vector);
+    assert.equal(container.customData.beautidrawDisplayApproximation, true);
+    assert.ok(container.label.text.length < 70, `${container.id} display must remain bounded`);
+  }
+  const extreme = {
+    ...distributionData,
+    candidates: [
+      { label: "near-one", probability: 1 - Number.EPSILON },
+      { label: "tiny", probability: Number.EPSILON },
+    ],
+    selected: "tiny",
+  };
+  const renderedDistribution = renderDataVignette(extreme, { idPrefix: "precision-distribution" });
+  const valueLabels = renderedDistribution.filter((element) => /candidate-\d+-value$/.test(element.id)).map((element) => element.label.text);
+  assert.deepEqual(valueLabels, ["≈100%", "2.22e-14%"]);
+  assert.ok(renderedDistribution.some((element) => element.customData?.beautidrawDataValue === Number.EPSILON));
+});
+
 test("renderDataVignette emits readable normalized editable primitives with role metadata", () => {
   assert.throws(
     () => renderDataVignette(tokenData, { idPrefix: "too-small", width: DATA_VIGNETTE_VIEWPORT.minWidth - 0.01, height: DATA_VIGNETTE_VIEWPORT.minHeight }),
@@ -184,7 +216,10 @@ test("declared maximum data fits measured editor bounds in a real browser", { ti
     selected: "tiny",
   };
   assert.equal(formatProbabilityLabel(0.0000004), "4.00e-5%");
-  assert.equal(formatProbabilityLabel(0.9999996), "99.99996%");
+  assert.equal(formatProbabilityLabel(0.9999996), "≈100%");
+  assert.equal(formatProbabilityLabel(1 - Number.EPSILON), "≈100%");
+  assert.equal(formatProbabilityLabel(Number.EPSILON), "2.22e-14%");
+  assert.notEqual(formatProbabilityLabel(Number.MIN_VALUE), "0%");
   const scenes = [maxToken, maxLookup, maxDistribution, adaptiveDistribution];
   for (const data of scenes) assert.deepEqual(validateDataVignette(data), []);
   assert.ok(DATA_VIGNETTE_VIEWPORT.minWidth >= 0.68 && DATA_VIGNETTE_VIEWPORT.minHeight >= 0.76);
@@ -255,7 +290,7 @@ test("declared maximum data fits measured editor bounds in a real browser", { ti
     assert.deepEqual(result.failures, []);
     assert.ok(result.counts.every((count) => count > 8));
     assert.ok(result.texts.includes("4.00e-5%"));
-    assert.ok(result.texts.includes("99.99996%"));
+    assert.ok(result.texts.includes("≈100%"));
   });
 });
 
@@ -346,6 +381,91 @@ test("six-candidate distribution stays inside the final composed viewport", { ti
       assert.equal(overlaps(dataElement, editorialElement), false, `${dataElement.id} overlaps ${editorialElement.id}`);
     }
   }
+});
+
+test("precision vectors and extreme probabilities survive final composition", { timeout: 120_000 }, async (t) => {
+  const root = resolve(import.meta.dirname, "..");
+  const tempRoot = await mkdtemp(join(tmpdir(), "beautidraw-precision-final-compose-"));
+  t.after(() => rm(tempRoot, { recursive: true, force: true }));
+  const spec = JSON.parse(await readFile(resolve(root, "decks/llm-token-flow/deck-spec.json"), "utf8"));
+  const preciseVector = [0.12345678901234567, -0.9876543210987654, Number.MIN_VALUE, -0.000000000000000123];
+  const lookupBand = spec.bands.find((band) => band.visual?.data?.kind === "lookup");
+  const distributionBand = spec.bands.find((band) => band.visual?.data?.kind === "distribution");
+  assert.ok(lookupBand && distributionBand);
+  lookupBand.visual.data.rows = lookupBand.visual.data.rows.map((row) => ({ ...row, vector: [...preciseVector] }));
+  distributionBand.visual.data.candidates = [
+    { label: "near-one", probability: 1 - Number.EPSILON },
+    { label: "tiny", probability: Number.EPSILON },
+  ];
+  distributionBand.visual.data.selected = "tiny";
+  const specPath = join(tempRoot, "spec.json");
+  const output = join(tempRoot, "out");
+  await writeFile(specPath, JSON.stringify(spec));
+  await cp(resolve(root, "decks/llm-token-flow/assets"), join(tempRoot, "assets"), { recursive: true });
+  const result = spawnSync(process.execPath, [resolve(root, "scripts/build-deck.mjs"), specPath, output], {
+    cwd: root,
+    encoding: "utf8",
+    timeout: 120_000,
+  });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const deck = JSON.parse(await readFile(join(output, "deck.excalidraw"), "utf8"));
+  const outline = await readFile(join(output, "outline.md"), "utf8");
+  for (const source of [lookupBand.visual.data, distributionBand.visual.data]) {
+    for (const line of dataVignetteOutline(source).split("\n").filter((value) => value.includes("→") || value.includes("near-one") || value.includes("tiny"))) {
+      assert.ok(outline.includes(line), `outline must retain exact data line: ${line}`);
+    }
+  }
+  const overlap = (a, b) => Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x) > 0
+    && Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y) > 0;
+  for (const { band, data } of [
+    { band: spec.bands.indexOf(lookupBand), data: lookupBand.visual.data },
+    { band: spec.bands.indexOf(distributionBand), data: distributionBand.visual.data },
+  ]) {
+    const frame = deck.elements.find((element) => element.id === `b${band}-frame`);
+    const deckLine = deck.elements.find((element) => element.id === `b${band}-deck`);
+    const body = {
+      x: frame.x + BODY_INSET,
+      y: deckLine.y + deckLine.height + DECK_BODY_GAP,
+      width: frame.width - 2 * BODY_INSET,
+      height: frame.y + frame.height - FRAME_PAD_BOTTOM - (deckLine.y + deckLine.height + DECK_BODY_GAP),
+    };
+    const viewport = {
+      x: spec.bands[band].visual.image.side === "right" ? 0.03 : 0.30,
+      y: 0.07,
+      width: 0.68,
+      height: 0.76,
+    };
+    const bounds = {
+      x: body.x + body.width * viewport.x,
+      y: body.y + body.height * viewport.y,
+      width: body.width * viewport.width,
+      height: body.height * viewport.height,
+    };
+    const members = deck.elements.filter((element) => element.frameId === frame.id);
+    const dataId = new RegExp(`^b${band}-data-(?!header(?:$|-))`);
+    const containers = new Set(members.filter((element) => dataId.test(element.id)).map((element) => element.id));
+    const dataElements = members.filter((element) => dataId.test(element.id) || containers.has(element.containerId));
+    const outside = dataElements.filter((element) =>
+      element.x < bounds.x - 0.5 || element.y < bounds.y - 0.5
+      || element.x + element.width > bounds.x + bounds.width + 0.5
+      || element.y + element.height > bounds.y + bounds.height + 0.5,
+    );
+    assert.deepEqual(outside.map((element) => element.id), [], `${data.kind}: data must stay in the allocated viewport`);
+    const cells = dataElements.filter((element) => element.type !== "line" && element.type !== "arrow" && !element.containerId);
+    for (let left = 0; left < cells.length; left += 1) {
+      for (let right = left + 1; right < cells.length; right += 1) {
+        assert.equal(overlap(cells[left], cells[right]), false, `${cells[left].id} overlaps ${cells[right].id}`);
+      }
+    }
+  }
+  const lookupVectors = deck.elements.filter((element) => /^b2-data-(?:row-\d+-vector|result-vector)$/.test(element.id));
+  assert.equal(lookupVectors.length, 4);
+  assert.ok(lookupVectors.every((element) => element.customData?.beautidrawDataValue?.every((value, index) => value === preciseVector[index])));
+  const distributionValues = deck.elements.filter((element) => /^b4-data-candidate-[12]-value$/.test(element.id));
+  assert.deepEqual(distributionValues.map((element) => element.customData.beautidrawDataValue), [1 - Number.EPSILON, Number.EPSILON]);
+  const distributionTexts = deck.elements.filter((element) => element.frameId === "b4-frame" && element.type === "text").map((element) => element.text);
+  assert.ok(distributionTexts.includes("≈100%"));
+  assert.ok(distributionTexts.includes("2.22e-14%"));
 });
 
 test("data illustrations reserve the vignette before fitting 1000px canvases", { timeout: 120_000 }, async (t) => {
@@ -497,6 +617,12 @@ test("data outline preserves single and multiple backticks plus spaces in code s
   assert.ok(outline.includes('``"`"``'));
   assert.ok(outline.includes('```"``x``"```'));
   assert.ok(outline.includes('``"  spaced `value`  "``'));
+});
+
+test("data outline preserves valid lookup keys ending in backticks", () => {
+  const lookup = { ...lookupData, key: "`toy-314`" };
+  assert.deepEqual(validateDataVignette(lookup), []);
+  assert.ok(dataVignetteOutline(lookup).includes("`` `toy-314` ``"));
 });
 
 test("auto-compose accepts omitted optional explanation and example on data and illustration paths", { timeout: 120_000 }, async (t) => {
