@@ -101,7 +101,7 @@ function dataIllustrationCalloutParts(band) {
   return source.map((node) => {
     const label = isObject(node) ? cleanText(node.label) : cleanText(node);
     const note = isObject(node) ? cleanText(node.note ?? node.text) : "";
-    return note ? `Callout — ${label}: ${note}` : "";
+    return label ? `Callout — ${label}${note ? `: ${note}` : ""}` : "";
   }).filter(Boolean);
 }
 

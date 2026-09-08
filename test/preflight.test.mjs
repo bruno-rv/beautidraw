@@ -258,6 +258,25 @@ test("footer budget counts every rendered callout and evidence part", async () =
   };
   const dataCalloutUnderBudget = collectDeckPreflightFailures(dataCalloutBase);
   assert.equal(dataCalloutUnderBudget.some(({ reason }) => /footer content is/.test(reason)), false);
+  const labelOnly = structuredClone(dataCalloutBase);
+  labelOnly.bands[0].visual.explanation = "E".repeat(430);
+  labelOnly.bands[0].visual.callouts = [
+    { kind: "example", label: "A".repeat(72) },
+    { kind: "boundary", label: "B".repeat(72) },
+  ];
+  assert.match(collectDeckPreflightFailures(labelOnly).map(({ reason }) => reason).join("\n"), /footer content is/);
+  const fallbackLabelOnly = structuredClone(labelOnly);
+  delete fallbackLabelOnly.bands[0].visual.callouts;
+  fallbackLabelOnly.bands[0].visual.nodes = [{ label: "C".repeat(72) }, { label: "D".repeat(72) }];
+  assert.match(collectDeckPreflightFailures(fallbackLabelOnly).map(({ reason }) => reason).join("\n"), /footer content is/);
+  const wideCallout = structuredClone(dataCalloutBase);
+  wideCallout.bands[0].visual.callouts = [
+    { kind: "example", label: "W".repeat(72) },
+    { kind: "boundary", label: "界".repeat(72) },
+  ];
+  const wideCalloutFailures = collectDeckPreflightFailures(wideCallout);
+  assert.match(wideCalloutFailures.map(({ reason }) => reason).join("\n"), /data illustration boundary needs/);
+  assert.equal(collectDeckPreflightFailures(wideCallout, { mode: "core" }).some(({ reason }) => /data illustration boundary needs/.test(reason)), false);
   const dataCalloutOverflow = structuredClone(dataCalloutBase);
   dataCalloutOverflow.bands[0].visual.explanation = "E".repeat(50);
   dataCalloutOverflow.bands[0].visual.callouts[0].note = "B".repeat(180);
