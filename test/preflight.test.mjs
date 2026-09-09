@@ -717,6 +717,22 @@ test("native data capacity rejects wide dense labels while ordinary fixtures rem
   inspectPathSpec.bands[0].visual.inspect = "/usr/bin";
   const inspectFailures = collectDeckPreflightFailures(inspectPathSpec);
   assert.equal(inspectFailures.some(({ field, reason }) => field === "bands[0].visual.data" && /machine-local path/.test(reason)), false, "inspect paths must not be attributed to data values");
+  const scientific = makeSpec({
+    kind: "lookup",
+    caption,
+    key: "toy-key",
+    rows: [
+      { id: "toy-01", label: "tiny", vector: [-1e-100, -1e-100, -1e-100, -1e-100] },
+      { id: "toy-02", label: "next", vector: [-1e-100, -1e-100, -1e-100, -1e-100] },
+    ],
+    selected: "toy-01",
+  });
+  const scientificFailures = collectDeckPreflightFailures(scientific);
+  assert.equal(
+    scientificFailures.some(({ reason }) => /native data label requires/.test(reason)),
+    false,
+    `compact scientific vectors must fit the measured lookup cell:\n${scientificFailures.map(({ field, reason }) => `${field}: ${reason}`).join("\n")}`,
+  );
 });
 
 test("malformed visual callouts produce structured failures", () => {

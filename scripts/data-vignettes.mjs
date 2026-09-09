@@ -274,8 +274,36 @@ function exactVectorText(vector) {
   return `[${vector.map(formatExactNumber).join(", ")}]`;
 }
 
-function displayVectorText(vector) {
-  return `[${vector.map(formatDisplayNumber).join(", ")}]`;
+// Cascadia 23px in the 28%-wide lookup vector cell on the standard body holds
+// 30 glyphs. Bound the whole vector, not just each component, so exponent-heavy
+// rows stay on one line inside that fixed cell.
+const VECTOR_DISPLAY_MAX_CHARS = 30;
+
+function factoredExponentText(formatted) {
+  const matches = formatted.map((text) => /^(-?)(\d+(?:\.\d+)?)e([+-]?\d+)$/.exec(text));
+  if (matches.some((match) => match == null)) return null;
+  const exponent = matches[0][3];
+  if (!matches.every((match) => match[3] === exponent)) return null;
+  const coefficients = matches.map((match) => `${match[1]}${match[2]}`);
+  return `[${coefficients.join(",")}]e${exponent}`;
+}
+
+function compactVectorComponent(value) {
+  const display = formatDisplayNumber(value);
+  if (display.length <= 5) return display;
+  if (!Number.isFinite(value) || value === 0) return display;
+  return value < 0 ? "-≈0" : "≈0";
+}
+
+export function displayVectorText(vector) {
+  const formatted = vector.map(formatDisplayNumber);
+  const spaced = `[${formatted.join(", ")}]`;
+  if (spaced.length <= VECTOR_DISPLAY_MAX_CHARS) return spaced;
+  const factored = factoredExponentText(formatted);
+  if (factored && factored.length <= VECTOR_DISPLAY_MAX_CHARS) return factored;
+  const tight = `[${formatted.join(",")}]`;
+  if (tight.length <= VECTOR_DISPLAY_MAX_CHARS) return tight;
+  return `[${vector.map(compactVectorComponent).join(", ")}]`;
 }
 
 function vectorDisplayData(vector) {

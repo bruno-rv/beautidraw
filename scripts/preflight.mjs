@@ -3,7 +3,7 @@ import { constants } from "node:fs";
 import { isAbsolute, relative, resolve, dirname } from "node:path";
 
 import { CliError } from "./cli.mjs";
-import { DATA_VIGNETTE_VIEWPORT, dataVignetteOutline, validateDataVignette } from "./data-vignettes.mjs";
+import { DATA_VIGNETTE_VIEWPORT, dataVignetteOutline, displayVectorText, validateDataVignette } from "./data-vignettes.mjs";
 import {
   automaticEditorialLayout,
   automaticInspectY,
@@ -250,9 +250,9 @@ function collectDataNativeCapacityFailures(band, index, { bodyWidth, bodyHeight,
       { specPath, recovery: DATA_CAPTION_RECOVERY },
     ));
   }
-  const check = (field, value, width, fixedCell = false) => {
+  const check = (field, value, width, fixedCell = false, role = "prose") => {
     const text = String(value ?? "");
-    const lines = estimateWrappedLines(text, Math.max(1, width - 2 * BOUND_TEXT_PADDING), RAMP.note);
+    const lines = estimateWrappedLines(text, Math.max(1, width - 2 * BOUND_TEXT_PADDING), RAMP.note, role);
     if (lines <= 1) return;
     failures.push(failure(
       `bands[${index}].visual.data.${field}`,
@@ -299,6 +299,9 @@ function collectDataNativeCapacityFailures(band, index, { bodyWidth, bodyHeight,
     data.rows.forEach((row, rowIndex) => {
       check(`rows[${rowIndex}].id`, row.id, viewportWidth * 0.20, true);
       check(`rows[${rowIndex}].label`, row.label, viewportWidth * 0.20, true);
+      if (Array.isArray(row.vector)) {
+        check(`rows[${rowIndex}].vector`, displayVectorText(row.vector), viewportWidth * 0.28, true, "mono");
+      }
     });
   } else if (data.kind === "distribution") {
     const rowHeight = viewportHeight * Math.min(0.085, 0.54 / data.candidates.length);

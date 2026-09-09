@@ -10,13 +10,14 @@ import {
   DATA_VIGNETTE_LIMITS,
   DATA_VIGNETTE_VIEWPORT,
   dataVignetteOutline,
+  displayVectorText,
   formatProbabilityLabel,
   renderDataVignette,
   validateDataVignette,
 } from "../scripts/data-vignettes.mjs";
-import { BODY_INSET, BOUND_TEXT_PADDING, DECK_BODY_GAP, FONT, FRAME_PAD_BOTTOM } from "../scripts/layout.mjs";
+import { BODY_INSET, BOUND_TEXT_PADDING, DECK_BODY_GAP, FONT, FRAME_PAD_BOTTOM, PAGE_WIDTH } from "../scripts/layout.mjs";
 import { buildOutline } from "../scripts/outline.mjs";
-import { preflightDeck } from "../scripts/preflight.mjs";
+import { collectDeckPreflightFailures, preflightDeck } from "../scripts/preflight.mjs";
 import { withHarness } from "../scripts/harness-runner.mjs";
 
 const caption = "Synthetic illustrative example — toy values are not real tokenizer or model output.";
@@ -119,6 +120,55 @@ test("precision data keeps raw metadata while compacting bounded display labels"
   const valueLabels = renderedDistribution.filter((element) => /candidate-\d+-value$/.test(element.id)).map((element) => element.label.text);
   assert.deepEqual(valueLabels, ["≈100%", "2.22e-14%"]);
   assert.ok(renderedDistribution.some((element) => element.customData?.beautidrawDataValue === Number.EPSILON));
+});
+
+test("scientific lookup vectors stay inside the fixed cell while keeping exact values", () => {
+  const vector = [-1e-100, -1e-100, -1e-100, -1e-100];
+  const display = displayVectorText(vector);
+  assert.equal(display, "[-1,-1,-1,-1]e-100");
+  assert.ok(display.length <= 30, `whole-vector display must fit the 28% cell, got ${JSON.stringify(display)}`);
+  const lookup = {
+    ...lookupData,
+    rows: [
+      { id: "toy-301", label: "tiny", vector },
+      { id: "toy-314", label: "selected", vector: [...vector] },
+    ],
+    selected: "toy-314",
+  };
+  assert.deepEqual(validateDataVignette(lookup), []);
+  const rendered = renderDataVignette(lookup, { idPrefix: "scientific-lookup" });
+  const vectorContainers = rendered.filter((element) => /(?:row-[12]-vector|result-vector)$/.test(element.id));
+  assert.equal(vectorContainers.length, 3);
+  for (const container of vectorContainers) {
+    assert.equal(container.label.text, display);
+    assert.ok(container.label.text.length <= 30);
+    assert.deepEqual(container.customData.beautidrawDataValue, vector);
+    assert.equal(container.customData.beautidrawDisplayApproximation, true);
+  }
+  const outline = dataVignetteOutline(lookup);
+  assert.ok(outline.includes("[-1e-100, -1e-100, -1e-100, -1e-100]"));
+  const spec = {
+    title: "Scientific lookup",
+    subtitle: "A bounded native scene",
+    footer: "Toy values only",
+    bands: [{
+      heading: "Data canvas",
+      deck: "A bounded native data scene",
+      pattern: "canvas",
+      accent: "blue",
+      height: 800,
+      visual: {
+        family: "illustration",
+        data: lookup,
+        image: { file: "assets/data.png", use: "Data scene", description: "A data teaching scene" },
+        explanation: "Short native data explanation.",
+      },
+    }],
+  };
+  const failures = collectDeckPreflightFailures(spec);
+  assert.equal(failures.some(({ reason }) => /native data label requires/.test(reason)), false, failures.map(({ field, reason }) => `${field}: ${reason}`).join("\n"));
+  const core = collectDeckPreflightFailures(spec, { mode: "core" });
+  assert.equal(core.length, 0);
 });
 
 test("renderDataVignette emits readable normalized editable primitives with role metadata", () => {
@@ -291,6 +341,71 @@ test("declared maximum data fits measured editor bounds in a real browser", { ti
     assert.ok(result.counts.every((count) => count > 8));
     assert.ok(result.texts.includes("4.00e-5%"));
     assert.ok(result.texts.includes("≈100%"));
+  });
+});
+
+test("scientific lookup vectors do not wrap into the next native row", { timeout: 120_000 }, async () => {
+  const vector = [-1e-100, -1e-100, -1e-100, -1e-100];
+  const lookup = {
+    ...lookupData,
+    rows: [
+      { id: "toy-301", label: "tiny", vector },
+      { id: "toy-314", label: "next", vector: [...vector] },
+    ],
+    selected: "toy-314",
+  };
+  const rendered = renderDataVignette(lookup, {
+    idPrefix: "scientific",
+    x: 0.03,
+    y: 0.07,
+    width: DATA_VIGNETTE_VIEWPORT.minWidth,
+    height: DATA_VIGNETTE_VIEWPORT.minHeight,
+  });
+  await withHarness(async ({ page }) => {
+    const result = await page.evaluate(async ({ rendered, body }) => {
+      await document.fonts.ready;
+      const api = window.__bdApi;
+      const overlap = (a, b) => Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x) > 0
+        && Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y) > 0;
+      const pixels = rendered.map((skeleton) => {
+        const element = {
+          ...skeleton,
+          x: body.x + body.width * skeleton.x,
+          y: body.y + body.height * skeleton.y,
+        };
+        if (Number.isFinite(skeleton.width)) element.width = body.width * skeleton.width;
+        if (Number.isFinite(skeleton.height)) element.height = body.height * skeleton.height;
+        if (Array.isArray(skeleton.points)) element.points = skeleton.points.map(([x, y]) => [x * element.width, y * element.height]);
+        return element;
+      });
+      const converted = api.convertToExcalidrawElements(pixels, { regenerateIds: false });
+      const failures = [];
+      const rowCells = converted.filter((element) => /^scientific-row-\d+-(?:id|label|vector)$/.test(element.id));
+      for (let i = 0; i < rowCells.length; i += 1) {
+        for (let j = i + 1; j < rowCells.length; j += 1) {
+          if (overlap(rowCells[i], rowCells[j])) failures.push(`${rowCells[i].id} overlaps ${rowCells[j].id}`);
+        }
+      }
+      const display = converted.filter((element) => /(?:row-\d+-vector|result-vector)$/.test(element.id)).map((element) => {
+        const label = converted.find((item) => item.containerId === element.id);
+        return { id: element.id, text: label?.text, height: element.height, labelHeight: label?.height };
+      });
+      for (const item of display) {
+        if ((item.labelHeight ?? 0) > item.height + 1) failures.push(`${item.id}: bound label taller than the fixed cell`);
+      }
+      return { failures, display };
+    }, {
+      rendered,
+      body: {
+        x: 80,
+        y: 80,
+        width: PAGE_WIDTH - 2 * BODY_INSET,
+        height: 800,
+      },
+    });
+    assert.deepEqual(result.failures, []);
+    assert.ok(result.display.every((item) => item.text !== "[-1e-100, -1e-100, -1e-100, -1e-100]"));
+    assert.ok(result.display.every((item) => item.text && item.text.length <= 30));
   });
 });
 
