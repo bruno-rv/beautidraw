@@ -170,10 +170,19 @@ test("composed token-flow exemplar survives the golden build inside the real edi
     assert.ok(outlineHeadingOffsets[index] > outlineHeadingOffsets[index - 1], "outline frame headings must remain in frame order");
   }
 
-  // Threshold-family composition regression: frame 2 must emit its axis and
-  // zone elements instead of crashing on an undefined text color.
-  for (const id of ["b1-threshold-axis", "b1-left-zone", "b1-threshold", "b1-right-zone"]) {
-    assert.ok(elements.some((element) => element.id === id), `threshold family must compose ${id}`);
+  // Threshold-family composition regression: frame 2 keeps an explicit
+  // boundary, three readable open labels, and meaningful marks rather than
+  // flattening each zone into an auto-sized prose container.
+  assert.equal(elements.find((element) => element.id === "b1-threshold-axis")?.type, "line");
+  for (const [id, type] of [
+    ["b1-left-zone-mark", "rectangle"],
+    ["b1-threshold-mark", "diamond"],
+    ["b1-right-zone-mark", "rectangle"],
+  ]) {
+    assert.equal(elements.find((element) => element.id === id)?.type, type, `threshold family must compose ${id} as a mark`);
+  }
+  for (const id of ["b1-left-zone-label", "b1-threshold-label", "b1-right-zone-label"]) {
+    assert.ok(elements.some((element) => element.id === id && element.type === "text" && element.text.trim()), `threshold family must keep readable ${id}`);
   }
 
   // Semantic callouts survive with their kinds, and every bound label stays
@@ -181,7 +190,6 @@ test("composed token-flow exemplar survives the golden build inside the real edi
   // right page edge when sized like a full annotation column.
   const callouts = spec.bands.flatMap((band) => band.visual?.callouts ?? []);
   const semanticElements = elements.filter((element) => element.customData?.semanticKind);
-  assert.equal(semanticElements.length, callouts.length, "every authored callout must survive composition as one semantic element");
   const frameById = new Map(frames.map((frame) => [frame.id, frame]));
   const semanticShapeByKind = { example: "ellipse", boundary: "diamond", inspect: "line", warning: "rectangle" };
   for (const element of semanticElements) {
@@ -197,6 +205,35 @@ test("composed token-flow exemplar survives the golden build inside the real edi
       `${label.id} must not overflow its frame's right edge`,
     );
   }
+
+  const countOccurrences = (haystack, needle) => {
+    let count = 0;
+    let offset = 0;
+    while (needle) {
+      const next = haystack.indexOf(needle, offset);
+      if (next < 0) break;
+      count += 1;
+      offset = next + needle.length;
+    }
+    return count;
+  };
+  for (const [bandIndex, band] of spec.bands.entries()) {
+    if (!band.visual?.data) continue;
+    const frameText = elements
+      .filter((element) => element.frameId === `b${bandIndex}-frame`)
+      .map((element) => element.text)
+      .filter((value) => typeof value === "string")
+      .join(" ")
+      .replace(/\s+/g, " ");
+    for (const callout of band.visual.callouts ?? []) {
+      const renderedCallout = `Callout — ${callout.label}${callout.note ? `: ${callout.note}` : ""}`;
+      assert.equal(countOccurrences(frameText, renderedCallout), 1, `data callout must render exactly once: ${callout.label}`);
+      const kindLabel = `${callout.kind[0].toUpperCase()}${callout.kind.slice(1)}`;
+      assert.ok(outline.includes(`**${kindLabel}: ${callout.label}**`), `outline must preserve data callout kind: ${callout.label}`);
+      if (callout.note) assert.ok(outline.includes(callout.note), `outline must preserve data callout note: ${callout.label}`);
+    }
+  }
+
   for (const element of elements) {
     if (!element.frameId || ["line", "arrow"].includes(element.type)) continue;
     const hostFrame = frameById.get(element.frameId);

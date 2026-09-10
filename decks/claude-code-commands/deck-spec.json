@@ -91,9 +91,17 @@
           {
             "label": "Parallel",
             "note": "/tasks · /batch · /background"
+          },
+          {
+            "label": "Shipping",
+            "note": "/diff · /code-review"
+          },
+          {
+            "label": "Recovery",
+            "note": "/resume · /rewind"
           }
         ],
-        "explanation": "Recovery rides at the loop's end: /resume returns, /rewind rolls back. Four of the six moments sit in this map; the deck walks the rest in order.",
+        "explanation": "Shipping and Recovery close the loop after the fork: /diff and /code-review inspect the handoff; /resume and /rewind return to prior work.",
         "example": "Shipping (/diff, /code-review) and Recovery close the loop after the fork.",
         "tradeoff": "Alphabetical sorting hides this loop's shape.",
         "inspect": "/help shows all 109",

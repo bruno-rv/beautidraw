@@ -1,0 +1,425 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
+
+import { BODY_INSET, DECK_BODY_GAP, FRAME_PAD_BOTTOM } from "../scripts/layout.mjs";
+import { preflightDeck } from "../scripts/preflight.mjs";
+
+const root = resolve(import.meta.dirname, "..");
+
+function overlaps(a, b) {
+  return Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x) > 0
+    && Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y) > 0;
+}
+
+function elementText(element) {
+  return String(element.text ?? element.label?.text ?? "");
+}
+
+function frameBody(deck, bandIndex) {
+  const frame = deck.elements.find((element) => element.id === `b${bandIndex}-frame`);
+  const deckLine = deck.elements.find((element) => element.id === `b${bandIndex}-deck`);
+  assert.ok(frame && deckLine, `band ${bandIndex} must have a frame and deck line`);
+  return {
+    frame,
+    x: frame.x + BODY_INSET,
+    y: deckLine.y + deckLine.height + DECK_BODY_GAP,
+    width: frame.width - 2 * BODY_INSET,
+    height: frame.y + frame.height - FRAME_PAD_BOTTOM - (deckLine.y + deckLine.height + DECK_BODY_GAP),
+  };
+}
+
+function assertInsideBody(members, body, label) {
+  for (const element of members) {
+    if (!Number.isFinite(element.width) || !Number.isFinite(element.height)) continue;
+    assert.ok(element.x >= body.x - 0.5, `${label}: ${element.id} starts outside body`);
+    assert.ok(element.y >= body.y - 0.5, `${label}: ${element.id} starts above body`);
+    assert.ok(element.x + element.width <= body.x + body.width + 0.5, `${label}: ${element.id} exceeds body width`);
+    assert.ok(element.y + element.height <= body.y + body.height + 0.5, `${label}: ${element.id} exceeds body height`);
+  }
+}
+
+function runBuild(specPath, output) {
+  return spawnSync(process.execPath, [resolve(root, "scripts/build-deck.mjs"), specPath, output], {
+    cwd: root,
+    encoding: "utf8",
+    timeout: 120_000,
+  });
+}
+
+test("over-capacity wrapped node labels fail without publishing a bad deck", { timeout: 120_000 }, async (t) => {
+  const temp = await mkdtemp(join(tmpdir(), "beautidraw-measured-node-placement-"));
+  t.after(() => rm(temp, { recursive: true, force: true }));
+  const spec = {
+    title: "Measured node placement",
+    subtitle: "Long labels keep their notes readable",
+    footer: "Placement fixture",
+    bands: [{
+      heading: "Field",
+      deck: "A field with measured node labels",
+      pattern: "canvas",
+      accent: "blue",
+      height: 500,
+      visual: {
+        family: "field",
+        thesis: "A field thesis reserves readable space for the visual argument and its supporting labels.",
+        focus: "Field focus",
+        axisX: "specificity →",
+        axisY: "blast radius ↑",
+        nodes: [
+          { label: "W".repeat(120), note: "Short note below the wrapped label." },
+          { label: "Short node", note: "Second short note." },
+          { label: "Third node", note: "Third note." },
+          { label: "Fourth node", note: "Fourth note." },
+        ],
+        explanation: "A mechanism explanation preserves the authored relationship and keeps supporting notes readable.",
+        example: "A concrete example keeps the field inspectable.",
+        tradeoff: "A boundary makes the choice explicit.",
+        evidence: ["Evidence verifies the node label and note placement remains complete in the final frame."],
+        inspect: "inspect field geometry",
+      },
+    }],
+  };
+  const specPath = join(temp, "spec.json");
+  const output = join(temp, "out");
+  await writeFile(specPath, JSON.stringify(spec));
+  const preflight = await preflightDeck({ specPath, spec });
+  assert.equal(preflight.ok, true, preflight.failures.map(({ field, reason }) => `${field}: ${reason}`).join("\n"));
+  const result = runBuild(specPath, output);
+  if (result.status !== 0) {
+    const generated = spawnSync(process.execPath, [resolve(root, "scripts/generate.mjs"), specPath, output], { cwd: root, encoding: "utf8", timeout: 120_000 });
+    assert.equal(generated.status, 0, `${generated.stdout}\n${generated.stderr}`);
+    const composed = spawnSync(process.execPath, [resolve(root, "scripts/auto-compose.mjs"), specPath, output], { cwd: root, encoding: "utf8", timeout: 120_000 });
+    assert.notEqual(composed.status, 0);
+    const compositionPath = join(output, "auto-composition-spec.json");
+    await readFile(compositionPath, "utf8");
+    const directOutput = join(temp, "direct");
+    await mkdir(directOutput);
+    const sentinel = join(directOutput, "deck.excalidraw");
+    await writeFile(sentinel, "SENTINEL");
+    const direct = spawnSync(process.execPath, [resolve(root, "scripts/compose.mjs"), join(output, "deck.excalidraw"), compositionPath, directOutput], { cwd: root, encoding: "utf8", timeout: 120_000 });
+    assert.notEqual(direct.status, 0);
+    assert.match(`${direct.stdout}\n${direct.stderr}`, /COMPOSITION VALIDATION FAILED:.*b0-field-3.*overlaps/);
+    assert.equal(await readFile(sentinel, "utf8"), "SENTINEL", "failed compose must not publish an invalid deck");
+    return;
+  }
+  const deck = JSON.parse(await readFile(join(output, "deck.excalidraw"), "utf8"));
+  const body = frameBody(deck, 0);
+  const members = deck.elements.filter((element) => element.frameId === body.frame.id && element.customData?.beautidrawComposition === true);
+  assertInsideBody(members, body, "field-over-capacity");
+  const cells = members.filter((element) => element.customData?.beautidrawCompositionKind !== "surface" && element.type !== "line" && element.type !== "arrow" && !element.containerId);
+  for (let left = 0; left < cells.length; left += 1) {
+    for (let right = left + 1; right < cells.length; right += 1) {
+      assert.equal(overlaps(cells[left], cells[right]), false, `${cells[left].id} overlaps ${cells[right].id}`);
+    }
+  }
+});
+
+test("two-line node labels keep short notes below measured bounds", { timeout: 120_000 }, async (t) => {
+  const temp = await mkdtemp(join(tmpdir(), "beautidraw-measured-node-positive-"));
+  t.after(() => rm(temp, { recursive: true, force: true }));
+  const spec = {
+    title: "Measured node placement",
+    subtitle: "A two-line label fixture",
+    footer: "Placement fixture",
+    bands: [{
+      heading: "Field",
+      deck: "A field with measured node labels",
+      pattern: "canvas",
+      accent: "blue",
+      height: 500,
+      visual: {
+        family: "field",
+        thesis: "A field thesis reserves readable space for the visual argument and its supporting labels.",
+        focus: "Field focus",
+        axisX: "specificity →",
+        axisY: "blast radius ↑",
+        nodes: [
+          { label: "A measured boundary keeps the context readable while preserving the bounded decision", note: "Short note below the two-line label." },
+          { label: "A second node", note: "Second short note." },
+        ],
+        explanation: "A mechanism explanation preserves the authored relationship and keeps supporting notes readable.",
+        example: "A concrete example keeps the field inspectable.",
+        tradeoff: "A boundary makes the choice explicit.",
+        evidence: ["Evidence verifies the node label and note placement remains complete in the final frame."],
+        inspect: "inspect field geometry",
+      },
+    }],
+  };
+  const specPath = join(temp, "spec.json");
+  const output = join(temp, "out");
+  await writeFile(specPath, JSON.stringify(spec));
+  const result = runBuild(specPath, output);
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+
+  const deck = JSON.parse(await readFile(join(output, "deck.excalidraw"), "utf8"));
+  const body = frameBody(deck, 0);
+  const members = deck.elements.filter((element) => element.frameId === body.frame.id && element.customData?.beautidrawComposition === true);
+  assertInsideBody(members, body, "field-positive");
+  const label = members.find((element) => element.id === "b0-field-1-label");
+  const labelText = label?.type === "text" ? label : members.find((element) => element.containerId === label?.id);
+  const note = members.find((element) => element.id === "b0-field-1-note");
+  assert.ok(label && labelText && note, "positive label/note must survive composition");
+  assert.ok(labelText.height > 40 && labelText.height < 90, "positive label must measure as exactly two lines");
+  assert.ok(note.y >= label.y + label.height - 0.5, "note must start below the measured wrapped label");
+  const visible = members.map(elementText).join(" ").replace(/\s+/g, " ");
+  assert.equal(visible.includes("A measured boundary keeps the context readable while preserving the bounded decision"), true, "full label must remain visible");
+  assert.equal(visible.includes("Short note below the two-line label."), true, "full note must remain visible");
+});
+
+test("specialized callout labels keep notes below measured bounds", { timeout: 120_000 }, async (t) => {
+  const temp = await mkdtemp(join(tmpdir(), "beautidraw-measured-callout-placement-"));
+  t.after(() => rm(temp, { recursive: true, force: true }));
+  const labelText = "A measured boundary keeps this illustration label readable in two lines";
+  const noteText = "The note stays below the converted semantic label.";
+  const spec = {
+    title: "Measured callout placement",
+    subtitle: "Semantic labels keep their notes readable",
+    footer: "Placement fixture",
+    bands: [{
+      heading: "Illustration",
+      deck: "A specialized callout keeps its semantic note below its measured label.",
+      pattern: "canvas",
+      accent: "violet",
+      height: 700,
+      visual: {
+        family: "illustration",
+        thesis: "An illustration thesis keeps the central claim readable.",
+        focus: "Illustration focus",
+        nodes: [
+          { label: "One", note: "First" },
+          { label: "Two", note: "Second" },
+        ],
+        callouts: [{ kind: "boundary", label: labelText, note: noteText }],
+        image: {
+          file: "assets/vector-lookup-space.png",
+          side: "right",
+          use: "Illustrate the callout",
+          description: "A bounded visual scene leaves room for measured explanatory text.",
+        },
+        explanation: "A specialized illustration gives the boundary a visible home while measured labels preserve the authored relationship and leave the supporting note below the converted text.",
+        example: "A concrete callout shows where the boundary matters.",
+        tradeoff: "Long labels remain bounded without dropping authored words.",
+        inspect: "inspect illustration geometry",
+      },
+    }],
+  };
+  const specPath = join(temp, "spec.json");
+  const output = join(temp, "out");
+  await cp(resolve(root, "decks/llm-token-flow/assets"), join(temp, "assets"), { recursive: true });
+  await writeFile(specPath, JSON.stringify(spec));
+  const result = runBuild(specPath, output);
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+
+  const deck = JSON.parse(await readFile(join(output, "deck.excalidraw"), "utf8"));
+  const body = frameBody(deck, 0);
+  const members = deck.elements.filter((element) => element.frameId === body.frame.id && element.customData?.beautidrawComposition === true);
+  assertInsideBody(members, body, "illustration");
+  const labelContainer = members.find((element) => element.id === "b0-callout-1-label");
+  const labelTextElement = labelContainer?.type === "text" ? labelContainer : members.find((element) => element.containerId === labelContainer?.id);
+  const note = members.find((element) => element.id === "b0-callout-1-note");
+  assert.ok(labelContainer && labelTextElement && note, "specialized callout label and note must survive composition");
+  assert.ok(labelTextElement.height > 40 && labelTextElement.height < 90, "specialized label must measure as two lines");
+  assert.ok(note.y >= labelContainer.y + labelContainer.height - 0.5, "specialized note must start below the measured label");
+  const visible = members.map(elementText).join(" ").replace(/\s+/g, " ");
+  assert.equal(visible.includes(labelText), true, "specialized label must remain complete");
+  assert.equal(visible.includes(noteText), true, "specialized note must remain complete");
+});
+
+test("constellation routes every accepted node through three native connectors", { timeout: 120_000 }, async (t) => {
+  const temp = await mkdtemp(join(tmpdir(), "beautidraw-constellation-connectivity-"));
+  t.after(() => rm(temp, { recursive: true, force: true }));
+  const nodes = (count) => Array.from({ length: count }, (_, index) => ({
+    label: `Constellation node ${index + 1}`,
+    note: `Evidence note ${index + 1}`,
+  }));
+  const bands = [2, 3, 4, 5, 6].map((count) => ({
+    heading: `Constellation ${count} nodes`,
+    deck: "Every accepted node remains part of one connected constellation.",
+    pattern: "canvas",
+    accent: "violet",
+    height: 700,
+    visual: {
+      family: "constellation",
+      thesis: "A connected neighborhood keeps every accepted node part of the same argument.",
+      focus: "Connected constellation",
+      nodes: nodes(count),
+      explanation: "The routed neighborhood connects all accepted nodes while preserving open text blocks.",
+      example: "Each node contributes a concrete part of the relationship.",
+      tradeoff: "A bounded connector budget favors meaningful routes over decorative density.",
+      evidence: ["The serialized native paths touch every accepted node anchor."],
+      inspect: "inspect constellation geometry",
+    },
+  }));
+  const spec = { title: "Constellation connectivity", subtitle: "Measured native routes", footer: "Placement fixture", bands };
+  const specPath = join(temp, "spec.json");
+  const output = join(temp, "out");
+  await writeFile(specPath, JSON.stringify(spec));
+  const result = runBuild(specPath, output);
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+
+  const deck = JSON.parse(await readFile(join(output, "deck.excalidraw"), "utf8"));
+  const positions = [[0.08, 0.21], [0.38, 0.17], [0.68, 0.21], [0.14, 0.50], [0.48, 0.45], [0.76, 0.51]];
+  for (const [bandIndex, count] of [2, 3, 4, 5, 6].entries()) {
+    const body = frameBody(deck, bandIndex);
+    const members = deck.elements.filter((element) => element.frameId === body.frame.id && element.customData?.beautidrawComposition === true);
+    const links = members.filter((element) => element.id.startsWith(`b${bandIndex}-constellation-link-`));
+    assert.ok(links.length <= 3, `${count}-node constellation must stay within the connector budget`);
+    const points = [];
+    const segments = new Set();
+    for (const link of links) {
+      const path = (link.points ?? []).map(([x, y]) => [link.x + x, link.y + y]);
+      for (let index = 1; index < path.length; index += 1) {
+        const [ax, ay] = path[index - 1];
+        const [bx, by] = path[index];
+        assert.ok(Math.hypot(bx - ax, by - ay) > 0.1, `${count}-node constellation must not emit zero-length segments`);
+        const first = `${ax.toFixed(2)},${ay.toFixed(2)}`;
+        const second = `${bx.toFixed(2)},${by.toFixed(2)}`;
+        const key = first < second ? `${first}|${second}` : `${second}|${first}`;
+        assert.equal(segments.has(key), false, `${count}-node constellation must not retrace a segment`);
+        segments.add(key);
+      }
+      points.push(...path);
+    }
+    for (let index = 0; index < count; index += 1) {
+      const [x, y] = positions[index];
+      const anchor = [
+        body.x + body.width * (x < 0.5 ? x + 0.24 - 0.011 : x + 0.011),
+        body.y + body.height * (y + 0.017),
+      ];
+      const distance = Math.min(...points.map(([px, py]) => Math.hypot(px - anchor[0], py - anchor[1])));
+      assert.ok(distance <= 12, `${count}-node constellation node ${index + 1} must touch a routed native anchor (distance=${distance.toFixed(1)})`);
+      assert.ok(members.some((element) => elementText(element).includes(`Constellation node ${index + 1}`)), `node ${index + 1} text must survive`);
+    }
+  }
+});
+
+test("tension outcome source and sibling notes follow measured labels", { timeout: 120_000 }, async (t) => {
+  const temp = await mkdtemp(join(tmpdir(), "beautidraw-tension-placement-"));
+  t.after(() => rm(temp, { recursive: true, force: true }));
+  const longLabel = "A measured source label keeps the decision boundary readable";
+  const sourceNote = "The source note preserves authored context below the explicit decision label while keeping the boundary inspectable.";
+  const siblingNote = "Sibling note.";
+  const baseVisual = {
+    family: "tension",
+    thesis: "A tension frame keeps the decision boundary inspectable.",
+    focus: "Tension focus",
+    axisX: "specificity →",
+    axisY: "blast radius ↑",
+    explanation: "Mechanism remains visible.",
+    example: "Decision example.",
+    tradeoff: "Boundary remains explicit.",
+  };
+  const spec = {
+    title: "Tension measured placement",
+    subtitle: "Outcome notes stay below converted labels",
+    footer: "Placement fixture",
+    bands: [
+      {
+        heading: "Explicit decision",
+        deck: "An explicit decision keeps its source label and note readable.",
+        pattern: "canvas",
+        accent: "amber",
+        height: 800,
+        visual: {
+          ...baseVisual,
+          decision: "Chosen boundary",
+          nodes: [
+            { label: "Left option", note: "Left note" },
+            { label: "Decision", note: "Decision note" },
+            { label: "Right option", note: "Right note" },
+            { label: longLabel, note: sourceNote },
+          ],
+        },
+      },
+      {
+        heading: "Sibling outcome",
+        deck: "A sibling outcome keeps its fallback note readable.",
+        pattern: "canvas",
+        accent: "violet",
+        height: 800,
+        visual: {
+          ...baseVisual,
+          nodes: [
+            { label: "Left option", note: "Left note" },
+            { label: "Decision", note: "Decision note" },
+            { label: "Right option", note: "Right note" },
+            { label: "Fallback source", note: siblingNote },
+          ],
+        },
+      },
+    ],
+  };
+  const specPath = join(temp, "spec.json");
+  const output = join(temp, "out");
+  await writeFile(specPath, JSON.stringify(spec));
+  const generated = spawnSync(process.execPath, [resolve(root, "scripts/generate.mjs"), specPath, output], { cwd: root, encoding: "utf8", timeout: 120_000 });
+  assert.equal(generated.status, 0, `${generated.stdout}\n${generated.stderr}`);
+  const composed = spawnSync(process.execPath, [resolve(root, "scripts/auto-compose.mjs"), specPath, output], { cwd: root, encoding: "utf8", timeout: 120_000 });
+  assert.equal(composed.status, 0, `${composed.stdout}\n${composed.stderr}`);
+
+  const deck = JSON.parse(await readFile(join(output, "deck.excalidraw"), "utf8"));
+  for (const [bandIndex, noteId, labelId, expected] of [
+    [0, "b0-outcome-source-note", "b0-outcome-source", `${longLabel} ${sourceNote}`],
+    [1, "b1-outcome-note", "b1-outcome", siblingNote],
+  ]) {
+    const body = frameBody(deck, bandIndex);
+    const members = deck.elements.filter((element) => element.frameId === body.frame.id && element.customData?.beautidrawComposition === true);
+    assertInsideBody(members, body, `tension-${bandIndex}`);
+    const labelContainer = members.find((element) => element.id === labelId);
+    const labelText = labelContainer?.type === "text" ? labelContainer : members.find((element) => element.containerId === labelContainer?.id);
+    const note = members.find((element) => element.id === noteId);
+    assert.ok(labelContainer && labelText && note, `tension ${bandIndex} labels and notes must survive`);
+    assert.ok(note.y >= labelContainer.y + labelContainer.height - 0.5, `tension ${bandIndex} note must start below its measured label`);
+    const visible = members.map(elementText).join(" ").replace(/\s+/g, " ");
+    for (const value of expected.split(" ").filter(Boolean)) assert.ok(visible.includes(value), `tension ${bandIndex} must preserve ${value}`);
+  }
+});
+
+test("data illustration header content stays clear of left and right images", { timeout: 180_000 }, async (t) => {
+  const temp = await mkdtemp(join(tmpdir(), "beautidraw-measured-data-header-"));
+  t.after(() => rm(temp, { recursive: true, force: true }));
+  const source = JSON.parse(await readFile(resolve(root, "decks/llm-token-flow/deck-spec.json"), "utf8"));
+  const bandIndex = source.bands.findIndex((band) => band.visual?.data?.kind === "token-sequence");
+  assert.ok(bandIndex >= 0);
+  await cp(resolve(root, "decks/llm-token-flow/assets"), join(temp, "assets"), { recursive: true });
+
+  for (const side of ["left", "right"]) {
+    const spec = structuredClone(source);
+    const band = spec.bands[bandIndex];
+    band.visual.thesis = "T".repeat(120);
+    band.visual.focus = "F".repeat(120);
+    band.visual.image.side = side;
+    band.visual.callouts = [{ kind: "boundary", label: "Header boundary", note: "The boundary remains visible in the editorial column." }];
+    const specPath = join(temp, `spec-${side}.json`);
+    const output = join(temp, `out-${side}`);
+    await writeFile(specPath, JSON.stringify(spec));
+    const result = runBuild(specPath, output);
+    assert.equal(result.status, 0, `${side}: ${result.stdout}\n${result.stderr}`);
+
+    const deck = JSON.parse(await readFile(join(output, "deck.excalidraw"), "utf8"));
+    const body = frameBody(deck, bandIndex);
+    const members = deck.elements.filter((element) => element.frameId === body.frame.id && element.customData?.beautidrawComposition === true);
+    assertInsideBody(members, body, side);
+    const image = members.find((element) => element.id === `b${bandIndex}-composition-image`);
+    assert.ok(image, `${side}: raster image must survive composition`);
+    const composition = JSON.parse(await readFile(join(output, "auto-composition-spec.json"), "utf8"));
+    const entry = composition.bands.find((candidate) => candidate.band === bandIndex);
+    assert.ok(entry?.image, `${side}: auto-composition image entry must survive`);
+    const expectedX = body.x + body.width * entry.image.x;
+    const expectedRight = body.x + body.width * (entry.image.x + entry.image.width);
+    if (side === "left") assert.ok(Math.abs(image.x - expectedX) <= 0.5, `${side}: image left anchor must remain authored`);
+    else assert.ok(Math.abs(image.x + image.width - expectedRight) <= 0.5, `${side}: image right anchor must remain authored`);
+    const textMembers = members.filter((element) => element.type === "text" || element.containerId);
+    assert.equal(textMembers.some((element) => overlaps(element, image)), false, `${side}: text must not overlap the image`);
+    const visible = members.map(elementText).join(" ");
+    const compactVisible = visible.replace(/\s+/g, "");
+    for (const authored of [band.visual.thesis, band.visual.focus, "Header boundary", "The boundary remains visible in the editorial column."]) {
+      assert.equal(compactVisible.includes(authored.replace(/\s+/g, "")), true, `${side}: authored text must remain complete`);
+    }
+    assert.equal(image.width / image.height > 1.7 && image.width / image.height < 1.8, true, `${side}: image aspect must remain 16:9`);
+  }
+});

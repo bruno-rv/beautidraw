@@ -49,6 +49,89 @@ export const FRAME_LABEL_BAND = 20.5;
 // body's available width, before wrapWidth ever sees it.
 export const BODY_INSET = 24;
 
+// Data-illustration image/header geometry is shared by automatic composition,
+// preflight, and the browser-side image adjustment. Keep these normalized
+// values together so an aspect-ratio change cannot silently drift between
+// those stages.
+export const DATA_IMAGE_MAX_HEIGHT = 0.36;
+export const DATA_IMAGE_MAX_WIDTH = 0.23;
+export const DATA_IMAGE_SIDE_MARGIN = 0.03;
+export const DATA_IMAGE_CENTER = 0.5;
+export const DATA_HEADER_Y = 0.03;
+export const DATA_HEADER_MAX_WIDTH = 0.24;
+export const DATA_HEADER_FONT_SIZE = 26;
+export const DATA_HEADER_IMAGE_GAP = 0.02;
+export const DATA_IMAGE_MIN_HEIGHT = 0.20;
+
+export function dataImageGeometry({ pixelWidth, pixelHeight, bodyHeight, side = "left" } = {}) {
+  const imageAspect = Number(pixelWidth) / Number(pixelHeight);
+  const heightValue = Number(bodyHeight);
+  if (!(imageAspect > 0) || !(heightValue > 0)) {
+    throw new Error("data image geometry requires positive PNG dimensions and body height");
+  }
+  const bodyAspect = (PAGE_WIDTH - 2 * BODY_INSET) / heightValue;
+  let height = DATA_IMAGE_MAX_HEIGHT;
+  let width = imageAspect * height / bodyAspect;
+  if (width > DATA_IMAGE_MAX_WIDTH) {
+    width = DATA_IMAGE_MAX_WIDTH;
+    height = width * bodyAspect / imageAspect;
+  }
+  return {
+    x: side === "right" ? 1 - DATA_IMAGE_SIDE_MARGIN - width : DATA_IMAGE_SIDE_MARGIN,
+    y: DATA_IMAGE_CENTER - height / 2,
+    width,
+    height,
+  };
+}
+
+export function dataHeaderGeometry({ side = "left" } = {}) {
+  return {
+    x: side === "right" ? 1 - DATA_IMAGE_SIDE_MARGIN - DATA_HEADER_MAX_WIDTH : DATA_IMAGE_SIDE_MARGIN,
+    y: DATA_HEADER_Y,
+    maxWidth: DATA_HEADER_MAX_WIDTH,
+    fontSize: DATA_HEADER_FONT_SIZE,
+  };
+}
+
+export function dataHeaderCapacity({ imageY, imageHeight, bodyHeight } = {}) {
+  const heightValue = Number(bodyHeight);
+  const imageTop = Number(imageY);
+  const imageHeightValue = Number(imageHeight);
+  if (!(heightValue > 0) || !Number.isFinite(imageTop) || !Number.isFinite(imageHeightValue)) {
+    throw new Error("data header capacity requires finite image geometry and positive body height");
+  }
+  const normalizedCapacity = Math.max(
+    imageTop - DATA_HEADER_Y - DATA_HEADER_IMAGE_GAP,
+    imageTop + imageHeightValue - DATA_IMAGE_MIN_HEIGHT - DATA_HEADER_Y - DATA_HEADER_IMAGE_GAP,
+  );
+  return normalizedCapacity * heightValue;
+}
+
+export function dataHeaderCapacityUpperBound(bodyHeight) {
+  const heightValue = Number(bodyHeight);
+  if (!(heightValue > 0)) throw new Error("data header capacity requires positive body height");
+  const imageTopCapacity = DATA_IMAGE_CENTER - DATA_HEADER_Y - DATA_HEADER_IMAGE_GAP;
+  const imageBottomCapacity = DATA_IMAGE_CENTER + DATA_IMAGE_MAX_HEIGHT / 2 - DATA_IMAGE_MIN_HEIGHT - DATA_HEADER_Y - DATA_HEADER_IMAGE_GAP;
+  return Math.max(imageTopCapacity, imageBottomCapacity) * heightValue;
+}
+
+const AUTOMATIC_TALL_EDITORIAL_FAMILIES = new Set(["tension", "matrix", "journey", "map", "evidence"]);
+
+// Shared automatic-composition footer geometry. Consumers outside the browser
+// renderer use this same contract for preflight capacity checks.
+export function automaticEditorialLayout(family) {
+  return {
+    y: AUTOMATIC_TALL_EDITORIAL_FAMILIES.has(family) ? 0.74 : 0.68,
+    maxWidth: 0.90,
+    fontSize: 28,
+  };
+}
+
+export function automaticInspectY(bodyHeight) {
+  const height = Math.max(1, Number(bodyHeight) || 1);
+  return Math.min(0.95, Math.max(0.82, 1 - 36 / height));
+}
+
 export function wrapWidth(k) {
   return (PAGE_WIDTH - (k - 1) * GUTTER_COL) / k;
 }
@@ -81,6 +164,11 @@ export const FRAME_PAD_BOTTOM = G;
 const ROW_GAP = G; // vertical gap between stacked rows/units
 const CARD_GAP = 12; // gap between stacked cards within one unit
 const ARROW_CLEARANCE = 6; // gap between an arrow tip and the shape it binds to
+const EDITORIAL_RULE_GAP = 16;
+const EDITORIAL_TEXT_GAP = 16;
+const CHECKLIST_TEXT_INSET = 28;
+const EDITORIAL_LABEL_FONT_SIZE = 36;
+const EDITORIAL_BODY_FONT_SIZE = 30;
 
 // Composition fix: the label card and its note card, within one flow/
 // row-of-stages unit, get a gap of exactly 0 instead of CARD_GAP. Widths
@@ -91,11 +179,11 @@ const ARROW_CLEARANCE = 6; // gap between an arrow tip and the shape it binds to
 // checkNoOverlap (generate.mjs) uses strict `>` on the overlap area, so two
 // AABBs that only touch along an edge (zero-area intersection) are not
 // flagged — this is a legitimate touching-not-overlapping layout, not a
-// validator loophole. comparison/tree/checklist keep CARD_GAP: their stacked
-// cards are visually distinct rows (bullet lists, child nodes), not a
-// label/note pair meant to read as one card. `timeline` cards ARE a
-// label/note pair at column width — structurally the same shape as
-// row-of-stages — so they take CARD_HEADER_GAP too.
+// validator loophole. `tree` keeps CARD_GAP because its child nodes are
+// distinct connected rows. Comparison/checklist use the editorial spacing
+// below instead of visible stacked cards. `timeline` cards ARE a label/note
+// pair at column width — structurally the same shape as row-of-stages — so
+// they take CARD_HEADER_GAP too.
 const CARD_HEADER_GAP = 0;
 
 // Composition fix (visual, not geometric): flow cards are narrow and centred
@@ -355,8 +443,8 @@ export function collectFontRequirements(spec) {
         break;
       case "comparison":
         for (const n of band.nodes) {
-          add(n.label, RAMP.hero);
-          if (n.items.length) add(formatComparisonItems(n.items), RAMP.note);
+          add(n.label, EDITORIAL_LABEL_FONT_SIZE);
+          if (n.items.length) add(formatComparisonItems(n.items), EDITORIAL_BODY_FONT_SIZE);
         }
         break;
       case "timeline":
@@ -374,7 +462,9 @@ export function collectFontRequirements(spec) {
         break;
       case "checklist":
         for (const n of band.nodes) {
-          add(formatChecklistRow(n.label, n.note), RAMP.note);
+          add(n.label, EDITORIAL_LABEL_FONT_SIZE);
+          if (n.note) add(`— ${n.note}`, EDITORIAL_BODY_FONT_SIZE);
+          add(n.note ? `${n.label} — ${n.note}` : n.label, RAMP.note);
         }
         break;
       case "canvas":
@@ -528,6 +618,39 @@ function rectSkeleton(id, x, y, width, height, text, fontSize, accent, textAlign
     role,
     customData: { beautidrawRole: role },
     label: { text, fontSize, fontFamily: font.family, role, roughness: 0, ...(textAlign ? { textAlign } : {}) },
+  };
+}
+
+// Bound text still needs a rectangle for the converter to measure and bind,
+// but comparison/checklist surfaces are editorial text, not cards. Keep the
+// measurement bounds transparent and make the text color explicit so the
+// open surface remains readable regardless of the container stroke.
+function openTextSkeleton(id, x, y, width, height, text, fontSize, textAlign = "left", role = "prose") {
+  const font = fontForRole(role);
+  return {
+    id,
+    type: "rectangle",
+    x,
+    y,
+    width,
+    height,
+    strokeColor: "transparent",
+    backgroundColor: "transparent",
+    fillStyle: "solid",
+    strokeWidth: 0,
+    roughness: 0,
+    role,
+    customData: { beautidrawRole: role, beautidrawOpenText: true },
+    label: {
+      text,
+      fontSize,
+      fontFamily: font.family,
+      role,
+      strokeColor: CHROME_COLOR,
+      verticalAlign: "top",
+      roughness: 0,
+      ...(textAlign ? { textAlign } : {}),
+    },
   };
 }
 
@@ -707,34 +830,47 @@ function layoutComparison(band, bandIndex, api, bodyX, bodyTop, bodyWidth, bodyH
     const natural = band.nodes.map((n, i) => {
       const idPrefix = `b${bandIndex}-col${i}`;
       const itemsText = n.items.length ? formatComparisonItems(n.items) : null;
-      return measureCards(api, idPrefix, [
-        { text: n.label, fontSize: RAMP.hero }, // header stays centred
-        // DEFECT 2 fix: a bulleted list reads ragged when centred (every
-        // line a different width, no shared edge). Left-align it; the
-        // library's own BOUND_TEXT_PADDING (5px, LAYOUT-CONTRACT.md) is the
-        // left inset — small and consistent, not a guessed value.
-        itemsText ? { text: itemsText, fontSize: RAMP.note, textAlign: "left" } : null,
-      ], width);
+      return {
+        itemsText,
+        headingHeight: measureBoundHeight(api, `${idPrefix}-heading-probe`, n.label, EDITORIAL_LABEL_FONT_SIZE, width, "left"),
+        itemsHeight: itemsText
+          ? measureBoundHeight(api, `${idPrefix}-items-probe`, itemsText, EDITORIAL_BODY_FONT_SIZE, width, "left")
+          : 0,
+      };
     });
-    const slotCount = Math.max(...natural.map((c) => c.length));
-    const slotHeights = Array.from({ length: slotCount }, (_, slot) =>
-      Math.max(...natural.map((c) => c[slot]?.height ?? 0)),
-    );
+    const headingHeight = Math.max(...natural.map((c) => c.headingHeight));
+    const itemsHeight = Math.max(...natural.map((c) => c.itemsHeight));
 
     const skeletons = [];
     const memberIds = [];
     band.nodes.forEach((n, i) => {
       const x = rowXStart + i * (width + GUTTER_COL);
       const accent = accentFor(band, n.tone);
-      const { placed } = placeCards(natural[i], x, bodyTop, width, CARD_GAP, slotHeights);
-      placed.forEach((c) => {
-        skeletons.push(rectSkeleton(c.id, c.x, c.y, c.width, c.height, c.text, c.fontSize, accent, c.textAlign, c.role));
-        memberIds.push(c.id);
-      });
+      const headingId = `b${bandIndex}-col${i}-heading`;
+      skeletons.push(openTextSkeleton(headingId, x, bodyTop, width, headingHeight, n.label, EDITORIAL_LABEL_FONT_SIZE));
+      memberIds.push(headingId);
+
+      const ruleY = bodyTop + headingHeight + EDITORIAL_RULE_GAP;
+      const ruleId = `b${bandIndex}-col${i}-rule`;
+      skeletons.push(lineSkeleton(ruleId, x, ruleY, x + 72, ruleY, accent.stroke));
+      memberIds.push(ruleId);
+
+      if (natural[i].itemsText) {
+        const itemsId = `b${bandIndex}-col${i}-items`;
+        skeletons.push(openTextSkeleton(
+          itemsId,
+          x,
+          ruleY + EDITORIAL_TEXT_GAP,
+          width,
+          itemsHeight,
+          natural[i].itemsText,
+          EDITORIAL_BODY_FONT_SIZE,
+        ));
+        memberIds.push(itemsId);
+      }
     });
 
-    let height = 0;
-    for (let s = 0; s < slotCount; s++) height += slotHeights[s] + (s > 0 ? CARD_GAP : 0);
+    const height = headingHeight + EDITORIAL_RULE_GAP + EDITORIAL_TEXT_GAP + itemsHeight;
     return { skeletons, height, memberIds, columnsUsed: k };
   };
 
@@ -873,43 +1009,75 @@ function layoutTree(band, bandIndex, api, bodyX, bodyTop, bodyWidth, bodyHeightC
 }
 
 function layoutChecklist(band, bandIndex, api, bodyX, bodyTop, bodyWidth, bodyHeightCap) {
+  const k = band.nodes.length === 1 ? 1 : 2;
   const build = () => {
-    const k = 2;
     const width = bodyWrapWidth(k);
     const rowXStart = PAGE_X + (PAGE_WIDTH - (k * width + (k - 1) * GUTTER_COL)) / 2;
     const accent = accentFor(band, null);
 
     const half = Math.ceil(band.nodes.length / 2);
-    const columns = [band.nodes.slice(0, half), band.nodes.slice(half)];
+    const columns = k === 1
+      ? [band.nodes]
+      : [band.nodes.slice(0, half), band.nodes.slice(half)];
 
-    const skeletons = [];
-    const memberIds = [];
-    let bodyHeight = 0;
+    const buildRows = (compact) => {
+      const skeletons = [];
+      const memberIds = [];
+      let bodyHeight = 0;
 
-    columns.forEach((col, ci) => {
-      const x = rowXStart + ci * (width + GUTTER_COL);
-      let y = bodyTop;
-      col.forEach((n, ri) => {
-        const text = formatChecklistRow(n.label, n.note);
-        const id = `b${bandIndex}-row${ci}-${ri}`;
-        // DEFECT 3 fix: full-width rows with centred "label — note" text and
-        // a centred bullet read as buttons, not as a Q&A checklist. Left
-        // align so the question leads (primary) and the "— note" trails
-        // (secondary) in natural reading order; the bullet moves from
-        // floating mid-row to the left edge as a side effect of the same
-        // alignment change, so it no longer needs a separate marker element.
-        const h = measureBoundHeight(api, id, text, RAMP.note, width, "left");
-        skeletons.push(rectSkeleton(id, x, y, width, h, text, RAMP.note, accent, "left", "prose"));
-        memberIds.push(id);
-        y += h + CARD_GAP;
+      columns.forEach((col, ci) => {
+        const x = rowXStart + ci * (width + GUTTER_COL);
+        let y = bodyTop;
+        col.forEach((n, ri) => {
+          const rowId = `b${bandIndex}-row${ci}-${ri}`;
+          const textWidth = width - CHECKLIST_TEXT_INSET;
+          if (compact) {
+            const text = n.note ? `${n.label} — ${n.note}` : n.label;
+            const textId = `${rowId}-text`;
+            const textHeight = measureBoundHeight(api, `${textId}-probe`, text, RAMP.note, textWidth, "left");
+            skeletons.push(openTextSkeleton(textId, x + CHECKLIST_TEXT_INSET, y, textWidth, textHeight, text, RAMP.note));
+            memberIds.push(textId);
+
+            const markerId = `${rowId}-marker`;
+            skeletons.push(lineSkeleton(markerId, x + 8, y + 4, x + 8, y + textHeight - 4, accent.stroke));
+            memberIds.push(markerId);
+            y += textHeight + CARD_GAP;
+            return;
+          }
+
+          const labelId = `${rowId}-label`;
+          const labelHeight = measureBoundHeight(api, `${labelId}-probe`, n.label, EDITORIAL_LABEL_FONT_SIZE, textWidth, "left");
+          skeletons.push(openTextSkeleton(labelId, x + CHECKLIST_TEXT_INSET, y, textWidth, labelHeight, n.label, EDITORIAL_LABEL_FONT_SIZE));
+          memberIds.push(labelId);
+
+          const noteText = n.note ? `— ${n.note}` : null;
+          const noteHeight = noteText
+            ? measureBoundHeight(api, `${labelId}-note-probe`, noteText, EDITORIAL_BODY_FONT_SIZE, textWidth, "left")
+            : 0;
+          if (noteText) {
+            const noteId = `${rowId}-note`;
+            skeletons.push(openTextSkeleton(noteId, x + CHECKLIST_TEXT_INSET, y + labelHeight + 4, textWidth, noteHeight, noteText, EDITORIAL_BODY_FONT_SIZE));
+            memberIds.push(noteId);
+          }
+
+          const markerId = `${rowId}-marker`;
+          const markerBottom = y + labelHeight + (noteText ? 4 + noteHeight : 0) - 4;
+          skeletons.push(lineSkeleton(markerId, x + 8, y + 4, x + 8, markerBottom, accent.stroke));
+          memberIds.push(markerId);
+
+          y += labelHeight + (noteText ? 4 + noteHeight : 0) + CARD_GAP + EDITORIAL_RULE_GAP;
+        });
+        bodyHeight = Math.max(bodyHeight, y - CARD_GAP - (compact ? 0 : EDITORIAL_RULE_GAP) - bodyTop);
       });
-      bodyHeight = Math.max(bodyHeight, y - CARD_GAP - bodyTop);
-    });
 
-    return { skeletons, height: bodyHeight, memberIds, columnsUsed: k };
+      return { skeletons, height: bodyHeight, memberIds, columnsUsed: k };
+    };
+
+    const expanded = buildRows(false);
+    return expanded.height <= bodyHeightCap ? expanded : buildRows(true);
   };
 
-  return selectColumnCandidate([2], bandIndex, "checklist", bodyHeightCap, build);
+  return selectColumnCandidate([k], bandIndex, "checklist", bodyHeightCap, build);
 }
 
 function layoutCanvas(band, bandIndex, api, bodyX, bodyTop, bodyWidth, bodyHeightCap) {

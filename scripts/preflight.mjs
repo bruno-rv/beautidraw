@@ -3,10 +3,26 @@ import { constants } from "node:fs";
 import { isAbsolute, relative, resolve, dirname } from "node:path";
 
 import { CliError } from "./cli.mjs";
-import { planDeck } from "./layout.mjs";
+import { DATA_VIGNETTE_VIEWPORT, dataVignetteOutline, displayVectorText, validateDataVignette } from "./data-vignettes.mjs";
+import {
+  automaticEditorialLayout,
+  automaticInspectY,
+  BODY_INSET,
+  BOUND_TEXT_PADDING,
+  DATA_HEADER_FONT_SIZE,
+  DATA_HEADER_MAX_WIDTH,
+  PAGE_WIDTH,
+  dataHeaderCapacity,
+  dataHeaderCapacityUpperBound,
+  dataImageGeometry,
+  RAMP,
+  planDeck,
+} from "./layout.mjs";
+import { hasAbsolutePath } from "./outline.mjs";
 
 export const CONTENT_BUDGETS = Object.freeze({
   thesisChars: 120,
+  focusChars: 120,
   footerChars: 560,
   inspectChars: 84,
   explanationWords: 140,
@@ -16,6 +32,23 @@ export const CONTENT_BUDGETS = Object.freeze({
 
 const MAX_HEADING_CHARS = 2000;
 const SEMANTIC_KINDS = new Set(["example", "boundary", "inspect", "warning"]);
+export const AUTO_COMPOSE_FAMILIES = Object.freeze([
+  "illustration", "orbit", "field", "spotlight", "constellation", "evidence", "matrix", "threshold", "map",
+]);
+export const FAMILY_CAPACITIES = Object.freeze({
+  illustration: Object.freeze({ nodes: 2, callouts: 2 }),
+  orbit: Object.freeze({ nodes: 6, callouts: 2 }),
+  field: Object.freeze({ nodes: 6, callouts: 2 }),
+  spotlight: Object.freeze({ nodes: 4, callouts: 4 }),
+  constellation: Object.freeze({ nodes: 6, callouts: 2 }),
+  evidence: Object.freeze({ nodes: 4, callouts: 2 }),
+  matrix: Object.freeze({ nodes: 4, callouts: 2 }),
+  threshold: Object.freeze({ nodes: 3, callouts: 2 }),
+  map: Object.freeze({ nodes: 6, callouts: 2 }),
+  pipeline: Object.freeze({ nodes: 6, callouts: 2 }),
+  journey: Object.freeze({ nodes: 6, callouts: 2 }),
+  tension: Object.freeze({ nodes: 4, callouts: 2 }),
+});
 const PNG_SIGNATURE = "89504e470d0a1a0a";
 const CRC_TABLE = Array.from({ length: 256 }, (_, value) => {
   let crc = value;
@@ -25,6 +58,325 @@ const CRC_TABLE = Array.from({ length: 256 }, (_, value) => {
 
 const words = (value) => String(value ?? "").trim().split(/\s+/).filter(Boolean).length;
 const chars = (value) => String(value ?? "").trim().length;
+const DATA_EDITORIAL_START = 0.84;
+const DATA_EDITORIAL_LINE_HEIGHT_PX = 35;
+const DATA_BOUNDARY_START = 0.76;
+const DATA_BOUNDARY_LINE_HEIGHT_PX = 32;
+const DATA_BOUND_TEXT_MARGIN_PX = 2 * BOUND_TEXT_PADDING + 1;
+const DATA_HEADER_RECOVERY = "Shorten the thesis/focus, grow the canvas height, or use an image aspect ratio that leaves the header its required clearance.";
+// Safe Nunito advances measured from the pinned font corpus at 26px and
+// rounded upward by glyphWidth(). Keeping every printable ASCII glyph in the
+// table prevents a repeated wide glyph (for example 250 "m"s) from passing an
+// average-width estimate. Unknown/non-ASCII glyphs take a conservative 1.05em
+// fallback; this is a preflight safety bound, not a runtime font-coverage claim.
+const DATA_SAFE_ASCII_WIDTHS = new Map([
+  ["'", 0.226], ["!,.\u003a;", 0.233], ["i", 0.237], ["j", 0.241], [" ", 0.261],
+  ["I", 0.262], ["|", 0.270], ["/\\", 0.290], ["l", 0.301], ["[]", 0.324],
+  ["()", 0.326], ["J", 0.331], ["f", 0.340], ["t", 0.358], ["`{}", 0.361],
+  ["r", 0.365], ["\"", 0.405], ["-", 0.427], ["?", 0.447], ["*", 0.451],
+  ["c", 0.465], ["z", 0.466], ["s", 0.483], ["_", 0.500], ["k", 0.508],
+  ["y", 0.517], ["v", 0.518], ["x", 0.530], ["a", 0.533], ["e", 0.534],
+  ["L", 0.548], ["F", 0.551], ["o", 0.560], ["u", 0.565], ["hn", 0.572],
+  ["E", 0.586], ["bdpq", 0.587], ["g", 0.590], ["Z", 0.593],
+  ["#$+0123456789<=>^~", 0.600], ["Y", 0.601], ["T", 0.607], ["S", 0.618],
+  ["K", 0.634], ["P", 0.637], ["X", 0.655], ["R", 0.673], ["C", 0.675],
+  ["B", 0.679], ["V", 0.694], ["&", 0.701], ["G", 0.729], ["U", 0.731],
+  ["A", 0.733], ["N", 0.741], ["D", 0.747], ["H", 0.764], ["OQ", 0.771],
+  ["w", 0.844], ["M", 0.858], ["m", 0.861], ["%", 0.933], ["@", 0.947], ["W", 1.104],
+]);
+// The converter's own measured advances are the safety table used below.
+// Keep the ASCII coverage explicit so every printable glyph is bounded.
+const DATA_CONVERTER_ASCII_WIDTHS = [
+  ["'", 0.180], ["|", 0.200], [" ,.", 0.250], ["/:;\\ijlt", 0.278],
+  ["!()-I[]`fr", 0.333], ["Js", 0.389], ["\"", 0.408], ["?acez", 0.444],
+  ["^", 0.469], ["{}", 0.480], ["0123456789#$*_bdghknopquvxy", 0.500], ["~", 0.541],
+  ["FPS", 0.556], ["+<=>", 0.564], ["ELTZ", 0.611], ["BCR", 0.667],
+  ["ADGHKNOQUVXYw", 0.722], ["&m", 0.778], ["%", 0.833], ["M", 0.889],
+  ["@", 0.921], ["W", 0.944],
+];
+for (const [glyphs, width] of DATA_CONVERTER_ASCII_WIDTHS) {
+  for (const glyph of glyphs) DATA_SAFE_ASCII_WIDTHS.set(glyph, width);
+}
+// Values are rounded to the converter's measured precision; retain the pinned
+// advances instead of adding an arbitrary average-width margin that would
+// reject the existing three-line examples.
+const DATA_GLYPH_SAFETY = 0.005;
+const DATA_MONO_GLYPH_WIDTH = 0.586;
+const DATA_MONO_TAB_WIDTH = DATA_MONO_GLYPH_WIDTH * 8;
+const DATA_EDITORIAL_RECOVERY = "Shorten the data illustration copy, split it across bands, or grow the canvas height and rerun.";
+const cleanText = (value, fallback = "") => {
+  const text = String(value ?? "").trim();
+  return text || fallback;
+};
+
+function dataIllustrationHeaderCapacityFailure(
+  band,
+  index,
+  { specPath, bodyWidth, bodyHeight, pixelWidth, pixelHeight, dataValidationPassed } = {},
+) {
+  if (band?.pattern !== "canvas") return null;
+  const visual = isObject(band.visual) ? band.visual : {};
+  if (cleanText(visual.family, AUTO_COMPOSE_FAMILIES[index % AUTO_COMPOSE_FAMILIES.length]) !== "illustration") return null;
+  if (!visual.data || (!dataValidationPassed && validateDataVignette(visual.data).length > 0)) return null;
+  const image = visual.image;
+  if (
+    !isObject(image) ||
+    typeof image.file !== "string" || image.file.trim() === "" ||
+    typeof image.use !== "string" || image.use.trim() === "" ||
+    typeof image.description !== "string" || image.description.trim() === "" ||
+    image.use.trim() === image.description.trim()
+  ) return null;
+  if (isAbsolute(image.file) || /^[A-Za-z]:[\\/]/.test(image.file) || image.file.split(/[\\/]/).includes("..")) return null;
+  const header = [cleanText(visual.thesis), cleanText(visual.focus, band.heading)].filter(Boolean).join("  •  ");
+  if (!header || !(bodyWidth > 0) || !(bodyHeight > 0)) return null;
+  const headerWidth = bodyWidth * DATA_HEADER_MAX_WIDTH;
+  const lines = estimateWrappedLines(header, headerWidth, DATA_HEADER_FONT_SIZE);
+  const requiredHeight = lines * DATA_EDITORIAL_LINE_HEIGHT_PX + DATA_BOUND_TEXT_MARGIN_PX;
+  const exact = Number.isFinite(pixelWidth) && Number.isFinite(pixelHeight);
+  const allowedHeight = exact
+    ? (() => {
+      const imageGeometry = dataImageGeometry({ pixelWidth, pixelHeight, bodyHeight });
+      return dataHeaderCapacity({ imageY: imageGeometry.y, imageHeight: imageGeometry.height, bodyHeight });
+    })()
+    : dataHeaderCapacityUpperBound(bodyHeight);
+  if (requiredHeight <= allowedHeight) return null;
+  return failure(
+    `bands[${index}].visual`,
+    `data illustration header needs ${lines} wrapped lines (${requiredHeight.toFixed(1)}px) but ${exact ? "the image/header geometry" : "the universal image/header geometry bound"} allows only ${allowedHeight.toFixed(1)}px of clearance`,
+    { specPath, recovery: DATA_HEADER_RECOVERY, code: "data-header-capacity" },
+  );
+}
+
+function dataIllustrationCalloutParts(band) {
+  const visual = isObject(band.visual) ? band.visual : {};
+  const callouts = Array.isArray(visual.callouts) ? visual.callouts : [];
+  const source = callouts.length
+    ? callouts
+    : (Array.isArray(visual.nodes) ? visual.nodes : Array.isArray(band.nodes) ? band.nodes : []).slice(0, 2);
+  return source.map((node) => {
+    const label = isObject(node) ? cleanText(node.label) : cleanText(node);
+    const note = isObject(node) ? cleanText(node.note ?? node.text) : "";
+    return label ? `Callout — ${label}${note ? `: ${note}` : ""}` : "";
+  }).filter(Boolean);
+}
+
+function glyphWidth(char, fontSize, role = "prose") {
+  if (role === "mono") {
+    if (char === "\t") return DATA_MONO_TAB_WIDTH * fontSize;
+    if (char.codePointAt(0) > 0x7f) return 1.05 * fontSize;
+    return (DATA_MONO_GLYPH_WIDTH + DATA_GLYPH_SAFETY) * fontSize;
+  }
+  const directWidth = DATA_SAFE_ASCII_WIDTHS.get(char);
+  if (directWidth !== undefined) return (directWidth + DATA_GLYPH_SAFETY) * fontSize;
+  for (const [glyphs, width] of DATA_SAFE_ASCII_WIDTHS) {
+    if (glyphs.includes(char)) return (width + DATA_GLYPH_SAFETY) * fontSize;
+  }
+  return 1.05 * fontSize;
+}
+
+function estimateWrappedLines(value, width, fontSize, role = "prose") {
+  return String(value ?? "").split("\n").reduce((total, hardLine) => {
+    if (hardLine === "") return total + 1;
+    let lineUnits = 0;
+    let lineCount = 1;
+    let pendingSpaceUnits = 0;
+    for (const token of hardLine.match(/\s+|[^\s]+/gu) ?? []) {
+      if (/^\s+$/u.test(token)) {
+        pendingSpaceUnits = [...token].reduce((sum, char) => sum + glyphWidth(char, fontSize, role), 0);
+        continue;
+      }
+      const tokenUnits = [...token].reduce((sum, char) => sum + glyphWidth(char, fontSize, role), 0);
+      if (tokenUnits > width) {
+        if (lineUnits > 0) {
+          lineCount += 1;
+          lineUnits = 0;
+        }
+        for (const char of token) {
+          const units = glyphWidth(char, fontSize, role);
+          if (lineUnits > 0 && lineUnits + units > width) {
+            lineCount += 1;
+            lineUnits = 0;
+          }
+          lineUnits += units;
+        }
+      } else {
+        const neededUnits = tokenUnits + (lineUnits > 0 ? pendingSpaceUnits : 0);
+        if (lineUnits > 0 && lineUnits + neededUnits > width) {
+          lineCount += 1;
+          lineUnits = tokenUnits;
+        } else {
+          lineUnits += neededUnits;
+        }
+      }
+      pendingSpaceUnits = 0;
+    }
+    return total + lineCount;
+  }, 0);
+}
+
+const DATA_TOKEN_RECOVERY = "Shorten the token label, reduce token items, or split the data vignette across frames; native cells stay single-line without truncation or font shrinking.";
+const DATA_FIXED_CELL_RECOVERY = "Shorten the label or use manual composition/split the data vignette across frames; fixed native cells stay single-line without truncation or font shrinking.";
+const DATA_CAPTION_RECOVERY = "Shorten the data caption or increase the canvas height; the caption must clear the native data header lane.";
+const AUTOMATIC_FOOTER_RECOVERY = "Shorten the editorial footer/callouts, split the family across frames, or grow the canvas height.";
+const DATA_OUTLINE_RECOVERY = "Keep authored data values portable for the outline; use a deck-relative image path or encode the example value.";
+
+function collectDataOutlinePathFailure(data, index, { specPath }) {
+  if (hasAbsolutePath(dataVignetteOutline(data))) {
+    return failure(
+      `bands[${index}].visual.data`,
+      "data values contain an absolute or machine-local path that would make outline.md non-portable",
+      { specPath, recovery: DATA_OUTLINE_RECOVERY },
+    );
+  }
+  return null;
+}
+
+const DATA_NATIVE_CELL_HEIGHT_PX = 42;
+const DATA_NATIVE_NOTE_HEIGHT_PX = 32;
+
+function collectDataNativeCapacityFailures(band, index, { bodyWidth, bodyHeight, specPath }) {
+  const data = band.visual?.data;
+  if (!data || !isObject(data)) return [];
+  const viewportWidth = bodyWidth * DATA_VIGNETTE_VIEWPORT.minWidth;
+  const viewportHeight = bodyHeight * DATA_VIGNETTE_VIEWPORT.minHeight;
+  const failures = [];
+  const captionLines = estimateWrappedLines(data.caption, viewportWidth * 0.96, RAMP.note);
+  const captionAvailableHeight = viewportHeight * (0.18 - 0.03);
+  const captionRequiredHeight = captionLines * DATA_NATIVE_NOTE_HEIGHT_PX;
+  if (captionRequiredHeight > captionAvailableHeight) {
+    failures.push(failure(
+      `bands[${index}].visual.data.caption`,
+      `native data caption requires ${captionLines} lines (${captionRequiredHeight}px) but only ${captionAvailableHeight.toFixed(1)}px remains before the native header lane; increase the canvas height or shorten the caption`,
+      { specPath, recovery: DATA_CAPTION_RECOVERY },
+    ));
+  }
+  const check = (field, value, width, fixedCell = false, role = "prose") => {
+    const text = String(value ?? "");
+    const lines = estimateWrappedLines(text, Math.max(1, width - 2 * BOUND_TEXT_PADDING), RAMP.note, role);
+    if (lines <= 1) return;
+    failures.push(failure(
+      `bands[${index}].visual.data.${field}`,
+      `native data label requires ${lines} lines in a ${width.toFixed(1)}px single-line cell; ${fixedCell ? "shorten the label or use manual composition/split the vignette" : "shorten it, reduce items, or split the vignette"}`,
+      { specPath, recovery: fixedCell ? DATA_FIXED_CELL_RECOVERY : DATA_TOKEN_RECOVERY },
+    ));
+  };
+  const heightFailure = (field, actual, context, fixedCell = false, required = DATA_NATIVE_CELL_HEIGHT_PX) => {
+    if (actual >= required) return;
+    failures.push(failure(
+      `bands[${index}].visual.data.${field}`,
+      `${context} provides only ${actual.toFixed(1)}px for a ${required}px native label cell; increase the canvas height or ${fixedCell ? "shorten the label/use manual composition" : "shorten the label/reduce items"}`,
+      { specPath, recovery: fixedCell ? DATA_FIXED_CELL_RECOVERY.replace("Shorten the label", "Increase the canvas height or shorten the label") : `${DATA_TOKEN_RECOVERY} Increase the canvas height if the native rows still cannot fit.` },
+    ));
+  };
+  if (data.kind === "token-sequence") {
+    const columns = data.pieces.length > 4 ? Math.ceil(data.pieces.length / 2) : data.pieces.length;
+    const gap = Math.min(0.018, 0.12 / columns);
+    const cellWidth = viewportWidth * ((0.94 - gap * (columns - 1)) / columns);
+    const areaHeight = viewportHeight;
+    const dense = data.pieces.length > 4;
+    const rowTop = dense ? 0.27 : 0.30;
+    const rowStep = dense ? 0.24 : 0;
+    const linkGap = dense ? 0.012 : 0.005;
+    const linkHeight = dense ? 0.02 : 0.06;
+    const idGap = dense ? 0.04 : 0.03;
+    const rowStack = DATA_NATIVE_CELL_HEIGHT_PX * 2 + areaHeight * (linkGap + linkHeight + idGap);
+    const availableToNextRow = rowStep ? areaHeight * rowStep : areaHeight * (0.72 - rowTop);
+    if (rowStack > availableToNextRow) {
+      heightFailure("pieces", availableToNextRow, "native token rows", false, rowStack);
+    }
+    if (rowStep && areaHeight * 0.80 < areaHeight * (rowTop + rowStep) + rowStack) {
+      heightFailure("pieces", areaHeight * (0.80 - rowTop - rowStep), "native token rows before the alignment note", false, rowStack);
+    }
+    data.pieces.forEach((piece, pieceIndex) => {
+      const visible = String(piece.text ?? "").replace(/^[ \t]+|[ \t]+$/g, (whitespace) => "␠".repeat(whitespace.length));
+      check(`pieces[${pieceIndex}].text`, visible, cellWidth);
+      check(`pieces[${pieceIndex}].id`, piece.id, cellWidth);
+    });
+  } else if (data.kind === "lookup") {
+    const rowHeight = viewportHeight * Math.min(0.07, 0.40 / data.rows.length);
+    heightFailure("rows", rowHeight, "native lookup rows", true);
+    check("key", `Lookup key: ${data.key}`, viewportWidth * 0.62, true);
+    data.rows.forEach((row, rowIndex) => {
+      check(`rows[${rowIndex}].id`, row.id, viewportWidth * 0.20, true);
+      check(`rows[${rowIndex}].label`, row.label, viewportWidth * 0.20, true);
+      if (Array.isArray(row.vector)) {
+        check(`rows[${rowIndex}].vector`, displayVectorText(row.vector), viewportWidth * 0.28, true, "mono");
+      }
+    });
+  } else if (data.kind === "distribution") {
+    const rowHeight = viewportHeight * Math.min(0.085, 0.54 / data.candidates.length);
+    heightFailure("candidates", rowHeight, "native distribution rows", true);
+    const rowGap = 0.008;
+    const noteY = Math.min(0.83, 0.27 + data.candidates.length * (Math.min(0.085, 0.54 / data.candidates.length) + rowGap) + 0.03);
+    const noteBottomRoom = bodyHeight * (DATA_BOUNDARY_START - (0.07 + DATA_VIGNETTE_VIEWPORT.minHeight * noteY));
+    if (noteBottomRoom < DATA_NATIVE_NOTE_HEIGHT_PX) {
+      heightFailure("candidates", noteBottomRoom, "native distribution note", true, DATA_NATIVE_NOTE_HEIGHT_PX);
+    }
+    data.candidates.forEach((candidate, candidateIndex) => {
+      check(`candidates[${candidateIndex}].label`, candidate.label, viewportWidth * 0.24, true);
+    });
+  }
+  return failures;
+}
+
+function renderedFooterParts(band, index) {
+  const visual = isObject(band.visual) ? band.visual : {};
+  const family = cleanText(visual.family, AUTO_COMPOSE_FAMILIES[index % AUTO_COMPOSE_FAMILIES.length]);
+  const parts = [
+    cleanText(visual.explanation, band.deck),
+    visual.example ? `Example — ${cleanText(visual.example)}` : "",
+    visual.tradeoff ? `Boundary — ${cleanText(visual.tradeoff)}` : "",
+    ...(Array.isArray(visual.evidence) ? visual.evidence : []).map((item) => `Evidence — ${cleanText(item)}`),
+  ];
+  if (family === "illustration" && visual.data) {
+    parts.push(...dataIllustrationCalloutParts(band));
+  } else if (!["illustration", "spotlight"].includes(family)) {
+    const callouts = Array.isArray(visual.callouts) ? visual.callouts : [];
+    parts.push(...callouts.map((callout) => {
+      const label = isObject(callout) ? cleanText(callout.label) : cleanText(callout);
+      const note = isObject(callout) ? cleanText(callout.note ?? callout.text) : cleanText(callout);
+      return `Callout — ${label}${note ? `: ${note}` : ""}`;
+    }));
+  }
+  return parts.filter(Boolean);
+}
+
+function collectAutomaticFooterCapacityFailures(band, index, { bodyWidth, bodyHeight, specPath }) {
+  const visual = isObject(band.visual) ? band.visual : {};
+  const family = cleanText(visual.family, AUTO_COMPOSE_FAMILIES[index % AUTO_COMPOSE_FAMILIES.length]);
+  if (family === "illustration") return [];
+  const parts = renderedFooterParts(band, index);
+  if (!parts.length) return [];
+  const layout = automaticEditorialLayout(family);
+  const width = bodyWidth * layout.maxWidth;
+  const inspectY = visual.inspect ? automaticInspectY(bodyHeight) : 1;
+  const text = parts.join("  •  ");
+  const lines = estimateWrappedLines(text, width, layout.fontSize);
+  const lineHeight = layout.fontSize * 1.35;
+  const availableHeight = bodyHeight * Math.max(0, inspectY - layout.y);
+  const requiredHeight = lines * lineHeight + DATA_BOUND_TEXT_MARGIN_PX;
+  const failures = [];
+  if (requiredHeight > availableHeight) {
+    failures.push(failure(
+      `bands[${index}].visual`,
+      `automatic ${family} editorial footer needs ${lines} wrapped lines (${requiredHeight.toFixed(1)}px) but only ${availableHeight.toFixed(1)}px remains in the ${bodyHeight}px body`,
+      { specPath, recovery: AUTOMATIC_FOOTER_RECOVERY },
+    ));
+  }
+  if (visual.inspect) {
+    const inspectLines = estimateWrappedLines(`Inspect: ${cleanText(visual.inspect)}`, width, RAMP.note, "mono");
+    const inspectRequiredHeight = inspectLines * DATA_BOUNDARY_LINE_HEIGHT_PX;
+    const inspectAvailableHeight = bodyHeight * Math.max(0, 1 - inspectY);
+    if (inspectRequiredHeight > inspectAvailableHeight) {
+      failures.push(failure(
+        `bands[${index}].visual.inspect`,
+        `automatic ${family} inspect footer needs ${inspectLines} wrapped lines (${inspectRequiredHeight.toFixed(1)}px) but only ${inspectAvailableHeight.toFixed(1)}px remains in the ${bodyHeight}px body`,
+        { specPath, recovery: AUTOMATIC_FOOTER_RECOVERY },
+      ));
+    }
+  }
+  return failures;
+}
 
 function crc32(bytes) {
   let crc = 0xffffffff;
@@ -32,13 +384,14 @@ function crc32(bytes) {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
-function failure(field, reason, { specPath, recovery } = {}) {
+function failure(field, reason, { specPath, recovery, code } = {}) {
   return {
     stage: "preflight",
     field,
     input: specPath,
     reason,
     recovery: recovery ?? "Fix the reported field and run the command again.",
+    ...(code ? { code } : {}),
   };
 }
 
@@ -49,6 +402,48 @@ function isObject(value) {
 function isWithin(root, candidate) {
   const remainder = relative(root, candidate);
   return remainder === "" || (!remainder.startsWith("..") && !isAbsolute(remainder));
+}
+
+export function collectFamilyCapacityFailures(spec, { specPath, mode = "automatic" } = {}) {
+  if (mode !== "automatic") return [];
+  const failures = [];
+  for (const [index, band] of (Array.isArray(spec?.bands) ? spec.bands : []).entries()) {
+    if (!isObject(band) || band.pattern !== "canvas") continue;
+    const visual = isObject(band.visual) ? band.visual : {};
+    const authoredFamily = typeof visual.family === "string" ? visual.family.trim() : "";
+    const family = authoredFamily || AUTO_COMPOSE_FAMILIES[index % AUTO_COMPOSE_FAMILIES.length];
+    const capacity = FAMILY_CAPACITIES[family];
+    if (!capacity) continue;
+    const nodes = Array.isArray(visual.nodes)
+      ? visual.nodes
+      : Array.isArray(band.nodes) ? band.nodes : [];
+    const callouts = Array.isArray(visual.callouts) ? visual.callouts : [];
+    const minimumNodes = family === "pipeline" ? 3 : family === "constellation" ? 2 : null;
+    if (minimumNodes !== null && nodes.length < minimumNodes) {
+      const noun = family === "pipeline" ? "stages" : "nodes";
+      failures.push(failure(
+        `bands[${index}].visual.nodes`,
+        `${family} family needs at least ${minimumNodes} authored ${noun} to show its relationships; add genuine ${noun}, choose a family with a meaningful one-node primitive, or use manual composition`,
+        { specPath },
+      ));
+    }
+    const nodeCapacityApplies = !["illustration", "spotlight"].includes(family) || callouts.length === 0;
+    if (nodeCapacityApplies && nodes.length > capacity.nodes) {
+      failures.push(failure(
+        `bands[${index}].visual.nodes`,
+        `${family} family supports up to ${capacity.nodes} authored nodes; split across frames or choose a family with more capacity`,
+        { specPath },
+      ));
+    }
+    if (capacity.callouts !== undefined && callouts.length > capacity.callouts) {
+      failures.push(failure(
+        `bands[${index}].visual.callouts`,
+        `${family} family supports up to ${capacity.callouts} authored callouts; split across frames or choose a family with more capacity`,
+        { specPath },
+      ));
+    }
+  }
+  return failures;
 }
 
 // Resolve before every asset read/copy. Lexical containment alone lets a
@@ -121,11 +516,13 @@ export function collectDeckPreflightFailures(spec, { specPath, specDir, mode = "
   }
   if (failures.length) return failures;
 
+  let plannedDeck;
   try {
-    planDeck(spec);
+    plannedDeck = planDeck(spec);
   } catch (error) {
     failures.push(failure("spec", error.message ?? String(error), { specPath }));
   }
+  failures.push(...collectFamilyCapacityFailures(spec, { specPath, mode }));
 
   const titleChars = chars(spec.title);
   if (titleChars > MAX_HEADING_CHARS) {
@@ -168,6 +565,28 @@ export function collectDeckPreflightFailures(spec, { specPath, specDir, mode = "
     if (visual.nodes !== undefined && !Array.isArray(visual.nodes)) {
       failures.push(failure(`bands[${index}].visual.nodes`, `bands[${index}].visual.nodes must be an array`, { specPath }));
     }
+    let dataValidationPassed = false;
+    if (visual.data !== undefined) {
+      if (band.pattern !== "canvas" || visual.family !== "illustration") {
+        failures.push(failure(
+          `bands[${index}].visual.data`,
+          `visual.data requires a canvas band with visual.family "illustration"`,
+          { specPath },
+        ));
+      }
+      const dataFailures = validateDataVignette(visual.data);
+      dataValidationPassed = dataFailures.length === 0;
+      for (const dataFailure of dataFailures) {
+        const field = dataFailure.field === "data"
+          ? `bands[${index}].visual.data`
+          : `bands[${index}].visual.data.${dataFailure.field}`;
+        failures.push(failure(field, dataFailure.reason, { specPath }));
+      }
+      if (dataValidationPassed) {
+        const outlinePathFailure = collectDataOutlinePathFailure(visual.data, index, { specPath });
+        if (outlinePathFailure) failures.push(outlinePathFailure);
+      }
+    }
 
     const image = visual.image;
     if (visual.family === "illustration" && (!isObject(image) || typeof image.file !== "string" || image.file.trim() === "")) {
@@ -202,6 +621,18 @@ export function collectDeckPreflightFailures(spec, { specPath, specDir, mode = "
     if (thesisChars > CONTENT_BUDGETS.thesisChars) {
       failures.push(failure(`bands[${index}].visual.thesis`, `visual.thesis is ${thesisChars} characters; it renders as one line of at most ${CONTENT_BUDGETS.thesisChars}`, { specPath }));
     }
+    if (mode === "automatic" && band.pattern === "canvas") {
+      const focusAuthored = typeof visual.focus === "string" && visual.focus.trim() !== "";
+      const focus = focusAuthored ? visual.focus : band.heading;
+      const focusChars = chars(focus);
+      if (focusChars > CONTENT_BUDGETS.focusChars) {
+        failures.push(failure(
+          `bands[${index}].visual.focus`,
+          `automatic focus resolves to ${focusChars} characters${focusAuthored ? "" : " from the band heading"}; provide a shorter visual.focus of at most ${CONTENT_BUDGETS.focusChars} characters so the visual remains readable`,
+          { specPath, recovery: "Provide a short visual.focus override; do not truncate or silently drop the resolved focus." },
+        ));
+      }
+    }
     const inspectChars = chars(visual.inspect);
     if (inspectChars > CONTENT_BUDGETS.inspectChars) {
       failures.push(failure(`bands[${index}].visual.inspect`, `visual.inspect is ${inspectChars} characters; keep it to ${CONTENT_BUDGETS.inspectChars}`, { specPath }));
@@ -210,10 +641,75 @@ export function collectDeckPreflightFailures(spec, { specPath, specDir, mode = "
     if (explanationWords > CONTENT_BUDGETS.explanationWords) {
       failures.push(failure(`bands[${index}].visual.explanation`, `visual.explanation is ${explanationWords} words; the renderer truncates past approximately 130`, { specPath }));
     }
-    const evidence = Array.isArray(visual.evidence) ? visual.evidence : [];
-    const footerParts = chars(visual.explanation) + (visual.example ? chars(visual.example) + 9 : 0) + (visual.tradeoff ? chars(visual.tradeoff) + 11 : 0) + Math.min(evidence.length, 1) * (evidence[0] ? chars(evidence[0]) + 10 : 0);
+    const footerParts = chars(renderedFooterParts(band, index).join("  •  "));
     if (footerParts > CONTENT_BUDGETS.footerChars) {
       failures.push(failure(`bands[${index}].visual`, `visual footer content is ${footerParts} characters; rendered column holds approximately ${CONTENT_BUDGETS.footerChars}`, { specPath }));
+    }
+    if (mode === "automatic") {
+      const plannedBand = plannedDeck?.bands?.[index];
+      failures.push(...collectAutomaticFooterCapacityFailures(band, index, {
+        bodyWidth: PAGE_WIDTH - 2 * BODY_INSET,
+        bodyHeight: Math.max(1, Number(plannedBand?.height) || 1),
+        specPath,
+      }));
+    }
+    if (mode === "automatic" && visual.family === "illustration" && visual.data && dataValidationPassed) {
+      const bodyWidth = PAGE_WIDTH - 2 * BODY_INSET;
+      const plannedBand = plannedDeck?.bands?.[index];
+      const bodyHeight = Math.max(1, Number(plannedBand?.height) || 1);
+      if (plannedBand) {
+        const headerCapacityFailure = dataIllustrationHeaderCapacityFailure(band, index, {
+          specPath,
+          bodyWidth,
+          bodyHeight,
+          dataValidationPassed,
+        });
+        if (headerCapacityFailure) failures.push(headerCapacityFailure);
+      }
+      const dataExplanationParts = [
+        cleanText(visual.explanation, band.deck),
+        visual.example ? `Example — ${cleanText(visual.example)}` : "",
+      ].filter(Boolean).join("  •  ");
+      const dataBoundaryParts = [
+        visual.tradeoff ? `Boundary — ${cleanText(visual.tradeoff)}` : "",
+        ...(Array.isArray(visual.evidence) ? visual.evidence : []).map((item) => `Evidence — ${cleanText(item)}`),
+        ...dataIllustrationCalloutParts(band),
+      ].filter(Boolean).join("  •  ");
+      failures.push(...collectDataNativeCapacityFailures(band, index, { bodyWidth, bodyHeight, specPath }));
+      const explanationLines = estimateWrappedLines(dataExplanationParts, bodyWidth * 0.46, 26);
+      const explanationAvailableHeight = bodyHeight * (1 - DATA_EDITORIAL_START);
+      const explanationRequiredHeight = explanationLines * DATA_EDITORIAL_LINE_HEIGHT_PX + DATA_BOUND_TEXT_MARGIN_PX;
+      if (dataExplanationParts && explanationRequiredHeight > explanationAvailableHeight) {
+        failures.push(failure(
+          `bands[${index}].visual`,
+          `data illustration explanation needs ${explanationLines} wrapped lines (${explanationRequiredHeight}px) but only ${explanationAvailableHeight}px remains in the ${bodyHeight}px body`,
+          { specPath, recovery: DATA_EDITORIAL_RECOVERY },
+        ));
+      }
+      const inspectY = visual.inspect ? Math.min(0.95, Math.max(0.82, 1 - 36 / bodyHeight)) : 1;
+      const boundaryLines = estimateWrappedLines(dataBoundaryParts, bodyWidth * 0.44, 23);
+      const boundaryAvailableHeight = bodyHeight * Math.max(0, inspectY - DATA_BOUNDARY_START);
+      const boundaryRequiredHeight = boundaryLines * DATA_BOUNDARY_LINE_HEIGHT_PX + DATA_BOUND_TEXT_MARGIN_PX;
+      if (dataBoundaryParts && boundaryRequiredHeight > boundaryAvailableHeight) {
+        failures.push(failure(
+          `bands[${index}].visual`,
+          `data illustration boundary needs ${boundaryLines} wrapped lines (${boundaryRequiredHeight}px) but only ${boundaryAvailableHeight}px remains in the ${bodyHeight}px body`,
+          { specPath, recovery: DATA_EDITORIAL_RECOVERY },
+        ));
+      }
+      if (visual.inspect) {
+        const inspectText = `Inspect — ${cleanText(visual.inspect)}`;
+        const inspectLines = estimateWrappedLines(inspectText, bodyWidth * 0.44, 23, "mono");
+        const inspectAvailableHeight = bodyHeight * Math.max(0, 1 - inspectY);
+        const inspectRequiredHeight = inspectLines * DATA_BOUNDARY_LINE_HEIGHT_PX;
+        if (inspectRequiredHeight > inspectAvailableHeight) {
+          failures.push(failure(
+            `bands[${index}].visual.inspect`,
+            `data illustration inspect needs ${inspectLines} wrapped lines (${inspectRequiredHeight}px) but only ${inspectAvailableHeight}px remains in the ${bodyHeight}px body`,
+            { specPath, recovery: DATA_EDITORIAL_RECOVERY },
+          ));
+        }
+      }
     }
     if (visual.callouts !== undefined && !Array.isArray(visual.callouts)) {
       failures.push(failure(`bands[${index}].visual.callouts`, `visual.callouts must be an array`, { specPath }));
@@ -241,7 +737,7 @@ export function collectDeckPreflightFailures(spec, { specPath, specDir, mode = "
   return failures;
 }
 
-async function collectAssetFailures(spec, { specPath, specDir } = {}) {
+async function collectAssetFailures(spec, { specPath, specDir, mode = "automatic" } = {}) {
   const failures = [];
   const root = resolve(specDir ?? (specPath ? dirname(resolve(specPath)) : process.cwd()));
   const bands = Array.isArray(spec?.bands) ? spec.bands : [];
@@ -313,6 +809,21 @@ async function collectAssetFailures(spec, { specPath, specDir } = {}) {
       const height = bytes.readUInt32BE(20);
       if (width <= 0 || height <= 0) {
         failures.push(failure(field, `${field} PNG dimensions must be positive (measured ${width}x${height})`, { specPath }));
+        continue;
+      }
+      if (mode === "automatic") {
+        const plannedBand = band?.height;
+        const bodyHeight = Number(plannedBand);
+        if (Number.isFinite(bodyHeight) && bodyHeight > 0) {
+          const headerCapacityFailure = dataIllustrationHeaderCapacityFailure(band, index, {
+            specPath,
+            bodyWidth: PAGE_WIDTH - 2 * BODY_INSET,
+            bodyHeight,
+            pixelWidth: width,
+            pixelHeight: height,
+          });
+          if (headerCapacityFailure) failures.push(headerCapacityFailure);
+        }
       }
     } catch (cause) {
       failures.push(failure(field, `${field} is not readable`, { specPath, recovery: "Provide a readable PNG at the deck-relative image path." }));
@@ -337,7 +848,23 @@ export async function preflightDeck({ specPath, spec, mode = "automatic" } = {})
     }
   }
   const specDir = specPath ? dirname(resolve(specPath)) : process.cwd();
-  failures.push(...collectDeckPreflightFailures(loaded, { specPath, specDir, mode }));
-  failures.push(...(await collectAssetFailures(loaded, { specPath, specDir })));
+  const structuralFailures = collectDeckPreflightFailures(loaded, { specPath, specDir, mode });
+  const assetFailures = await collectAssetFailures(loaded, { specPath, specDir, mode });
+  const assetFailureBands = new Set(
+    assetFailures
+      .filter(({ field }) => /^bands\[(\d+)\]\.visual\.image\.file$/.test(field))
+      .map(({ field }) => Number(/^bands\[(\d+)\]/.exec(field)[1])),
+  );
+  const exactHeaderFailureBands = new Set(
+    assetFailures
+      .filter(({ code }) => code === "data-header-capacity")
+      .map(({ field }) => Number(/^bands\[(\d+)\]/.exec(field)[1])),
+  );
+  failures.push(...structuralFailures.filter((item) => {
+    if (item.code !== "data-header-capacity") return true;
+    const bandIndex = Number(/^bands\[(\d+)\]/.exec(item.field)?.[1]);
+    return !assetFailureBands.has(bandIndex) && !exactHeaderFailureBands.has(bandIndex);
+  }));
+  failures.push(...assetFailures);
   return { ok: failures.length === 0, failures, spec: loaded };
 }

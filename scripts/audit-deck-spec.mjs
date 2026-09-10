@@ -226,7 +226,11 @@ for (const [index, band] of bands.entries()) {
     if (nonRectangles.length < 2 && !entry.image) {
       failures.push(`canvas band ${index + 1} needs a visual relationship (arrows, lines, ellipses, or a scene), not only labels`);
     }
-    const connectors = elements.filter((element) => element.type === "arrow" || element.type === "line").length;
+    const connectors = elements.filter((element) =>
+      (element.type === "arrow" || element.type === "line")
+      && !element.customData?.beautidrawDataLink
+      && !element.customData?.semanticKind,
+    ).length;
     const family = visual?.family;
     const maxConnectors = sequentialFamilies.has(family) ? 7 : 3;
     if (connectors > maxConnectors) {

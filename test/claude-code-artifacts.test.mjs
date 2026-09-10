@@ -132,9 +132,42 @@ test("Claude Code exemplar satisfies its mixed-media contract", { timeout: 300_0
   const inspectLabelId = semanticInspect.customData.semanticLabelId;
   const inspectLabel = elements.find((element) => element.id === inspectLabelId || element.customData?.semanticLabelFor === semanticInspect.id);
   assert.ok(inspectLabel?.text?.trim(), "inspect icon must have a visible label");
+
+  const countOccurrences = (haystack, needle) => {
+    let count = 0;
+    let offset = 0;
+    while (needle) {
+      const next = haystack.indexOf(needle, offset);
+      if (next < 0) break;
+      count += 1;
+      offset = next + needle.length;
+    }
+    return count;
+  };
+  for (const [bandIndex, band] of spec.bands.entries()) {
+    const frameText = elements
+      .filter((element) => element.frameId === `b${bandIndex}-frame`)
+      .map((element) => element.text)
+      .filter((value) => typeof value === "string")
+      .join(" ")
+      .replace(/\s+/g, " ");
+    for (const callout of band.visual?.callouts ?? []) {
+      const specialized = !band.visual?.data && ["illustration", "spotlight"].includes(band.visual?.family);
+      const labelMarker = specialized
+        ? `${callout.kind[0].toUpperCase()}${callout.kind.slice(1)}: ${callout.label}`
+        : `Callout — ${callout.label}`;
+      const renderedCallout = `${labelMarker}${callout.note && !specialized ? `: ${callout.note}` : ""}`;
+      assert.equal(countOccurrences(frameText, renderedCallout), 1, `${band.visual.family} callout content must render exactly once: ${callout.label}`);
+      if (specialized && callout.note) assert.equal(countOccurrences(frameText, callout.note), 1, `${band.visual.family} callout note must render exactly once: ${callout.label}`);
+    }
+  }
+
   const semanticElements = elements.filter((element) => element.customData?.semanticKind);
-  assert.equal(semanticElements.length, callouts.length, "every authored callout must survive composition as one semantic element");
-  for (const callout of callouts) {
+  const specializedCallouts = spec.bands
+    .filter((band) => !band.visual?.data && ["illustration", "spotlight"].includes(band.visual?.family))
+    .flatMap((band) => band.visual?.callouts ?? []);
+  assert.equal(semanticElements.length, specializedCallouts.length, "only specialized illustration/spotlight callouts render semantic icons");
+  for (const callout of specializedCallouts) {
     const rendered = semanticElements.find((element) => {
       const label = elements.find((candidate) => candidate.type === "text" && (
         candidate.containerId === element.id || candidate.customData?.semanticLabelFor === element.id
@@ -143,14 +176,14 @@ test("Claude Code exemplar satisfies its mixed-media contract", { timeout: 300_0
     });
     assert.equal(rendered?.customData?.semanticKind, callout.kind, `${callout.label} kind must survive composition`);
   }
-  const shapeTypes = (prefix) => new Set(elements.filter((element) => new RegExp(`^${prefix}\\d+$`).test(element.id)).map((element) => element.type));
+  const markTypes = (prefix) => new Set(elements.filter((element) => new RegExp(`^${prefix}\\d+-mark$`).test(element.id)).map((element) => element.type));
   for (const [prefix, expectedType] of [
     ["b1-field-", "ellipse"], ["b2-field-", "ellipse"],
-    ["b4-evidence-", "rectangle"], ["b8-star-", "ellipse"],
-    ["b11-satellite-", "ellipse"], ["b12-evidence-", "rectangle"],
-    ["b13-quadrant-", "rectangle"],
+    ["b4-evidence-", "ellipse"], ["b8-star-", "ellipse"],
+    ["b11-satellite-", "ellipse"], ["b12-evidence-", "ellipse"],
+    ["b13-quadrant-", "ellipse"],
   ]) {
-    assert.deepEqual(shapeTypes(prefix), new Set([expectedType]), `${prefix} must use one relationship shape`);
+    assert.deepEqual(markTypes(prefix), new Set([expectedType]), `${prefix} must use one restrained relationship mark`);
   }
   const semanticShapeByKind = { example: "ellipse", boundary: "diamond", inspect: "line", warning: "rectangle" };
   for (const element of semanticElements) {
@@ -212,7 +245,7 @@ test("Claude Code exemplar satisfies its mixed-media contract", { timeout: 300_0
     const legacyResult = await withHarness(async ({ page }) =>
       page.evaluate((scene) => window.__bdLoadScene(scene), legacyLineHeight));
     assert.ok(
-      legacyResult.state === "ready" || (legacyResult.state === "error" && legacyResult.error?.code === "FIDELITY"),
+      legacyResult.state === "ready" || (legacyResult.state === "error" && /^Fidelity report failed/.test(legacyResult.error?.reason ?? "")),
       `${generatedBound.id}: generated lineHeight=1.25 must pass compatibility or fail as typed fidelity, got ${legacyResult.error?.reason ?? legacyResult.state}`,
     );
     if (legacyResult.state === "error") {

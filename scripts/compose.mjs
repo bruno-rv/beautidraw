@@ -11,7 +11,20 @@
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, normalize, resolve } from "node:path";
-import { BODY_INSET, BOUND_TEXT_PADDING, DECK_BODY_GAP, FRAME_PAD_BOTTOM, FONT, FONT_NAME, PAGE_WIDTH, RAMP, USABLE_H, USABLE_W } from "./layout.mjs";
+import {
+  BODY_INSET,
+  BOUND_TEXT_PADDING,
+  DATA_HEADER_IMAGE_GAP,
+  DATA_IMAGE_MIN_HEIGHT,
+  DECK_BODY_GAP,
+  FRAME_PAD_BOTTOM,
+  FONT,
+  FONT_NAME,
+  PAGE_WIDTH,
+  RAMP,
+  USABLE_H,
+  USABLE_W,
+} from "./layout.mjs";
 import { runCli } from "./cli.mjs";
 import { readJsonInput, resolveAssetWithinRoot } from "./preflight.mjs";
 
@@ -275,7 +288,15 @@ for (const entry of spec.bands) {
       ) {
         throw new Error(`band ${entry.band} ${element.id}: points must be normalized [x,y] tuples`);
       }
-      skeleton.points = element.points.map(([px, py]) => [px * skeleton.width, py * skeleton.height]);
+      const scaledPoints = element.points.map(([px, py]) => [px * skeleton.width, py * skeleton.height]);
+      // Excalidraw 0.18.1 binds linear elements relative to their first point
+      // and assumes that point is [0, 0]. Preserve the authored geometry by
+      // moving the skeleton origin to that first point, then retaining signed
+      // offsets for every remaining point (including routed/reversed paths).
+      const [originX, originY] = scaledPoints[0];
+      skeleton.x += originX;
+      skeleton.y += originY;
+      skeleton.points = scaledPoints.map(([px, py]) => [px - originX, py - originY]);
     } else if (element.type === "line" || element.type === "arrow") {
       throw new Error(`band ${entry.band} ${element.id}: points are required for ${element.type}`);
     }
@@ -342,11 +363,15 @@ const result = await withHarness(async ({ page }) =>
             fontSize: skeleton.fontSize,
             fontFamily,
             role,
+            textAlign: skeleton.textAlign ?? "left",
           }], { regenerateIds: false });
-          const x = skeleton.x;
+          const x = skeleton.textAlign === "right" ? skeleton.x - measured.width : skeleton.x;
           const y = skeleton.y;
+          const horizontalAvailable = skeleton.textAlign === "right"
+            ? skeleton.x - item.body.x
+            : item.body.x + item.body.width - x;
           const availableWidth = Math.min(
-            item.body.x + item.body.width - x,
+            horizontalAvailable,
             Number.isFinite(skeleton.customData?.beautidrawMaxWidth)
               ? skeleton.customData.beautidrawMaxWidth * item.body.width
               : Number.POSITIVE_INFINITY,
@@ -354,10 +379,12 @@ const result = await withHarness(async ({ page }) =>
           if (measured.width <= availableWidth + 0.5) {
             return {
               ...skeleton,
+              x,
               width: measured.width,
               height: measured.height,
               role,
               fontFamily,
+              textAlign: skeleton.textAlign === "right" ? "left" : skeleton.textAlign,
               customData: {
                 ...(skeleton.customData ?? {}),
                 beautidrawMeasuredBounds: { x, y, width: measured.width, height: measured.height },
@@ -368,6 +395,7 @@ const result = await withHarness(async ({ page }) =>
             throw new Error(`${skeleton.id}: converter-derived text has no available body width; shorten or reposition the authored text`);
           }
           const width = availableWidth;
+          const containerX = skeleton.textAlign === "right" ? skeleton.x - width : skeleton.x;
           const [wrappedContainer] = api.convertToExcalidrawElements([{
             id: `${skeleton.id}-container-measurement`,
             type: "rectangle",
@@ -383,6 +411,7 @@ const result = await withHarness(async ({ page }) =>
               fontSize: skeleton.fontSize,
               fontFamily,
               role,
+              textAlign: skeleton.textAlign ?? "left",
               strokeColor: skeleton.strokeColor,
               roughness: 0,
             },
@@ -394,7 +423,7 @@ const result = await withHarness(async ({ page }) =>
           return {
             id: skeleton.id,
             type: "rectangle",
-            x,
+            x: containerX,
             y,
             width,
             height,
@@ -406,13 +435,14 @@ const result = await withHarness(async ({ page }) =>
             customData: {
               ...(skeleton.customData ?? {}),
               beautidrawTextContainer: true,
-              beautidrawMeasuredBounds: { x, y, width, height },
+              beautidrawMeasuredBounds: { x: containerX, y, width, height },
             },
             label: {
               text: skeleton.text,
               fontSize: skeleton.fontSize,
               fontFamily,
               role,
+              textAlign: skeleton.textAlign ?? "left",
               strokeColor: skeleton.strokeColor,
               roughness: 0,
             },
@@ -453,7 +483,7 @@ const result = await withHarness(async ({ page }) =>
           x: 0,
           y: 0,
           width,
-          label: { ...skeleton.label, role, fontFamily },
+          label: { ...skeleton.label, role, fontFamily, textAlign: skeleton.label.textAlign ?? "left" },
         }], { regenerateIds: false });
         const height = wrapped.height;
         if (y + height > item.body.y + item.body.height + 0.5) {
@@ -472,6 +502,70 @@ const result = await withHarness(async ({ page }) =>
           },
         };
       });
+      const positionBelowMeasuredText = (item, skeletons) => {
+        const anchorRefs = skeletons
+          .map((skeleton) => skeleton.customData?.beautidrawBelowTextId)
+          .filter((id) => typeof id === "string" && id.trim() !== "");
+        const anchorIds = new Set(anchorRefs.flatMap((id) => [id, `b${item.entry.band}-${id}`]));
+        if (!anchorIds.size) return skeletons;
+        const originalY = new Map(skeletons.map((skeleton) => [skeleton.id, skeleton.y]));
+        let positioned = skeletons.map((skeleton) => ({ ...skeleton }));
+        const notes = skeletons
+          .filter((skeleton) => skeleton.customData?.beautidrawBelowTextId)
+          .sort((left, right) => left.y - right.y);
+        for (const noteSkeleton of notes) {
+          const currentNote = positioned.find((skeleton) => skeleton.id === noteSkeleton.id);
+          const anchorId = noteSkeleton.customData.beautidrawBelowTextId;
+          const anchorSkeleton = positioned.find((skeleton) => skeleton.id === anchorId || skeleton.id === `b${item.entry.band}-${anchorId}`);
+          if (!currentNote || !anchorSkeleton) throw new Error(`${noteSkeleton.id}: measured anchor ${anchorId} is missing`);
+          const [anchor] = sizeFromConvertedBounds(item, [anchorSkeleton]);
+          const gap = Number.isFinite(noteSkeleton.customData?.beautidrawBelowTextGap)
+            ? noteSkeleton.customData.beautidrawBelowTextGap * item.body.height
+            : 0;
+          const targetY = Math.max(
+            originalY.get(noteSkeleton.id) ?? currentNote.y,
+            anchor.y + anchor.height + gap,
+          );
+          const delta = targetY - currentNote.y;
+          const lane = noteSkeleton.customData?.beautidrawTextFlowLane;
+          positioned = positioned.map((skeleton) => {
+            if (skeleton.id === noteSkeleton.id) return { ...skeleton, y: targetY };
+            if (
+              delta > 0 && lane && skeleton.customData?.beautidrawTextFlowLane === lane &&
+              (originalY.get(skeleton.id) ?? skeleton.y) > (originalY.get(noteSkeleton.id) ?? noteSkeleton.y)
+            ) return { ...skeleton, y: skeleton.y + delta };
+            return skeleton;
+          });
+        }
+        return positioned;
+      };
+      const imageAdjustments = [];
+      const positionDataImageBelowHeader = (item) => {
+        const anchorId = item.entry.image?.anchorBelow;
+        if (!anchorId) return;
+        const image = item.skeletons.find((skeleton) => skeleton.type === "image");
+        const anchor = item.skeletons.find((skeleton) => skeleton.id === `b${item.entry.band}-${anchorId}`);
+        if (!image || !anchor) throw new Error(`band ${item.entry.band}: data header/image anchor is missing`);
+        const [measuredHeader] = sizeFromConvertedBounds(item, [anchor]);
+        const originalY = image.y;
+        const originalBottom = image.y + image.height;
+        const targetY = Math.max(
+          originalY,
+          measuredHeader.y + measuredHeader.height + item.body.height * validationConfig.dataHeaderImageGap,
+        );
+        if (targetY <= originalY + 0.5) return;
+        const availableHeight = originalBottom - targetY;
+        const minimumHeight = item.body.height * validationConfig.dataImageMinHeight;
+        if (availableHeight < minimumHeight) {
+          throw new Error(`band ${item.entry.band}: data header leaves insufficient room for the illustration image; shorten the thesis/focus or grow the canvas height and rerun`);
+        }
+        const scale = Math.min(1, availableHeight / image.height);
+        const height = image.height * scale;
+        const width = image.width * scale;
+        const x = item.entry.image.side === "right" ? image.x + image.width - width : image.x;
+        imageAdjustments.push({ band: item.entry.band, targetWidth: width, targetHeight: height });
+        item.skeletons = item.skeletons.map((skeleton) => skeleton === image ? { ...skeleton, x, y: targetY, width, height } : skeleton);
+      };
       const annotationCandidates = [
         [0.05, 0.18], [0.30, 0.18], [0.55, 0.18],
         [0.05, 0.30], [0.30, 0.30], [0.55, 0.30],
@@ -502,9 +596,11 @@ const result = await withHarness(async ({ page }) =>
       };
       const byFrame = new Map();
       for (const item of prepared) {
+        positionDataImageBelowHeader(item);
         const annotationSkeletons = item.skeletons.filter((skeleton) => skeleton.customData?.beautidrawAnnotation === true);
         const familySkeletons = item.skeletons.filter((skeleton) => skeleton.customData?.beautidrawAnnotation !== true);
-        const familySized = sizeFromConvertedBounds(item, familySkeletons);
+        const positionedFamilySkeletons = positionBelowMeasuredText(item, familySkeletons);
+        const familySized = sizeFromConvertedBounds(item, positionedFamilySkeletons);
         const familyConverted = api.convertToExcalidrawElements(familySized, { regenerateIds: false });
         const familyCollisionElements = familyConverted.filter(
           (element) => element && element.customData?.beautidrawCompositionKind !== "surface" &&
@@ -610,7 +706,10 @@ const result = await withHarness(async ({ page }) =>
         if (!semanticKinds.has(kind)) failures.push(`${icon.id}: unsupported semantic icon kind "${kind}"`);
         if (!icon.frameId) failures.push(`${icon.id}: semantic icon must belong to a frame`);
         const labelId = icon.customData.semanticLabelId;
-        const label = (labelId ? elementById.get(labelId) : null) ?? restored.find(
+        const labeledElement = labelId ? elementById.get(labelId) : null;
+        const boundLabelId = (labeledElement?.boundElements ?? []).find((binding) => binding.type === "text")?.id;
+        const label = (labeledElement?.type === "text" ? labeledElement : null) ??
+          (boundLabelId ? elementById.get(boundLabelId) : null) ?? restored.find(
           (element) => element.type === "text" && (
             element.containerId === icon.id || element.customData?.semanticLabelFor === icon.id
           ),
@@ -658,6 +757,21 @@ const result = await withHarness(async ({ page }) =>
       const overlaps = (a, b) =>
         Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x) > 0 &&
         Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y) > 0;
+      const geometryBounds = (element) => {
+        if (!((element.type === "line" || element.type === "arrow") && Array.isArray(element.points) && element.points.length)) {
+          return element;
+        }
+        const xs = element.points.map(([x]) => x);
+        const ys = element.points.map(([, y]) => y);
+        const minX = Math.min(...xs);
+        const minY = Math.min(...ys);
+        return {
+          x: element.x + minX,
+          y: element.y + minY,
+          width: Math.max(...xs) - minX,
+          height: Math.max(...ys) - minY,
+        };
+      };
 
       for (const [frameId, item] of preparedByFrame) {
         const frame = frameById.get(frameId);
@@ -666,11 +780,12 @@ const result = await withHarness(async ({ page }) =>
             element.frameId === frameId && element.customData?.beautidrawComposition === true,
         );
         for (const element of members) {
+          const bounds = geometryBounds(element);
           const outside =
-            element.x < item.body.x - 0.5 ||
-            element.y < item.body.y - 0.5 ||
-            element.x + element.width > item.body.x + item.body.width + 0.5 ||
-            element.y + element.height > item.body.y + item.body.height + 0.5;
+            bounds.x < item.body.x - 0.5 ||
+            bounds.y < item.body.y - 0.5 ||
+            bounds.x + bounds.width > item.body.x + item.body.width + 0.5 ||
+            bounds.y + bounds.height > item.body.y + item.body.height + 0.5;
           if (outside) failures.push(`${element.id}: outside body bounds`);
           if (element.containerId && !elementById.has(element.containerId)) {
             failures.push(`${element.id}: bound-text container ${element.containerId} is missing`);
@@ -764,6 +879,7 @@ const result = await withHarness(async ({ page }) =>
         deck: JSON.parse(api.serializeAsJSON(restored, deck.appState ?? { viewBackgroundColor: "#ffffff" }, files, "local")),
         bandPngs,
         scenePng: scene.toDataURL("image/png"),
+        imageAdjustments,
       };
     },
     {
@@ -776,6 +892,8 @@ const result = await withHarness(async ({ page }) =>
         usableWidth: USABLE_W,
         usableHeight: USABLE_H,
         boundTextPadding: BOUND_TEXT_PADDING,
+        dataHeaderImageGap: DATA_HEADER_IMAGE_GAP,
+        dataImageMinHeight: DATA_IMAGE_MIN_HEIGHT,
         noteFontSize: RAMP.note,
         fontFamily: { prose: FONT.prose, mono: FONT.mono, handwritten: FONT.handwritten },
       },
@@ -784,6 +902,12 @@ const result = await withHarness(async ({ page }) =>
 );
 
 await mkdir(outDir, { recursive: true });
+for (const adjustment of result.imageAdjustments ?? []) {
+  const asset = manifest.find((candidate) => candidate.band === adjustment.band);
+  if (!asset) throw new Error(`band ${adjustment.band}: adjusted image manifest entry is missing`);
+  asset.targetWidth = adjustment.targetWidth;
+  asset.targetHeight = adjustment.targetHeight;
+}
 // Same orphan rule as generate.mjs: a composition with fewer bands than the
 // previous render must not leave stale band-NN.png files beside it.
 const staleBand = (name) => /^band-\d{2}\.png$/.exec(name);

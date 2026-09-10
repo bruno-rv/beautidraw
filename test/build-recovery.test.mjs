@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { access, cp, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
+import { access, cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -151,20 +151,152 @@ test("a missing final artifact preserves the previous output", { timeout: 120_00
   assert.equal(siblings.some((name) => name.includes("stage-") || name.includes("backup-")), false);
 });
 
-test("evidence band with three nodes composes without nodeText crash", { timeout: 120_000 }, async () => {
+test("illustration fallback nodes preserve notes without padded phantom labels", { timeout: 300_000 }, async (t) => {
+  const tempRoot = await mkdtemp(join(tmpdir(), "beautidraw-illustration-fallback-notes-"));
+  t.after(() => rm(tempRoot, { recursive: true, force: true }));
+  const fixtures = [
+    {
+      name: "illustration",
+      specPath: resolve(root, "decks/claude-code-artifacts/deck-spec.json"),
+      assetDir: join(root, "decks/claude-code-artifacts/assets"),
+      find: (band) => band.visual?.family === "illustration" && !band.visual?.data,
+    },
+    {
+      name: "spotlight",
+      specPath: resolve(root, "decks/claude-code-artifacts/deck-spec.json"),
+      assetDir: join(root, "decks/claude-code-artifacts/assets"),
+      find: (band) => band.visual?.family === "spotlight",
+    },
+    {
+      name: "data",
+      specPath: resolve(root, "decks/llm-token-flow/deck-spec.json"),
+      assetDir: join(root, "decks/llm-token-flow/assets"),
+      find: (band) => band.visual?.data?.kind === "distribution",
+    },
+  ];
+  for (const fixture of fixtures) {
+    for (const count of [1, 2]) {
+      const fixtureRoot = join(tempRoot, `${fixture.name}-${count}`);
+      const spec = JSON.parse(await readFile(fixture.specPath, "utf8"));
+      const bandIndex = spec.bands.findIndex(fixture.find);
+      const band = spec.bands[bandIndex];
+      assert.ok(band, `${fixture.name}: fixture band must exist`);
+      band.visual.nodes = band.visual.nodes.slice(0, count);
+      delete band.visual.callouts;
+      const specPath = join(fixtureRoot, "spec.json");
+      const output = join(fixtureRoot, "out");
+      await mkdir(fixtureRoot, { recursive: true });
+      await writeFile(specPath, JSON.stringify(spec));
+      await cp(fixture.assetDir, join(fixtureRoot, "assets"), { recursive: true });
+      const result = spawnSync(process.execPath, [resolve(root, "scripts/build-deck.mjs"), specPath, output], {
+        cwd: root,
+        encoding: "utf8",
+        timeout: 120_000,
+      });
+      assert.equal(result.status, 0, `${fixture.name}-${count}: ${result.stdout}\n${result.stderr}`);
+      const composition = JSON.parse(await readFile(join(output, "auto-composition-spec.json"), "utf8"));
+      const entry = composition.bands.find((candidate) => candidate.band === bandIndex);
+      assert.ok(entry, `${fixture.name}-${count}: composition entry must exist`);
+      const visible = entry.elements.filter((element) => element.type === "text").map((element) => String(element.text ?? "")).join(" ").replace(/\s+/g, " ");
+      for (const node of band.visual.nodes) {
+        assert.match(visible, new RegExp(node.label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+        assert.match(visible, new RegExp(node.note.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+      }
+      assert.doesNotMatch(visible, /\b(?:Context|Decision|Result)\b/);
+      const outline = await readFile(join(output, "outline.md"), "utf8");
+      for (const node of band.visual.nodes) assert.match(outline, new RegExp(node.note.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    }
+  }
+});
+
+test("tension preserves a fourth node beside an authored decision", { timeout: 300_000 }, async (t) => {
+  const tempRoot = await mkdtemp(join(tmpdir(), "beautidraw-tension-fourth-node-"));
+  t.after(() => rm(tempRoot, { recursive: true, force: true }));
+  for (const variant of ["four-with-decision", "three-with-decision", "four-without-decision"]) {
+    const spec = JSON.parse(await readFile(resolve(root, "decks/rag-vector-graph/deck-spec.json"), "utf8"));
+    const bandIndex = spec.bands.findIndex((band) => band.visual?.family === "tension");
+    const band = spec.bands[bandIndex];
+    assert.ok(band, "tension fixture must exist");
+    const fourth = { label: "Measured chunk size", note: "Validate the tradeoff against retrieval evidence" };
+    if (variant.startsWith("four")) band.visual.nodes = [...band.visual.nodes.slice(0, 3), fourth];
+    else band.visual.nodes = band.visual.nodes.slice(0, 3);
+    if (variant === "four-with-decision" || variant === "three-with-decision") band.visual.decision = "Choose the tested balance";
+    else delete band.visual.decision;
+    const fixtureRoot = join(tempRoot, variant);
+    const specPath = join(fixtureRoot, "spec.json");
+    const output = join(fixtureRoot, "out");
+    await mkdir(fixtureRoot, { recursive: true });
+    await writeFile(specPath, JSON.stringify(spec));
+    await cp(join(root, "decks/rag-vector-graph/assets"), join(fixtureRoot, "assets"), { recursive: true });
+    const result = spawnSync(process.execPath, [resolve(root, "scripts/build-deck.mjs"), specPath, output], {
+      cwd: root,
+      encoding: "utf8",
+      timeout: 120_000,
+    });
+    assert.equal(result.status, 0, `${variant}: ${result.stdout}\n${result.stderr}`);
+    const composition = JSON.parse(await readFile(join(output, "auto-composition-spec.json"), "utf8"));
+    const entry = composition.bands.find((candidate) => candidate.band === bandIndex);
+    const visible = entry.elements.filter((element) => element.type === "text").map((element) => String(element.text ?? "")).join(" ").replace(/\s+/g, " ");
+    if (variant !== "four-without-decision") assert.match(visible, /Choose the tested balance/);
+    if (variant.startsWith("four")) {
+      assert.match(visible, /Measured chunk size/);
+      assert.match(visible, /Validate the tradeoff against retrieval evidence/);
+    }
+  }
+});
+
+test("evidence composition links only authored nodes from one through four", { timeout: 300_000 }, async (t) => {
   const tempRoot = await mkdtemp(join(tmpdir(), "beautidraw-evidence3-"));
-  const spec = JSON.parse(await readFile(claudeSpecPath, "utf8"));
-  const evidenceBand = spec.bands.find((band) => band.visual?.family === "evidence");
-  assert.ok(evidenceBand, "fixture must contain an evidence band");
-  evidenceBand.visual.nodes = evidenceBand.visual.nodes.slice(0, 3);
-  const specPath = join(tempRoot, "evidence3.json");
-  await writeFile(specPath, JSON.stringify(spec));
+  t.after(() => rm(tempRoot, { recursive: true, force: true }));
   await cp(join(dirname(claudeSpecPath), "assets"), join(tempRoot, "assets"), { recursive: true });
-  const output = join(tempRoot, "out");
-  const result = spawnSync(process.execPath, [resolve(root, "scripts/build-deck.mjs"), specPath, output], {
-    cwd: root,
-    encoding: "utf8",
-    timeout: 110_000,
-  });
-  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const positions = [[0.05 + 0.013, 0.18 + 0.018], [0.69 + 0.013, 0.18 + 0.018], [0.05 + 0.013, 0.48 + 0.018], [0.69 + 0.013, 0.48 + 0.018]];
+  const near = (point, anchor) => Math.abs(point[0] - anchor[0]) < 1e-9 && Math.abs(point[1] - anchor[1]) < 1e-9;
+  const absolutePoints = (element) => element.points.map(([x, y]) => [element.x + x * element.width, element.y + y * element.height]);
+
+  for (const count of [1, 2, 3, 4]) {
+    const spec = JSON.parse(await readFile(claudeSpecPath, "utf8"));
+    const evidenceBand = spec.bands.find((band) => band.visual?.family === "evidence");
+    assert.ok(evidenceBand, "fixture must contain an evidence band");
+    evidenceBand.visual.nodes = evidenceBand.visual.nodes.slice(0, count);
+    const specPath = join(tempRoot, `evidence-${count}.json`);
+    const output = join(tempRoot, `out-${count}`);
+    await writeFile(specPath, JSON.stringify(spec));
+    const result = spawnSync(process.execPath, [resolve(root, "scripts/build-deck.mjs"), specPath, output], {
+      cwd: root,
+      encoding: "utf8",
+      timeout: 120_000,
+    });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+
+    const composition = JSON.parse(await readFile(join(output, "auto-composition-spec.json"), "utf8"));
+    const evidenceCompositions = composition.bands.filter(({ band }) => spec.bands[band].visual?.family === "evidence");
+    assert.equal(evidenceCompositions.length, 2);
+    for (const entry of evidenceCompositions) {
+      const authoredCount = spec.bands[entry.band].visual.nodes.length;
+      const nodes = entry.elements.filter((element) => /^evidence-\d+-label$/.test(element.id));
+      const links = entry.elements.filter((element) => /^evidence-link-\d+$/.test(element.id));
+      assert.equal(nodes.length, authoredCount);
+      assert.equal(links.length, authoredCount < 3 ? authoredCount : 3);
+      const linkPoints = links.flatMap(absolutePoints);
+      for (const anchor of positions.slice(authoredCount)) {
+        assert.equal(linkPoints.some((point) => near(point, anchor)), false, `${authoredCount}-node evidence must not link an absent node`);
+      }
+      if (authoredCount === 3) {
+        const thirdLink = links.find((element) => element.id === "evidence-link-3");
+        const thirdLinkPoints = absolutePoints(thirdLink);
+        assert.equal(thirdLinkPoints.some((point) => near(point, positions[2])), true, "the third authored node must have a meaningful connector");
+        assert.equal(thirdLinkPoints.some((point) => near(point, [0.49, 0.39])), true, "the third connector must attach to the claim");
+      }
+      if (authoredCount === 4) {
+        assert.equal(linkPoints.some((point) => near(point, positions[2])), true);
+        assert.equal(linkPoints.some((point) => near(point, positions[3])), true);
+      }
+    }
+
+    const deck = JSON.parse(await readFile(join(output, "deck.excalidraw"), "utf8"));
+    const frameIds = evidenceCompositions.map(({ band }) => `b${band}-frame`);
+    for (const frameId of frameIds) {
+      assert.ok(deck.elements.some((element) => element.id === frameId), `${frameId} must survive final composition`);
+    }
+  }
 });
